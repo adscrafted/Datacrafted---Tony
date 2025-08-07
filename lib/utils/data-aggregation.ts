@@ -1,0 +1,130 @@
+import { DataRow } from '@/lib/store'
+import { 
+  startOfDay, 
+  startOfWeek, 
+  startOfMonth, 
+  startOfQuarter, 
+  startOfYear,
+  format 
+} from 'date-fns'
+
+export type Granularity = 'day' | 'week' | 'month' | 'quarter' | 'year'
+
+export function aggregateDataByGranularity(
+  data: DataRow[], 
+  granularity: Granularity,
+  dateColumn?: string
+): DataRow[] {
+  if (!data || data.length === 0) return data
+  
+  // Find date column if not specified
+  if (!dateColumn) {
+    const firstRow = data[0]
+    const dateColumns = Object.keys(firstRow).filter(key => {
+      const value = firstRow[key]
+      if (!value) return false
+      const datePattern = /\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}|\d{4}\/\d{2}\/\d{2}/
+      if (typeof value === 'string' && datePattern.test(value)) return true
+      if (value instanceof Date) return true
+      if (!isNaN(Date.parse(String(value)))) return true
+      return false
+    })
+    
+    if (dateColumns.length === 0) return data
+    dateColumn = dateColumns[0]
+  }
+  
+  // Group data by the specified granularity
+  const groups = new Map<string, DataRow[]>()
+  
+  data.forEach(row => {
+    const dateValue = row[dateColumn]
+    if (!dateValue || dateValue === null || dateValue === undefined) return
+    
+    const date = new Date(dateValue as string | number | Date)
+    if (isNaN(date.getTime())) return
+    
+    let groupKey: string
+    let formattedDate: string
+    
+    switch (granularity) {
+      case 'day':
+        groupKey = format(startOfDay(date), 'yyyy-MM-dd')
+        formattedDate = format(date, 'MMM d, yyyy')
+        break
+      case 'week':
+        groupKey = format(startOfWeek(date), 'yyyy-MM-dd')
+        formattedDate = format(startOfWeek(date), 'MMM d, yyyy')
+        break
+      case 'month':
+        groupKey = format(startOfMonth(date), 'yyyy-MM')
+        formattedDate = format(date, 'MMM yyyy')
+        break
+      case 'quarter':
+        groupKey = format(startOfQuarter(date), 'yyyy-[Q]Q')
+        formattedDate = `Q${Math.floor(date.getMonth() / 3) + 1} ${date.getFullYear()}`
+        break
+      case 'year':
+        groupKey = format(startOfYear(date), 'yyyy')
+        formattedDate = format(date, 'yyyy')
+        break
+    }
+    
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, [])
+    }
+    
+    const group = groups.get(groupKey)!
+    group.push({ ...row, [dateColumn]: formattedDate, _originalDate: date })
+  })
+  
+  // Aggregate each group
+  const aggregatedData: DataRow[] = []
+  
+  groups.forEach((groupRows, groupKey) => {
+    if (groupRows.length === 0) return
+    
+    const aggregatedRow: DataRow = {}
+    const firstRow = groupRows[0]
+    
+    // Use the formatted date
+    aggregatedRow[dateColumn] = firstRow[dateColumn]
+    
+    // For each column, aggregate based on data type
+    Object.keys(firstRow).forEach(key => {
+      if (key === dateColumn || key === '_originalDate') return
+      
+      const values = groupRows.map(row => row[key]).filter(v => v != null)
+      
+      if (values.length === 0) {
+        aggregatedRow[key] = null
+        return
+      }
+      
+      // Check if all values are numbers
+      const numericValues = values.map(v => Number(v)).filter(v => !isNaN(v))
+      
+      if (numericValues.length === values.length) {
+        // Sum numeric values
+        aggregatedRow[key] = numericValues.reduce((sum, val) => sum + val, 0)
+      } else {
+        // For non-numeric values, use the first value or count unique values
+        const uniqueValues = Array.from(new Set(values))
+        if (uniqueValues.length === 1) {
+          aggregatedRow[key] = uniqueValues[0]
+        } else {
+          aggregatedRow[key] = values[0] // Use first value as representative
+        }
+      }
+    })
+    
+    aggregatedData.push(aggregatedRow)
+  })
+  
+  // Sort by date
+  return aggregatedData.sort((a, b) => {
+    const dateA = new Date((a._originalDate || a[dateColumn]) as string | number | Date)
+    const dateB = new Date((b._originalDate || b[dateColumn]) as string | number | Date)
+    return dateA.getTime() - dateB.getTime()
+  })
+}

@@ -1,0 +1,152 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider     = "sqlite"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Optional user identification (can be anonymous)
+  name      String?
+  email     String?
+  
+  // Relationships
+  sessions  Session[]
+  
+  @@map("users")
+}
+
+model Session {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  expiresAt   DateTime?
+  
+  // Session metadata
+  name        String?
+  description String?
+  isActive    Boolean  @default(true)
+  
+  // User association (can be null for anonymous sessions)
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Relationships
+  uploadedFiles UploadedFile[]
+  analyses    Analysis[]
+  chatMessages ChatMessage[]
+  
+  @@map("sessions")
+}
+
+model UploadedFile {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // File metadata
+  fileName      String
+  originalName  String
+  fileSize      Int
+  mimeType      String
+  fileHash      String?   // For deduplication
+  
+  // File storage path
+  filePath      String
+  
+  // Parsed data storage (JSON)
+  parsedData    String    // JSON string of the parsed data
+  dataSchema    String?   // JSON schema of the data structure
+  
+  // Session relationship
+  sessionId     String
+  session       Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  // Relationships
+  analyses      Analysis[]
+  
+  @@map("uploaded_files")
+}
+
+model Analysis {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Analysis metadata
+  name        String?
+  description String?
+  
+  // AI analysis results (JSON)
+  insights      String    // JSON array of insights
+  summary       String    // JSON object of summary data
+  keyFindings   String?   // AI-generated key findings
+  recommendations String? // AI-generated recommendations
+  businessContext String? // AI-generated business context
+  
+  // Session and file relationships
+  sessionId     String
+  session       Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  fileId        String
+  file          UploadedFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  
+  // Relationships
+  charts        Chart[]
+  
+  @@map("analyses")
+}
+
+model Chart {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Chart configuration
+  type        String   // 'line', 'bar', 'pie', 'area', 'scatter'
+  title       String
+  description String?
+  
+  // Chart data configuration (JSON)
+  dataKeys    String   // JSON array of data keys
+  config      String?  // Additional chart configuration
+  
+  // Display settings
+  position    Int?     // For ordering charts in dashboard
+  isVisible   Boolean  @default(true)
+  
+  // Analysis relationship
+  analysisId  String
+  analysis    Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  
+  @@map("charts")
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  
+  // Message content
+  role      String   // 'user' or 'assistant'
+  content   String
+  
+  // Optional metadata
+  metadata  String?  // JSON for additional message data
+  
+  // Session relationship
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  @@map("chat_messages")
+}

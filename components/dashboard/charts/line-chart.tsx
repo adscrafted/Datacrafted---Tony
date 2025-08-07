@@ -1,0 +1,1 @@
+export { ChartWrapper as LineChart } from '../chart-wrapper'
