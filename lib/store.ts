@@ -51,10 +51,31 @@ export interface ChartCustomization {
   customDescription?: string
   axisLabels?: { x?: string; y?: string }
   isVisible?: boolean
-  chartType?: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard'
+  chartType?: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table'
   animate?: boolean
   interactive?: boolean
   stacked?: boolean
+  dataColumns?: string[]
+  aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct'
+  // Dynamic sizing options
+  autoSize?: boolean
+  minHeight?: number
+  maxHeight?: number
+  labelRotation?: 'auto' | 'horizontal' | 'diagonal' | 'vertical'
+}
+
+export interface ChartTemplate {
+  id: string
+  name: string
+  type: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table'
+  description: string
+  category: 'comparison' | 'distribution' | 'trend' | 'relationship' | 'summary'
+  icon: string
+  defaultPosition: { w: number; h: number }
+  requiredDataTypes: ('string' | 'number' | 'date' | 'boolean')[]
+  minColumns: number
+  maxColumns?: number
+  preview?: string
 }
 
 export interface DashboardTheme {
@@ -152,7 +173,7 @@ interface DataStore {
   recentSessions: RecentSession[]
   isSaving: boolean
   saveError: string | null
-  
+
   // Data state
   fileName: string | null
   rawData: DataRow[]
@@ -167,13 +188,13 @@ interface DataStore {
   granularity: 'day' | 'week' | 'month' | 'quarter' | 'year'
   selectedChartId: string | null
   showChartSettings: boolean
-  
+
   // Chat state
   chatMessages: ChatMessage[]
   isChatOpen: boolean
   isChatLoading: boolean
   chatError: string | null
-  
+
   // Dashboard customization state
   currentTheme: DashboardTheme
   availableThemes: DashboardTheme[]
@@ -197,6 +218,18 @@ interface DataStore {
     previousState?: any
   }>
   showFullScreen: string | null // chart ID for full-screen view
+
+  // Enhanced dashboard state
+  chartTemplates: ChartTemplate[]
+  availableColumns: string[]
+  isDragging: boolean
+  draggedChartId: string | null
+  showChartTemplateGallery: boolean
+  contextMenuPosition: { x: number; y: number } | null
+  contextMenuChartId: string | null
+  gridSnapping: boolean
+  showGridLines: boolean
+  autoSaveLayouts: boolean
   
   // Session actions
   setCurrentSession: (session: SessionInfo | null) => void
@@ -252,11 +285,118 @@ interface DataStore {
   exportDashboard: (format: 'png' | 'pdf' | 'json') => Promise<void>
   generateShareableLink: () => Promise<string>
   getFilteredData: () => DataRow[]
-  
+
+  // Enhanced dashboard actions
+  addChart: (template: ChartTemplate, position?: { x: number; y: number }) => void
+  removeChart: (chartId: string) => void
+  duplicateChart: (chartId: string) => void
+  updateChartType: (chartId: string, type: ChartTemplate['type']) => void
+  setAvailableColumns: (columns: string[]) => void
+  setIsDragging: (isDragging: boolean) => void
+  setDraggedChartId: (chartId: string | null) => void
+  setShowChartTemplateGallery: (show: boolean) => void
+  setContextMenu: (position: { x: number; y: number } | null, chartId?: string | null) => void
+  setGridSnapping: (enabled: boolean) => void
+  setShowGridLines: (show: boolean) => void
+  setAutoSaveLayouts: (enabled: boolean) => void
+  saveLayout: (name: string) => void
+  loadLayout: (layoutId: string) => void
+  resetToDefaultLayout: () => void
+  exportLayoutConfig: () => Promise<void>
+  importLayoutConfig: (configFile: File) => Promise<void>
+
   // Utility actions
   reset: () => void
   exportSession: (format: 'json' | 'csv') => Promise<void>
 }
+
+// Default chart templates
+const defaultChartTemplates: ChartTemplate[] = [
+  {
+    id: 'line-trend',
+    name: 'Line Chart',
+    type: 'line',
+    description: 'Show trends and changes over time',
+    category: 'trend',
+    icon: 'TrendingUp',
+    defaultPosition: { w: 6, h: 4 },
+    requiredDataTypes: ['number'],
+    minColumns: 2,
+    maxColumns: 5,
+  },
+  {
+    id: 'bar-comparison',
+    name: 'Bar Chart',
+    type: 'bar',
+    description: 'Compare values across categories',
+    category: 'comparison',
+    icon: 'BarChart3',
+    defaultPosition: { w: 6, h: 4 },
+    requiredDataTypes: ['number'],
+    minColumns: 2,
+    maxColumns: 4,
+  },
+  {
+    id: 'pie-distribution',
+    name: 'Pie Chart',
+    type: 'pie',
+    description: 'Show proportional distribution',
+    category: 'distribution',
+    icon: 'PieChart',
+    defaultPosition: { w: 4, h: 4 },
+    requiredDataTypes: ['string', 'number'],
+    minColumns: 1,
+    maxColumns: 2,
+  },
+  {
+    id: 'area-filled',
+    name: 'Area Chart',
+    type: 'area',
+    description: 'Visualize cumulative trends',
+    category: 'trend',
+    icon: 'Activity',
+    defaultPosition: { w: 6, h: 4 },
+    requiredDataTypes: ['number'],
+    minColumns: 2,
+    maxColumns: 4,
+  },
+  {
+    id: 'scatter-relationship',
+    name: 'Scatter Plot',
+    type: 'scatter',
+    description: 'Explore relationships between variables',
+    category: 'relationship',
+    icon: 'Scatter',
+    defaultPosition: { w: 6, h: 4 },
+    requiredDataTypes: ['number'],
+    minColumns: 2,
+    maxColumns: 3,
+  },
+  {
+    id: 'scorecard-kpi',
+    name: 'Scorecard',
+    type: 'scorecard',
+    description: 'Display key metrics and KPIs',
+    category: 'summary',
+    icon: 'Gauge',
+    defaultPosition: { w: 3, h: 3 },
+    requiredDataTypes: ['number'],
+    minColumns: 1,
+    maxColumns: 1,
+  },
+  {
+    id: 'table-detailed',
+    name: 'Data Table',
+    type: 'table',
+    description: 'Show detailed tabular data',
+    category: 'summary',
+    icon: 'Table',
+    defaultPosition: { w: 12, h: 6 },
+    requiredDataTypes: ['string', 'number'],
+    minColumns: 1,
+    maxColumns: undefined,
+  },
+]
 
 // Default themes
 const defaultThemes: DashboardTheme[] = [
@@ -374,6 +514,18 @@ export const useDataStore = create<DataStore>()(
       customizationHistory: [],
       redoHistory: [],
       showFullScreen: null,
+
+      // Enhanced dashboard state
+      chartTemplates: defaultChartTemplates,
+      availableColumns: [],
+      isDragging: false,
+      draggedChartId: null,
+      showChartTemplateGallery: false,
+      contextMenuPosition: null,
+      contextMenuChartId: null,
+      gridSnapping: true,
+      showGridLines: false,
+      autoSaveLayouts: true,
       
       // Session actions
       setCurrentSession: (session) => set({ currentSession: session }),
@@ -1195,11 +1347,11 @@ export const useDataStore = create<DataStore>()(
       getFilteredData: () => {
         const state = get()
         const { rawData, dashboardFilters, dateRange, granularity } = state
-        
+
         if (!rawData.length) return rawData
-        
+
         let filteredData = rawData
-        
+
         // Apply date range filter if set
         if (dateRange?.from || dateRange?.to) {
           // Find date columns
@@ -1212,29 +1364,29 @@ export const useDataStore = create<DataStore>()(
             if (!isNaN(Date.parse(String(value)))) return true
             return false
           }) : []
-          
+
           if (dateColumns.length > 0) {
             filteredData = filteredData.filter(row => {
               const dateCol = row[dateColumns[0]]
               if (dateCol === null || dateCol === undefined) return true
               const dateValue = new Date(dateCol as string | number | Date)
               if (isNaN(dateValue.getTime())) return true
-              
+
               if (dateRange.from && dateValue < dateRange.from) return false
               if (dateRange.to && dateValue > dateRange.to) return false
               return true
             })
           }
         }
-        
+
         // Apply dashboard filters
         if (dashboardFilters.length) {
           filteredData = filteredData.filter(row => {
             return dashboardFilters.every(filter => {
               if (!filter.isActive) return true
-              
+
               const columnValue = row[filter.column]
-              
+
               switch (filter.operator) {
                 case 'equals':
                   return columnValue === filter.value
@@ -1255,7 +1407,7 @@ export const useDataStore = create<DataStore>()(
             })
           })
         }
-        
+
         // Apply granularity aggregation if there are date columns
         const dateColumns = filteredData.length > 0 ? Object.keys(filteredData[0]).filter(key => {
           const value = filteredData[0][key]
@@ -1266,12 +1418,253 @@ export const useDataStore = create<DataStore>()(
           if (!isNaN(Date.parse(String(value)))) return true
           return false
         }) : []
-        
+
         if (dateColumns.length > 0) {
           filteredData = aggregateDataByGranularity(filteredData, granularity, dateColumns[0])
         }
-        
+
         return filteredData
+      },
+
+      // Enhanced dashboard actions
+      addChart: (template, position) => {
+        const state = get()
+        const chartId = `chart-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+
+        // Generate data keys based on available columns and template requirements
+        const availableNumberColumns = state.availableColumns.filter(col => {
+          const sampleValue = state.rawData[0]?.[col]
+          return typeof sampleValue === 'number' || !isNaN(Number(sampleValue))
+        })
+        const availableStringColumns = state.availableColumns.filter(col => {
+          const sampleValue = state.rawData[0]?.[col]
+          return typeof sampleValue === 'string' && isNaN(Number(sampleValue))
+        })
+
+        let dataKeys: string[] = []
+        if (template.type === 'pie') {
+          dataKeys = [availableStringColumns[0], availableNumberColumns[0]].filter(Boolean)
+        } else if (template.type === 'scorecard') {
+          dataKeys = [availableNumberColumns[0]].filter(Boolean)
+        } else if (template.type === 'table') {
+          dataKeys = state.availableColumns.slice(0, 8) // Limit table columns
+        } else {
+          // For line, bar, area, scatter charts
+          const xKey = availableStringColumns[0] || availableNumberColumns[0]
+          const yKeys = availableNumberColumns.slice(0, template.maxColumns ? template.maxColumns - 1 : 3)
+          dataKeys = [xKey, ...yKeys].filter(Boolean)
+        }
+
+        // Create chart config
+        const newChart = {
+          id: chartId,
+          type: template.type,
+          title: template.name,
+          description: template.description,
+          dataKey: dataKeys,
+        }
+
+        // Update analysis with new chart
+        set(state => ({
+          analysis: state.analysis ? {
+            ...state.analysis,
+            chartConfig: [...state.analysis.chartConfig, newChart]
+          } : null
+        }))
+
+        // Create customization entry with position
+        const customization: ChartCustomization = {
+          id: chartId,
+          position: position ?
+            { x: position.x, y: position.y, ...template.defaultPosition } :
+            { x: 0, y: 0, ...template.defaultPosition },
+          isVisible: true,
+          chartType: template.type,
+        }
+
+        get().updateChartCustomization(chartId, customization)
+        get().addToHistory('chart_add', { chartId, template })
+      },
+
+      removeChart: (chartId) => {
+        const state = get()
+
+        // Remove from analysis
+        set(state => ({
+          analysis: state.analysis ? {
+            ...state.analysis,
+            chartConfig: state.analysis.chartConfig.filter(chart =>
+              (chart.id || `chart-${state.analysis!.chartConfig.indexOf(chart)}`) !== chartId
+            )
+          } : null
+        }))
+
+        // Remove customization
+        get().removeChartCustomization(chartId)
+        get().addToHistory('chart_remove', { chartId })
+      },
+
+      duplicateChart: (chartId) => {
+        const state = get()
+        if (!state.analysis) return
+
+        // Find the original chart
+        const originalChart = state.analysis.chartConfig.find(chart =>
+          (chart.id || `chart-${state.analysis!.chartConfig.indexOf(chart)}`) === chartId
+        )
+        if (!originalChart) return
+
+        // Create new chart with unique ID
+        const newChartId = `chart-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        const duplicatedChart = {
+          ...originalChart,
+          id: newChartId,
+          title: `${originalChart.title} (Copy)`,
+        }
+
+        // Add to analysis
+        set(state => ({
+          analysis: state.analysis ? {
+            ...state.analysis,
+            chartConfig: [...state.analysis.chartConfig, duplicatedChart]
+          } : null
+        }))
+
+        // Duplicate customization with offset position
+        const originalCustomization = state.chartCustomizations[chartId]
+        if (originalCustomization) {
+          const newCustomization = {
+            ...originalCustomization,
+            id: newChartId,
+            position: {
+              ...originalCustomization.position,
+              x: Math.min(originalCustomization.position.x + 1, 11),
+              y: originalCustomization.position.y + 1,
+            }
+          }
+          get().updateChartCustomization(newChartId, newCustomization)
+        }
+
+        get().addToHistory('chart_duplicate', { originalChartId: chartId, newChartId })
+      },
+
+      updateChartType: (chartId, type) => {
+        const state = get()
+        if (!state.analysis) return
+
+        // Update analysis
+        set(state => ({
+          analysis: state.analysis ? {
+            ...state.analysis,
+            chartConfig: state.analysis.chartConfig.map(chart => {
+              const id = chart.id || `chart-${state.analysis!.chartConfig.indexOf(chart)}`
+              return id === chartId ? { ...chart, type } : chart
+            })
+          } : null
+        }))
+
+        // Update customization
+        get().updateChartCustomization(chartId, { chartType: type })
+        get().addToHistory('chart_type_change', { chartId, newType: type })
+      },
+
+      setAvailableColumns: (columns) => set({ availableColumns: columns }),
+      setIsDragging: (isDragging) => set({ isDragging }),
+      setDraggedChartId: (chartId) => set({ draggedChartId: chartId }),
+      setShowChartTemplateGallery: (show) => set({ showChartTemplateGallery: show }),
+      setContextMenu: (position, chartId) => set({
+        contextMenuPosition: position,
+        contextMenuChartId: chartId || null
+      }),
+      setGridSnapping: (enabled) => set({ gridSnapping: enabled }),
+      setShowGridLines: (show) => set({ showGridLines: show }),
+      setAutoSaveLayouts: (enabled) => set({ autoSaveLayouts: enabled }),
+
+      saveLayout: (name) => {
+        const state = get()
+        const newLayout: DashboardLayout = {
+          id: `layout-${Date.now()}`,
+          name,
+          isDefault: false,
+          grid: state.currentLayout.grid,
+          chartPositions: { ...state.currentLayout.chartPositions }
+        }
+
+        get().addCustomLayout(newLayout)
+        get().addToHistory('layout_save', { layout: newLayout })
+      },
+
+      loadLayout: (layoutId) => {
+        const state = get()
+        const layout = state.availableLayouts.find(l => l.id === layoutId)
+        if (layout) {
+          get().setCurrentLayout(layout)
+        }
+      },
+
+      resetToDefaultLayout: () => {
+        get().setCurrentLayout(defaultLayout)
+        set({ chartCustomizations: {} })
+        get().addToHistory('layout_reset', { layout: 'default' })
+      },
+
+      exportLayoutConfig: async () => {
+        const state = get()
+        const config = {
+          layout: state.currentLayout,
+          customizations: state.chartCustomizations,
+          theme: state.currentTheme,
+          filters: state.dashboardFilters,
+          exportDate: new Date().toISOString(),
+        }
+
+        const blob = new Blob([JSON.stringify(config, null, 2)], {
+          type: 'application/json'
+        })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `layout-${state.currentLayout.name}-${new Date().toISOString().split('T')[0]}.json`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      },
+
+      importLayoutConfig: async (configFile) => {
+        try {
+          const text = await configFile.text()
+          const config = JSON.parse(text)
+
+          if (config.layout) {
+            const importedLayout = {
+              ...config.layout,
+              id: `layout-${Date.now()}`,
+              name: `${config.layout.name} (Imported)`
+            }
+            get().addCustomLayout(importedLayout)
+          }
+
+          if (config.customizations) {
+            set(state => ({
+              chartCustomizations: { ...state.chartCustomizations, ...config.customizations }
+            }))
+          }
+
+          if (config.theme) {
+            get().addCustomTheme(config.theme)
+          }
+
+          if (config.filters) {
+            set(state => ({
+              dashboardFilters: [...state.dashboardFilters, ...config.filters]
+            }))
+          }
+
+          get().addToHistory('layout_import', { fileName: configFile.name })
+        } catch (error) {
+          console.error('Failed to import layout config:', error)
+        }
       },
       
       // Utility actions
