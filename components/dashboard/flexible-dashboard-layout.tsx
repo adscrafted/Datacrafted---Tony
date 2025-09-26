@@ -93,11 +93,18 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     if (currentProjectId) {
       const savedConfig = loadDashboardConfig(currentProjectId)
       if (savedConfig) {
+        console.log('📋 Loading saved dashboard config for project:', currentProjectId)
         // Apply saved customizations to the store
         Object.entries(savedConfig.chartCustomizations).forEach(([chartId, customization]) => {
           updateChartCustomization(chartId, customization)
         })
         // Note: theme and layout would be applied through their respective setters if needed
+      } else {
+        console.log('🔄 No saved config found for project, will use fresh layout')
+        // Clear any existing customizations for fresh projects
+        Object.keys(chartCustomizations).forEach(chartId => {
+          updateChartCustomization(chartId, { position: undefined })
+        })
       }
     }
   }, [currentProjectId, loadDashboardConfig, updateChartCustomization])
@@ -140,52 +147,116 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     }
   }, [])
 
-  // Optimized collision detection function
+  // Enhanced collision detection function with debug logging
   const detectCollision = useCallback((newItem: GridLayout, existingItems: GridLayout[]) => {
+    if (existingItems.length === 0) {
+      return false
+    }
+
     return existingItems.some(item => {
-      return !(
+      // Check if the new item overlaps with this existing item
+      const hasCollision = !(
         newItem.x >= item.x + item.w || // newItem is to the right of item
         newItem.x + newItem.w <= item.x || // newItem is to the left of item
         newItem.y >= item.y + item.h || // newItem is below item
         newItem.y + newItem.h <= item.y    // newItem is above item
       )
+
+      if (hasCollision) {
+        console.warn('🔶 Chart collision detected:', {
+          newItem: { id: newItem.i, x: newItem.x, y: newItem.y, w: newItem.w, h: newItem.h },
+          existingItem: { id: item.i, x: item.x, y: item.y, w: item.w, h: item.h },
+          overlap: {
+            xOverlap: !(newItem.x >= item.x + item.w || newItem.x + newItem.w <= item.x),
+            yOverlap: !(newItem.y >= item.y + item.h || newItem.y + newItem.h <= item.y)
+          }
+        })
+      }
+
+      return hasCollision
     })
   }, [])
 
-  // Smart placement algorithm that finds the optimal position for new charts
-  const findOptimalPosition = useCallback((dimensions: { w: number; h: number }, existingItems: GridLayout[]) => {
-    const { w, h } = dimensions
+  // Function to fix all overlapping layouts - converted to regular function to avoid dependency issues
+  // This will be wrapped in useCallback after layoutItems is defined
+  const createFixOverlappingLayouts = (currentLayoutItems: GridLayout[]) => {
+    return () => {
+      const hasOverlaps = currentLayoutItems.some((item, index) => {
+        const otherItems = currentLayoutItems.filter((_, i) => i !== index)
+        return detectCollision(item, otherItems)
+      })
 
-    // Strategy 1: Try to place in first available row, scanning left to right
+      if (hasOverlaps) {
+        console.warn('🚨 Overlapping layouts detected! Fixing automatically...')
+
+        // Clear all chart customizations to force fresh positioning
+        validCharts.forEach(config => {
+          const originalIndex = analysis.chartConfig.indexOf(config)
+          const chartId = config.id || `chart-${originalIndex}`
+          updateChartCustomization(chartId, { position: undefined })
+        })
+
+        return true
+      }
+
+      return false
+    }
+  }
+
+  // Enhanced smart placement algorithm with better collision avoidance
+  const findOptimalPosition = useCallback((dimensions: { w: number; h: number }, existingItems: GridLayout[], chartType?: string) => {
+    const { w, h } = dimensions
+    console.log('🔍 Finding optimal position for:', { w, h, chartType, existingCount: existingItems.length })
+    console.log('🔍 Existing items:', existingItems.map(item => ({ id: item.i, x: item.x, y: item.y, w: item.w, h: item.h })))
+
+    // Strategy 1: For tables, always start on a new row at x=0
+    if (chartType === 'table') {
+      const maxY = existingItems.reduce((max, item) => Math.max(max, item.y + item.h), 0)
+      console.log('📊 Table placement: x=0, y=' + maxY)
+      return { x: 0, y: maxY }
+    }
+
+    // Strategy 2: Try to place in available spaces, scanning row by row, left to right
+    // Start from top-left and scan systematically
     for (let y = 0; y < 50; y++) {
       for (let x = 0; x <= 12 - w; x++) {
         const testItem: GridLayout = {
-          i: 'test',
+          i: 'test-position',
           x,
           y,
           w,
           h
         }
 
-        if (!detectCollision(testItem, existingItems)) {
+        const hasCollision = detectCollision(testItem, existingItems)
+
+        if (!hasCollision) {
+          console.log('✅ Found optimal position:', { x, y, w, h })
+          console.log('✅ No collision detected with existing items')
           return { x, y }
+        } else {
+          console.log('❌ Position occupied:', { x, y, w, h })
         }
       }
     }
 
-    // Strategy 2: Fallback - place below all existing items
+    // Strategy 3: Fallback - place below all existing items
     const maxY = existingItems.reduce((max, item) => Math.max(max, item.y + item.h), 0)
+    console.log('🔄 Fallback placement below all items: x=0, y=' + maxY)
     return { x: 0, y: maxY }
   }, [detectCollision])
 
-  // Generate layout items from chart configurations with smart placement
+  // Generate layout items from chart configurations with enhanced smart placement
   const layoutItems = useMemo(() => {
     const items: GridLayout[] = []
+    console.log('🔍 Generating layout items for', validCharts.length, 'charts')
 
     validCharts.forEach((config, index) => {
       const originalIndex = analysis.chartConfig.indexOf(config)
       const chartId = config.id || `chart-${originalIndex}`
       const customization = chartCustomizations[chartId]
+
+      console.log('📊 Processing chart:', { chartId, type: config.type, index, hasCustomization: !!customization })
 
       // Get dimensions for this chart type
       const defaultDimensions = getFixedDimensions(config)
@@ -194,48 +265,145 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       let position = customization?.position
 
       if (!position) {
-        // Tables always get full width and start on new row
-        if (config.type === 'table') {
-          const maxY = items.reduce((max, item) => Math.max(max, item.y + item.h), 0)
-          position = { x: 0, y: maxY, ...defaultDimensions }
-        } else {
-          // Use smart placement for other chart types
-          const optimalPos = findOptimalPosition(defaultDimensions, items)
-          position = { ...optimalPos, ...defaultDimensions }
+        console.log('🔍 No saved position, calculating optimal placement...')
+        console.log('🔍 Current items count before placement:', items.length)
+        // Use smart placement algorithm with chart type awareness
+        // Pass current items array to ensure no collisions with already processed charts
+        const optimalPos = findOptimalPosition(defaultDimensions, items, config.type)
+        position = { ...optimalPos, ...defaultDimensions }
+        console.log('✅ Calculated position:', position)
+
+        // Save the calculated position to prevent recalculation on re-renders
+        updateChartCustomization(chartId, { position })
+      } else {
+        console.log('📌 Using saved position:', position)
+        // Even with saved position, check for collisions with newly added charts
+        const testItem: GridLayout = {
+          i: 'test-saved-position',
+          x: position.x,
+          y: position.y,
+          w: position.w,
+          h: position.h
         }
+
+        if (detectCollision(testItem, items)) {
+          console.warn('⚠️ Saved position collides with existing items, recalculating...')
+          const optimalPos = findOptimalPosition(defaultDimensions, items, config.type)
+          position = { ...optimalPos, ...defaultDimensions }
+          console.log('🔄 Recalculated position:', position)
+
+          // Update the stored position with the new collision-free location
+          updateChartCustomization(chartId, { position })
+        }
+      }
+
+      // Ensure position is within bounds
+      const boundedPosition = {
+        x: Math.max(0, Math.min(position.x, 12 - position.w)),
+        y: Math.max(0, position.y),
+        w: position.w,
+        h: position.h
       }
 
       const layoutItem: GridLayout = {
         i: chartId,
-        x: position.x,
-        y: position.y,
-        w: position.w,
-        h: position.h,
-        // Minimum dimensions to ensure charts remain readable (320x400px minimum)
+        x: boundedPosition.x,
+        y: boundedPosition.y,
+        w: boundedPosition.w,
+        h: boundedPosition.h,
+        // Minimum dimensions to ensure charts remain readable
         minW: config.type === 'scorecard' ? 2 : config.type === 'table' ? 8 : 4,
         minH: config.type === 'scorecard' ? 1 : 2,
         maxW: config.type === 'table' ? 12 : 12,
         maxH: 10,
         isDraggable: true,
         isResizable: true,
+        static: false // Ensure charts can be moved
       }
 
+      console.log('🎯 Final layout item:', layoutItem)
+
+      // Final collision check before adding
+      if (detectCollision(layoutItem, items)) {
+        console.error('❌ CRITICAL: Layout item still collides after placement!', layoutItem)
+        // Force a safe position below all existing items
+        const maxY = items.reduce((max, item) => Math.max(max, item.y + item.h), 0)
+        layoutItem.x = 0
+        layoutItem.y = maxY
+        console.log('🔄 Forced safe position:', { x: layoutItem.x, y: layoutItem.y })
+
+        // Update the stored position with the forced safe position
+        const safePosition = { x: layoutItem.x, y: layoutItem.y, w: layoutItem.w, h: layoutItem.h }
+        updateChartCustomization(chartId, { position: safePosition })
+      }
+
+      // Add to items array for next iteration
       items.push(layoutItem)
+      console.log('➕ Added item to layout, total items:', items.length)
     })
 
-    return items
-  }, [validCharts, chartCustomizations, getFixedDimensions, findOptimalPosition])
+    console.log('✅ Layout items generated:', items.length, 'items')
+    console.log('📋 Final layout:', items.map(item => ({ id: item.i, x: item.x, y: item.y, w: item.w, h: item.h })))
 
-  // Simple layout validation - only used as safety net
+    return items
+  }, [validCharts, chartCustomizations, getFixedDimensions, findOptimalPosition, detectCollision, analysis.chartConfig])
+
+  // Create the actual fixOverlappingLayouts callback now that layoutItems is defined
+  const fixOverlappingLayouts = useCallback(
+    createFixOverlappingLayouts(layoutItems),
+    [layoutItems, detectCollision, validCharts, analysis.chartConfig, updateChartCustomization]
+  )
+
+  // Enhanced layout validation with collision resolution
   const validateLayout = useCallback((layout: GridLayout[]) => {
-    // Since we're using smart placement, validation should be minimal
-    // Just ensure items are within bounds
-    return layout.map(item => ({
-      ...item,
-      x: Math.max(0, Math.min(item.x, 12 - item.w)),
-      y: Math.max(0, item.y)
-    }))
-  }, [])
+    console.log('🔍 Validating layout with', layout.length, 'items')
+
+    const validatedLayout: GridLayout[] = []
+
+    layout.forEach((item, index) => {
+      // Ensure item is within bounds
+      let validatedItem = {
+        ...item,
+        x: Math.max(0, Math.min(item.x, 12 - item.w)),
+        y: Math.max(0, item.y)
+      }
+
+      // Check for collisions with previously validated items
+      let attempts = 0
+      while (detectCollision(validatedItem, validatedLayout) && attempts < 50) {
+        console.warn('🔶 Collision detected during validation, finding new position...')
+
+        // Try to find a new position
+        const optimalPos = findOptimalPosition(
+          { w: validatedItem.w, h: validatedItem.h },
+          validatedLayout,
+          validatedItem.i.includes('scorecard') ? 'scorecard' :
+          validatedItem.i.includes('table') ? 'table' : 'chart'
+        )
+
+        validatedItem = {
+          ...validatedItem,
+          x: optimalPos.x,
+          y: optimalPos.y
+        }
+
+        attempts++
+      }
+
+      if (attempts >= 50) {
+        console.error('❌ Could not resolve collision for item:', validatedItem.i)
+        // Force it below all existing items as last resort
+        const maxY = validatedLayout.reduce((max, existing) => Math.max(max, existing.y + existing.h), 0)
+        validatedItem.x = 0
+        validatedItem.y = maxY
+      }
+
+      validatedLayout.push(validatedItem)
+    })
+
+    console.log('✅ Layout validation complete')
+    return validatedLayout
+  }, [detectCollision, findOptimalPosition])
 
   // Handle layout changes
   const handleLayoutChange = useCallback((layout: GridLayout[], allLayouts: { [key: string]: GridLayout[] }) => {
@@ -358,22 +526,25 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
             Add Chart
           </Button>
 
-          {/* Reset Charts Button */}
+          {/* Fix Overlaps Button */}
           <Button
             onClick={() => {
-              // Clear all chart customizations to reset to default sizes
-              validCharts.forEach(config => {
-                const originalIndex = analysis.chartConfig.indexOf(config)
-                const chartId = config.id || `chart-${originalIndex}`
-                updateChartCustomization(chartId, { position: undefined })
-              })
+              const wasFixed = fixOverlappingLayouts()
+              if (!wasFixed) {
+                // If no overlaps detected, still reset positions as requested
+                validCharts.forEach(config => {
+                  const originalIndex = analysis.chartConfig.indexOf(config)
+                  const chartId = config.id || `chart-${originalIndex}`
+                  updateChartCustomization(chartId, { position: undefined })
+                })
+              }
             }}
             size="sm"
             variant="outline"
-            className="text-orange-600 border-orange-200 hover:bg-orange-50"
+            className="text-red-600 border-red-200 hover:bg-red-50"
           >
             <RotateCcw className="h-4 w-4 mr-2" />
-            Reset Sizes
+            Fix Overlaps
           </Button>
 
           {/* Layout Actions Dropdown */}
@@ -469,7 +640,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         ) : (
           <ResponsiveGridLayout
             className="layout"
-            layouts={layouts}
+            layouts={Object.keys(layouts).length > 0 ? layouts : { lg: layoutItems }}
             breakpoints={breakpoints}
             cols={cols}
             rowHeight={200}
@@ -486,6 +657,9 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
             margin={[24, 24]}
             containerPadding={[0, 0]}
             draggableHandle={undefined}
+            autoSize={true}
+            verticalCompact={false}
+            isBounded={true}
           >
             {validCharts.map((config, index) => {
               const originalIndex = analysis.chartConfig.indexOf(config)

@@ -57,6 +57,14 @@ export interface ChartCustomization {
   stacked?: boolean
   dataColumns?: string[]
   aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct'
+  // Data mapping for custom column selection
+  dataMapping?: {
+    xAxis?: string
+    yAxis?: string | string[]
+    category?: string // For pie charts
+    value?: string // For pie charts and scorecards
+    metric?: string // For scorecards
+  }
   // Dynamic sizing options
   autoSize?: boolean
   minHeight?: number
@@ -1472,12 +1480,14 @@ export const useDataStore = create<DataStore>()(
           } : null
         }))
 
-        // Create customization entry with position
+        // Create customization entry - let the layout component handle positioning
+        // by NOT setting a position here, the flexible layout will use findOptimalPosition
         const customization: ChartCustomization = {
           id: chartId,
+          // Don't set position here - let flexible-dashboard-layout handle it
           position: position ?
             { x: position.x, y: position.y, ...template.defaultPosition } :
-            { x: 0, y: 0, ...template.defaultPosition },
+            undefined, // This will trigger findOptimalPosition in the layout
           isVisible: true,
           chartType: template.type,
         }
