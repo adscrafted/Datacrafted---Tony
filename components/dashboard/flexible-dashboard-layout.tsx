@@ -27,6 +27,7 @@ import {
 import { EnhancedChartWrapper } from './enhanced-chart-wrapper'
 import { ChartTemplateGallery } from './chart-template-gallery'
 import { useDataStore, AnalysisResult, DataRow } from '@/lib/store'
+import { useProjectStore } from '@/lib/stores/project-store'
 import { filterValidCharts } from '@/lib/utils/chart-validator'
 import { cn } from '@/lib/utils/cn'
 
@@ -72,8 +73,12 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     importLayoutConfig,
     setAvailableColumns,
     isDragging,
-    setIsDragging
+    setIsDragging,
+    currentTheme,
+    dashboardFilters
   } = useDataStore()
+
+  const { currentProjectId, saveDashboardConfig, loadDashboardConfig } = useProjectStore()
 
   // Update available columns when data changes
   useEffect(() => {
@@ -83,180 +88,185 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     }
   }, [data, setAvailableColumns])
 
+  // Load saved dashboard config when project changes
+  useEffect(() => {
+    if (currentProjectId) {
+      const savedConfig = loadDashboardConfig(currentProjectId)
+      if (savedConfig) {
+        // Apply saved customizations to the store
+        Object.entries(savedConfig.chartCustomizations).forEach(([chartId, customization]) => {
+          updateChartCustomization(chartId, customization)
+        })
+        // Note: theme and layout would be applied through their respective setters if needed
+      }
+    }
+  }, [currentProjectId, loadDashboardConfig, updateChartCustomization])
+
   // Filter out invalid charts before rendering
   const validCharts = useMemo(() =>
     filterValidCharts(analysis.chartConfig, data),
     [analysis.chartConfig, data]
   )
 
-  // Helper function to calculate dynamic chart dimensions based on data
-  const calculateDynamicDimensions = useCallback((config: any, data: DataRow[]) => {
-    const dataPoints = data.length
-    const hasLabels = config.dataKey && config.dataKey.length > 0
-
-    // Get sample labels to estimate length
-    const sampleLabels = hasLabels && data.length > 0
-      ? data.slice(0, Math.min(10, data.length)).map(row => String(row[config.dataKey[0]] || ''))
-      : []
-
-    const maxLabelLength = sampleLabels.reduce((max, label) => Math.max(max, label.length), 0)
-    const needsRotation = maxLabelLength > 8
-
-    // Base dimensions
-    let dimensions = { w: 6, h: 3 }
-
+  // Enhanced default dimensions for each chart type with proper 320x400px minimum sizing
+  // Row height is 200px, so h: 2 = 400px, h: 3 = 600px
+  const getFixedDimensions = useCallback((config: any) => {
     switch (config.type) {
       case 'scorecard':
-        dimensions = { w: 3, h: 2 }
-        break
+        // Scorecards can be smaller: 240x240px (1.2 grid units each)
+        return { w: 3, h: 2 }
 
       case 'table':
-        // Table height based on data volume
-        const tableHeight = Math.min(Math.max(4, Math.ceil(dataPoints / 20)), 8)
-        dimensions = { w: 12, h: tableHeight }
-        break
+        // Tables need full width and more height: 960x600px
+        return { w: 12, h: 6 }
 
       case 'pie':
-        // Pie charts need square aspect ratio
-        dimensions = { w: 5, h: 4 }
-        break
+        // Pie charts: 400x400px (minimum for legend readability)
+        return { w: 4, h: 3 }
 
       case 'bar':
       case 'line':
       case 'area':
-        // Calculate width based on data points
-        const minWidth = 4
-        const maxWidth = 12
-        const calculatedWidth = Math.min(maxWidth, Math.max(minWidth, Math.ceil(dataPoints / 10) + 2))
-
-        // Calculate height based on label rotation and chart content
-        let calculatedHeight = 3 // Base height
-        if (needsRotation) {
-          calculatedHeight += 1 // Extra space for rotated labels
-        }
-        if (maxLabelLength > 15) {
-          calculatedHeight += 1 // Even more space for very long labels
-        }
-
-        dimensions = { w: calculatedWidth, h: Math.min(6, calculatedHeight) }
-        break
+        // Standard charts: 480x400px (minimum professional size)
+        return { w: 6, h: 3 }
 
       case 'scatter':
-        // Scatter plots benefit from larger size for better readability
-        const scatterWidth = Math.min(10, Math.max(6, Math.ceil(dataPoints / 20) + 4))
-        dimensions = { w: scatterWidth, h: 5 }
-        break
+        // Scatter plots need more width for axis labels: 560x400px
+        return { w: 7, h: 3 }
 
       default:
-        dimensions = { w: 6, h: 4 }
+        // Default minimum professional chart size: 480x400px
+        return { w: 6, h: 3 }
     }
-
-    return dimensions
   }, [])
 
-  // Generate layout items from chart configurations
-  const layoutItems = useMemo(() => {
-    // Track occupied positions for smart layout
-    const occupiedPositions = new Set<string>()
+  // Optimized collision detection function
+  const detectCollision = useCallback((newItem: GridLayout, existingItems: GridLayout[]) => {
+    return existingItems.some(item => {
+      return !(
+        newItem.x >= item.x + item.w || // newItem is to the right of item
+        newItem.x + newItem.w <= item.x || // newItem is to the left of item
+        newItem.y >= item.y + item.h || // newItem is below item
+        newItem.y + newItem.h <= item.y    // newItem is above item
+      )
+    })
+  }, [])
 
-    return validCharts.map((config, index) => {
+  // Smart placement algorithm that finds the optimal position for new charts
+  const findOptimalPosition = useCallback((dimensions: { w: number; h: number }, existingItems: GridLayout[]) => {
+    const { w, h } = dimensions
+
+    // Strategy 1: Try to place in first available row, scanning left to right
+    for (let y = 0; y < 50; y++) {
+      for (let x = 0; x <= 12 - w; x++) {
+        const testItem: GridLayout = {
+          i: 'test',
+          x,
+          y,
+          w,
+          h
+        }
+
+        if (!detectCollision(testItem, existingItems)) {
+          return { x, y }
+        }
+      }
+    }
+
+    // Strategy 2: Fallback - place below all existing items
+    const maxY = existingItems.reduce((max, item) => Math.max(max, item.y + item.h), 0)
+    return { x: 0, y: maxY }
+  }, [detectCollision])
+
+  // Generate layout items from chart configurations with smart placement
+  const layoutItems = useMemo(() => {
+    const items: GridLayout[] = []
+
+    validCharts.forEach((config, index) => {
       const originalIndex = analysis.chartConfig.indexOf(config)
       const chartId = config.id || `chart-${originalIndex}`
       const customization = chartCustomizations[chartId]
 
-      // Calculate dynamic dimensions based on data
-      const defaultDimensions = calculateDynamicDimensions(config, data)
+      // Get dimensions for this chart type
+      const defaultDimensions = getFixedDimensions(config)
 
-      // Use saved position or calculate automatic positioning with collision detection
-      const position = customization?.position || (() => {
-        // For tables (full width), always start on new row
+      // Use saved position or calculate optimal positioning
+      let position = customization?.position
+
+      if (!position) {
+        // Tables always get full width and start on new row
         if (config.type === 'table') {
-          let y = 0
-          // Find the lowest available row
-          while (occupiedPositions.has(`0,${y}`)) {
-            y++
-          }
-          // Mark full row as occupied
-          for (let x = 0; x < 12; x++) {
-            for (let dy = 0; dy < defaultDimensions.h; dy++) {
-              occupiedPositions.add(`${x},${y + dy}`)
-            }
-          }
-          return { x: 0, y, ...defaultDimensions }
+          const maxY = items.reduce((max, item) => Math.max(max, item.y + item.h), 0)
+          position = { x: 0, y: maxY, ...defaultDimensions }
+        } else {
+          // Use smart placement for other chart types
+          const optimalPos = findOptimalPosition(defaultDimensions, items)
+          position = { ...optimalPos, ...defaultDimensions }
         }
+      }
 
-        // For other charts, find next available position
-        let x = 0
-        let y = 0
-
-        while (y < 50) { // Safety limit
-          // Try to place at current position
-          let canPlace = true
-
-          // Check if position fits and doesn't overlap
-          for (let dx = 0; dx < defaultDimensions.w && canPlace; dx++) {
-            for (let dy = 0; dy < defaultDimensions.h && canPlace; dy++) {
-              if (x + dx >= 12 || occupiedPositions.has(`${x + dx},${y + dy}`)) {
-                canPlace = false
-              }
-            }
-          }
-
-          if (canPlace) {
-            // Mark positions as occupied
-            for (let dx = 0; dx < defaultDimensions.w; dx++) {
-              for (let dy = 0; dy < defaultDimensions.h; dy++) {
-                occupiedPositions.add(`${x + dx},${y + dy}`)
-              }
-            }
-            return { x, y, ...defaultDimensions }
-          }
-
-          // Move to next position
-          x += defaultDimensions.w
-          if (x + defaultDimensions.w > 12) {
-            x = 0
-            y += defaultDimensions.h
-          }
-        }
-
-        // Fallback position
-        return { x: 0, y: 0, ...defaultDimensions }
-      })()
-
-      return {
+      const layoutItem: GridLayout = {
         i: chartId,
         x: position.x,
         y: position.y,
         w: position.w,
         h: position.h,
-        // Enhanced minimum dimensions to prevent charts from becoming too small
-        minW: config.type === 'scorecard' ? 2 : config.type === 'table' ? 8 : 3,
-        minH: config.type === 'scorecard' ? 1 : config.type === 'table' ? 3 : 2,
+        // Minimum dimensions to ensure charts remain readable (320x400px minimum)
+        minW: config.type === 'scorecard' ? 2 : config.type === 'table' ? 8 : 4,
+        minH: config.type === 'scorecard' ? 1 : 2,
         maxW: config.type === 'table' ? 12 : 12,
-        maxH: config.type === 'table' ? 12 : 8,
-        isDraggable: true,  // Always allow dragging
-        isResizable: true,  // Always allow resizing
+        maxH: 10,
+        isDraggable: true,
+        isResizable: true,
       }
+
+      items.push(layoutItem)
     })
-  }, [validCharts, analysis.chartConfig, chartCustomizations, isLayoutMode, isCustomizing])
+
+    return items
+  }, [validCharts, chartCustomizations, getFixedDimensions, findOptimalPosition])
+
+  // Simple layout validation - only used as safety net
+  const validateLayout = useCallback((layout: GridLayout[]) => {
+    // Since we're using smart placement, validation should be minimal
+    // Just ensure items are within bounds
+    return layout.map(item => ({
+      ...item,
+      x: Math.max(0, Math.min(item.x, 12 - item.w)),
+      y: Math.max(0, item.y)
+    }))
+  }, [])
 
   // Handle layout changes
   const handleLayoutChange = useCallback((layout: GridLayout[], allLayouts: { [key: string]: GridLayout[] }) => {
+    // Validate and fix any overlaps
+    const validatedLayout = validateLayout(layout)
+
     setLayouts(allLayouts)
 
-    // Update chart positions in store
-    layout.forEach(item => {
+    // Update chart positions in store using validated layout
+    validatedLayout.forEach(item => {
       updateChartCustomization(item.i, {
         position: { x: item.x, y: item.y, w: item.w, h: item.h }
       })
     })
 
-    // Auto-save if enabled
-    if (autoSaveLayouts && !showSaveDialog) {
-      // Debounced auto-save could be implemented here
+    // Auto-save dashboard config to project if enabled and we have a current project
+    if (autoSaveLayouts && currentProjectId && !showSaveDialog) {
+      // Debounced auto-save to prevent excessive saves
+      const timeoutId = setTimeout(() => {
+        const config = {
+          chartCustomizations,
+          currentLayout,
+          filters: dashboardFilters,
+          theme: currentTheme
+        }
+        saveDashboardConfig(currentProjectId, config).catch(console.error)
+      }, 1000) // 1 second debounce
+
+      return () => clearTimeout(timeoutId)
     }
-  }, [updateChartCustomization, autoSaveLayouts, showSaveDialog])
+  }, [updateChartCustomization, autoSaveLayouts, showSaveDialog, validateLayout, currentProjectId, chartCustomizations, currentLayout, dashboardFilters, currentTheme, saveDashboardConfig])
 
   // Handle chart selection
   const handleChartSelect = useCallback((chartId: string) => {
@@ -462,14 +472,15 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
             layouts={layouts}
             breakpoints={breakpoints}
             cols={cols}
-            rowHeight={160}
+            rowHeight={200}
             onLayoutChange={handleLayoutChange}
             onDragStart={handleDragStart}
             onDragStop={handleDragStop}
             isDraggable={true}
             isResizable={true}
-            compactType="vertical"
-            preventCollision={false}
+            compactType={null}
+            preventCollision={true}
+            allowOverlap={false}
             useCSSTransforms={true}
             transformScale={1}
             margin={[24, 24]}

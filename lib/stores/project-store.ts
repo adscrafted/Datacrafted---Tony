@@ -28,6 +28,14 @@ export interface Project {
   }
   // Reference to IndexedDB stored data for large datasets
   dataStorageId?: string
+  // Dashboard layout and customization persistence
+  dashboardConfig?: {
+    chartCustomizations: Record<string, any>
+    currentLayout: any
+    filters: any[]
+    theme: any
+    lastModified: string
+  }
 }
 
 interface ProjectStore {
@@ -51,6 +59,20 @@ interface ProjectStore {
   saveProjectData: (projectId: string, data: DataRow[], analysis?: AnalysisResult, schema?: DataSchema) => Promise<void>
   getProjectData: (projectId: string) => { rawData: DataRow[], analysis: AnalysisResult | null, dataSchema: DataSchema | null } | null
   loadProjectDataAsync: (projectId: string) => Promise<{ rawData: DataRow[], analysis: AnalysisResult | null, dataSchema: DataSchema | null } | null>
+
+  // Dashboard configuration management
+  saveDashboardConfig: (projectId: string, config: {
+    chartCustomizations: Record<string, any>
+    currentLayout: any
+    filters: any[]
+    theme: any
+  }) => Promise<void>
+  loadDashboardConfig: (projectId: string) => {
+    chartCustomizations: Record<string, any>
+    currentLayout: any
+    filters: any[]
+    theme: any
+  } | null
 
   // Utility
   clearStore: () => void
@@ -121,14 +143,22 @@ export const useProjectStore = create<ProjectStore>()(
       },
 
       loadProjects: async (userId) => {
+        console.log('🔵 [PROJECT_STORE] loadProjects called for userId:', userId)
         set({ isLoading: true, error: null })
         try {
-          // In production, this would fetch from Firestore/BigQuery
-          // For now, we just filter by userId from local storage
+          // Get the current projects from store (which includes persisted data)
           const allProjects = get().projects
+          console.log('🔍 [PROJECT_STORE] All projects in store:', allProjects.length)
+
+          // Filter by userId and status - but DON'T overwrite the projects array
+          // The projects array should contain ALL projects, we just track which ones to display
           const userProjects = allProjects.filter(p => p.userId === userId && p.status !== 'deleted')
-          set({ projects: userProjects, isLoading: false })
+          console.log('✅ [PROJECT_STORE] Filtered user projects:', userProjects.length)
+
+          // Don't overwrite projects array - just update loading state
+          set({ isLoading: false })
         } catch (error) {
+          console.error('❌ [PROJECT_STORE] Error in loadProjects:', error)
           set({ error: error instanceof Error ? error.message : 'Failed to load projects', isLoading: false })
         }
       },
@@ -256,6 +286,32 @@ export const useProjectStore = create<ProjectStore>()(
           }
         }
 
+        return null
+      },
+
+      saveDashboardConfig: async (projectId, config) => {
+        set((state) => ({
+          projects: state.projects.map(p =>
+            p.id === projectId
+              ? {
+                  ...p,
+                  dashboardConfig: {
+                    ...config,
+                    lastModified: new Date().toISOString()
+                  },
+                  updatedAt: new Date().toISOString()
+                }
+              : p
+          )
+        }))
+      },
+
+      loadDashboardConfig: (projectId) => {
+        const project = get().projects.find(p => p.id === projectId)
+        if (project?.dashboardConfig) {
+          const { lastModified, ...config } = project.dashboardConfig
+          return config
+        }
         return null
       },
 
