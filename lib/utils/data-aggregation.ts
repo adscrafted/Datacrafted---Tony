@@ -135,3 +135,110 @@ export function aggregateDataByGranularity(
     return dateA.getTime() - dateB.getTime()
   })
 }
+
+export type AggregationMethod = 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct'
+
+/**
+ * Parses numeric values including currency-formatted strings
+ * Handles: € 0, € 50.00, $1,234.56, £100, ¥1000, 50%, etc.
+ */
+function parseNumericValue(value: any): number | null {
+  if (typeof value === 'number') return value
+  if (typeof value !== 'string') return null
+
+  // Remove currency symbols, commas, spaces, and percentages
+  const cleaned = value.replace(/[€$£¥,\s%]/g, '')
+  const num = parseFloat(cleaned)
+  return isNaN(num) ? null : num
+}
+
+/**
+ * Aggregates chart data by grouping on X-axis and aggregating Y-axis values
+ * Used for charts where multiple data points share the same X-axis value
+ *
+ * @param data - The data to aggregate
+ * @param xAxisKey - The key to group by (X-axis)
+ * @param yAxisKeys - The keys to aggregate (Y-axis values)
+ * @param aggregationMethod - The aggregation method to use (default: 'sum')
+ * @returns Aggregated data with one row per unique X-axis value
+ */
+export function aggregateChartData(
+  data: DataRow[],
+  xAxisKey: string,
+  yAxisKeys: string[],
+  aggregationMethod: AggregationMethod = 'sum'
+): DataRow[] {
+  if (!data || data.length === 0) return data
+  if (!xAxisKey || yAxisKeys.length === 0) return data
+
+  // Group data by X-axis value
+  const groups = new Map<string, DataRow[]>()
+
+  data.forEach(row => {
+    const xValue = row[xAxisKey]
+    if (xValue === null || xValue === undefined) return
+
+    const groupKey = String(xValue)
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, [])
+    }
+    groups.get(groupKey)!.push(row)
+  })
+
+  // Aggregate each group
+  const aggregatedData: DataRow[] = []
+
+  groups.forEach((groupRows, groupKey) => {
+    if (groupRows.length === 0) return
+
+    const aggregatedRow: DataRow = {}
+    const firstRow = groupRows[0]
+
+    // Preserve X-axis value from first row
+    aggregatedRow[xAxisKey] = firstRow[xAxisKey]
+
+    // Preserve other non-numeric columns from first row
+    Object.keys(firstRow).forEach(key => {
+      if (key === xAxisKey || yAxisKeys.includes(key)) return
+      aggregatedRow[key] = firstRow[key]
+    })
+
+    // Aggregate each Y-axis key
+    yAxisKeys.forEach(yKey => {
+      const values = groupRows.map(row => parseNumericValue(row[yKey])).filter(v => v !== null) as number[]
+
+      if (values.length === 0) {
+        aggregatedRow[yKey] = null
+        return
+      }
+
+      switch (aggregationMethod) {
+        case 'sum':
+          aggregatedRow[yKey] = values.reduce((sum, val) => sum + val, 0)
+          break
+        case 'avg':
+          aggregatedRow[yKey] = values.reduce((sum, val) => sum + val, 0) / values.length
+          break
+        case 'count':
+          aggregatedRow[yKey] = values.length
+          break
+        case 'min':
+          aggregatedRow[yKey] = Math.min(...values)
+          break
+        case 'max':
+          aggregatedRow[yKey] = Math.max(...values)
+          break
+        case 'distinct':
+          aggregatedRow[yKey] = new Set(values).size
+          break
+        default:
+          // Default to sum if method is not recognized
+          aggregatedRow[yKey] = values.reduce((sum, val) => sum + val, 0)
+      }
+    })
+
+    aggregatedData.push(aggregatedRow)
+  })
+
+  return aggregatedData
+}

@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { EnhancedChartWrapper } from './enhanced-chart-wrapper'
 import { ChartTemplateGallery } from './chart-template-gallery'
+import { ChartCustomizationPanel } from './chart-customization-panel'
 import { useDataStore, AnalysisResult, DataRow } from '@/lib/store'
 import { useProjectStore } from '@/lib/stores/project-store'
 import { filterValidCharts } from '@/lib/utils/chart-validator'
@@ -48,6 +49,12 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
   data,
   className
 }) => {
+  console.log('🏗️ [FLEXIBLE_DASHBOARD] Component rendering with:', {
+    analysisChartConfigLength: analysis.chartConfig?.length || 0,
+    dataLength: data.length,
+    chartTitles: analysis.chartConfig?.map(c => c.title)
+  })
+
   const [selectedChartId, setSelectedChartId] = useState<string | null>(null)
   const [newlyAddedChartId, setNewlyAddedChartId] = useState<string | null>(null) // Track newly added chart by ID
   const [layouts, setLayouts] = useState<{ [key: string]: GridLayout[] }>({})
@@ -80,7 +87,8 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     isDragging,
     setIsDragging,
     currentTheme,
-    dashboardFilters
+    dashboardFilters,
+    draftChart
   } = useDataStore()
 
   const { currentProjectId, saveDashboardConfig, loadDashboardConfig } = useProjectStore()
@@ -117,25 +125,56 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       chartTypes: analysis.chartConfig?.map(c => c.type).join(', ')
     })
 
+    // CRITICAL FIX: If data is empty but we have charts, don't filter them out
+    // The charts will display "No data" states individually rather than hiding the entire dashboard
+    if (!data || data.length === 0) {
+      console.warn('⚠️ [FLEXIBLE_DASHBOARD] Data is empty - showing all charts with empty state')
+      return analysis.chartConfig || []
+    }
+
     const filtered = filterValidCharts(analysis.chartConfig, data)
 
     console.log('🔍 [FLEXIBLE_DASHBOARD] Charts after filtering:', {
       validCharts: filtered.length,
-      filteredOut: (analysis.chartConfig?.length || 0) - filtered.length
+      filteredOut: (analysis.chartConfig?.length || 0) - filtered.length,
+      filteredOutTitles: (analysis.chartConfig || [])
+        .filter(c => !filtered.includes(c))
+        .map(c => c.title)
     })
 
     return filtered
   }, [analysis.chartConfig, data])
 
   // Sort charts by quality score (highest first), keeping scorecards separate
+  // CRITICAL: Filter out draft chart from rendering - it should NOT appear on dashboard yet
   const sortedCharts = useMemo(() => {
-    console.log('📊 [FLEXIBLE_DASHBOARD] Sorting charts by quality score')
+    console.log('📊 [FLEXIBLE_DASHBOARD] Sorting charts by quality score', {
+      validChartsCount: validCharts.length,
+      validChartTitles: validCharts.map(c => c.title),
+      draftChartId: draftChart?.id
+    })
+
+    // CRITICAL: Filter out the draft chart - it shouldn't be visible on the dashboard yet
+    const chartsToDisplay = validCharts.filter(chart => {
+      const chartId = chart.id || `chart-${analysis.chartConfig.indexOf(chart)}`
+      const isDraft = draftChart?.id === chartId
+      if (isDraft) {
+        console.log('🚫 [FLEXIBLE_DASHBOARD] Filtering out draft chart:', chart.title)
+      }
+      return !isDraft
+    })
+
+    console.log('📊 [FLEXIBLE_DASHBOARD] Charts after draft filter:', {
+      beforeFilter: validCharts.length,
+      afterFilter: chartsToDisplay.length,
+      filteredOutDraft: validCharts.length > chartsToDisplay.length
+    })
 
     // Separate scorecards from other charts
-    const scorecards: typeof validCharts = []
-    const otherCharts: typeof validCharts = []
+    const scorecards: typeof chartsToDisplay = []
+    const otherCharts: typeof chartsToDisplay = []
 
-    validCharts.forEach(chart => {
+    chartsToDisplay.forEach(chart => {
       if (chart.type === 'scorecard') {
         scorecards.push(chart)
       } else {
@@ -150,8 +189,13 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       return scoreB - scoreA // Descending order
     })
 
+    const result = [...scorecards, ...sortedOthers]
+
     console.log('📊 [FLEXIBLE_DASHBOARD] Sorted chart order:', {
       scorecards: scorecards.length,
+      otherCharts: sortedOthers.length,
+      totalSorted: result.length,
+      sortedTitles: result.map(c => c.title),
       otherCharts: sortedOthers.map(c => ({
         title: c.title,
         type: c.type,
@@ -160,8 +204,8 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     })
 
     // Return scorecards first, then sorted other charts
-    return [...scorecards, ...sortedOthers]
-  }, [validCharts])
+    return result
+  }, [validCharts, draftChart, analysis.chartConfig])
 
   // Extract quality scores from enhanced analysis if available
   const qualityScores = useMemo(() => {
@@ -757,29 +801,40 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         "dashboard-container draggable-grid-container relative",
         isLayoutMode && "layout-mode"
       )}>
-        {sortedCharts.length === 0 ? (
-          <div className="flex items-center justify-center py-32">
-            <div className="text-center space-y-6 max-w-md">
-              <div className="w-20 h-20 mx-auto bg-gray-100 rounded-3xl flex items-center justify-center">
-                <Layout className="w-10 h-10 text-gray-400" />
-              </div>
-              <div>
-                <h3 className="text-2xl font-semibold text-gray-900">No charts yet</h3>
-                <p className="text-gray-500 mt-3 text-base leading-relaxed">
-                  Add your first chart to get started with your dashboard
-                </p>
-                <Button
-                  onClick={() => setShowChartTemplateGallery(true)}
-                  className="mt-4"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Your First Chart
-                </Button>
+        {(() => {
+          // CRITICAL DEBUG: Log actual state at render time
+          console.log('🚨 [RENDER_CHECK] Empty state check:', {
+            sortedChartsLength: sortedCharts.length,
+            validChartsLength: validCharts.length,
+            dataLength: data.length,
+            analysisChartConfigLength: analysis.chartConfig?.length || 0,
+            sortedChartTitles: sortedCharts.map(c => c.title),
+            validChartTitles: validCharts.map(c => c.title)
+          })
+
+          return sortedCharts.length === 0 ? (
+            <div className="flex items-center justify-center py-32">
+              <div className="text-center space-y-6 max-w-md">
+                <div className="w-20 h-20 mx-auto bg-gray-100 rounded-3xl flex items-center justify-center">
+                  <Layout className="w-10 h-10 text-gray-400" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-semibold text-gray-900">No charts yet</h3>
+                  <p className="text-gray-500 mt-3 text-base leading-relaxed">
+                    Add your first chart to get started with your dashboard
+                  </p>
+                  <Button
+                    onClick={() => setShowChartTemplateGallery(true)}
+                    className="mt-4"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Your First Chart
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        ) : (
-          <ResponsiveGridLayout
+          ) : (
+            <ResponsiveGridLayout
             key={layoutKey} // Force re-render when charts are added/removed
             className="layout"
             layouts={Object.keys(layouts).length > 0 ? layouts : { lg: layoutItems }}
@@ -809,9 +864,27 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
               const chartId = config.id || `chart-${originalIndex}`
               const isSelected = selectedChartId === chartId
               const customization = chartCustomizations[chartId]
+              // CRITICAL FIX: Default to visible=true, not false
+              // Previously: isVisible !== false means if customization.isVisible is undefined, it's true
+              // But we need to ensure this is working correctly
               const isVisible = customization?.isVisible !== false
 
-              if (!isVisible && !isLayoutMode) return null
+              console.log(`🎨 [CHART_RENDER] Chart ${index}:`, {
+                chartId,
+                title: config.title,
+                type: config.type,
+                hasCustomization: !!customization,
+                customizationIsVisible: customization?.isVisible,
+                computedIsVisible: isVisible,
+                isLayoutMode,
+                willRender: isVisible || isLayoutMode,
+                willReturnNull: !isVisible && !isLayoutMode
+              })
+
+              if (!isVisible && !isLayoutMode) {
+                console.warn(`⚠️ [CHART_RENDER] Skipping chart "${config.title}" - not visible and not in layout mode`)
+                return null
+              }
 
               // PERFORMANCE: Memoize props to prevent unnecessary re-renders
               // Stabilize array and object references
@@ -854,7 +927,8 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
               )
             })}
           </ResponsiveGridLayout>
-        )}
+          )
+        })()}
       </div>
 
       {/* Customization Mode Indicator */}
@@ -918,12 +992,47 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         isOpen={showChartTemplateGallery}
         onClose={() => setShowChartTemplateGallery(false)}
         onChartAdded={(chartId) => {
-          // Select the new chart and open customization panel with DATA tab
+          console.log('🎨 [DASHBOARD] Chart added from gallery:', chartId)
+
+          // CRITICAL: Set selection FIRST, then trigger customization
+          // This ensures the chart is selected when autoOpen evaluates
           setSelectedChartId(chartId)
-          setNewlyAddedChartId(chartId) // Track the specific newly added chart
-          setIsCustomizing(true)
+          setNewlyAddedChartId(chartId)
+
+          // Delay customization trigger slightly to ensure state is updated
+          // This allows React to process the selection state before opening panel
+          setTimeout(() => {
+            console.log('🎨 [DASHBOARD] Opening customization panel for new chart')
+            setIsCustomizing(true)
+          }, 50)
         }}
       />
+
+      {/* Standalone Chart Customization Panel for Draft Charts */}
+      {/* CRITICAL FIX: Draft charts are filtered out from rendering, so we need a standalone panel */}
+      {draftChart && (() => {
+        console.log('🎯 [DASHBOARD] Rendering standalone panel for draft chart:', {
+          draftChartId: draftChart.id,
+          draftChartType: draftChart.type,
+          hasCustomization: !!chartCustomizations[draftChart.id],
+          customization: chartCustomizations[draftChart.id]
+        })
+        return (
+          <div className="hidden">
+            {/* Hidden div - just hosts the panel which renders via portal */}
+            <ChartCustomizationPanel
+              chartId={draftChart.id}
+              title={draftChart.title}
+              description={draftChart.description}
+              chartType={draftChart.type as any}
+              customization={chartCustomizations[draftChart.id]}
+              onCustomizationChange={updateChartCustomization}
+              initialTab="data"
+              autoOpen={true}
+            />
+          </div>
+        )
+      })()}
     </div>
   )
 }

@@ -767,7 +767,7 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
               dataMapping={{
                 cohort: customization?.dataMapping?.cohort || safeDataKey[0] || 'cohort',
                 period: customization?.dataMapping?.period || safeDataKey[1] || 'period',
-                retention: customization?.dataMapping?.value || safeDataKey[2] || 'retention'
+                retention: customization?.dataMapping?.retention || safeDataKey[2] || 'retention'
               }}
               customization={{
                 maxPeriods: 12,
@@ -785,7 +785,7 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
               dataMapping={{
                 category: customization?.dataMapping?.category || safeDataKey[0] || 'category',
                 actual: customization?.dataMapping?.actual || safeDataKey[1] || 'actual',
-                target: customization?.dataMapping?.comparative || undefined,
+                target: customization?.dataMapping?.target || undefined,
                 ranges: undefined  // Would need to be configured specifically
               }}
               customization={{

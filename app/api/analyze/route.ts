@@ -1689,6 +1689,16 @@ export async function POST(request: NextRequest) {
 - Multi-step transitions between states
 → **Recommend sankey diagram** for flow visualization
 
+### DETECT SPARKLINE OPPORTUNITIES:
+- **Limited display space**: Dashboard tiles, table cells, summary cards, inline trends
+- **Time series data** that needs compact visualization
+- **Small multiples** for comparison across categories
+- **Embedding trends** in tables or dashboards
+- Column names contain: "trend", "history", "timeline", "mini", "compact"
+- **Inline or embedded** visualization needs
+- **At-a-glance** trend indication without detailed axes
+→ **Recommend sparkline** for compact, space-efficient trend display
+
 ### GENERAL BUSINESS DOMAIN PATTERNS:
 - **E-commerce**: Likely has conversion funnels, product hierarchies (treemap), customer cohorts
 - **Advertising**: Performance vs targets (gauge), campaign efficiency (scatter), geographic distribution (heatmap)
@@ -2466,6 +2476,49 @@ export async function POST(request: NextRequest) {
                   legacyDataKey.push(...y2Values)
                 }
                 break
+              case 'waterfall':
+                if (dm.category) legacyDataKey.push(dm.category)
+                if (dm.value) legacyDataKey.push(dm.value)
+                if (dm.type && typeof dm.type === 'string') legacyDataKey.push(dm.type)
+                break
+              case 'funnel':
+                if (dm.stage) legacyDataKey.push(dm.stage)
+                if (dm.value) legacyDataKey.push(dm.value)
+                break
+              case 'heatmap':
+                if (dm.xAxis && typeof dm.xAxis === 'string') legacyDataKey.push(dm.xAxis)
+                if (dm.yAxis && typeof dm.yAxis === 'string') legacyDataKey.push(dm.yAxis)
+                if (dm.value) legacyDataKey.push(dm.value)
+                break
+              case 'gauge':
+                if (dm.metric) legacyDataKey.push(dm.metric)
+                if (dm.target && typeof dm.target === 'string') legacyDataKey.push(dm.target)
+                break
+              case 'cohort':
+                if (dm.cohort) legacyDataKey.push(dm.cohort)
+                if (dm.period) legacyDataKey.push(dm.period)
+                if (dm.retention) legacyDataKey.push(dm.retention)
+                break
+              case 'bullet':
+                if (dm.category) legacyDataKey.push(dm.category)
+                if (dm.actual) legacyDataKey.push(dm.actual)
+                if (dm.target && typeof dm.target === 'string') legacyDataKey.push(dm.target)
+                break
+              case 'treemap':
+                if (dm.category) legacyDataKey.push(dm.category)
+                if (dm.value) legacyDataKey.push(dm.value)
+                if (dm.parent && typeof dm.parent === 'string') legacyDataKey.push(dm.parent)
+                break
+              case 'sankey':
+                if (dm.source) legacyDataKey.push(dm.source)
+                if (dm.target && typeof dm.target === 'string') legacyDataKey.push(dm.target)
+                if (dm.flow || dm.value) legacyDataKey.push(dm.flow || dm.value)
+                break
+              case 'sparkline':
+                if (dm.xAxis && typeof dm.xAxis === 'string') legacyDataKey.push(dm.xAxis)
+                if (dm.yAxis && typeof dm.yAxis === 'string') legacyDataKey.push(dm.yAxis)
+                if (dm.trend) legacyDataKey.push(dm.trend)
+                break
             }
           }
 
@@ -2536,6 +2589,49 @@ export async function POST(request: NextRequest) {
                   const y2Values = Array.isArray(dm.yAxis2) ? dm.yAxis2 : [dm.yAxis2]
                   legacyDataKey.push(...y2Values)
                 }
+                break
+              case 'waterfall':
+                if (dm.category) legacyDataKey.push(dm.category)
+                if (dm.value) legacyDataKey.push(dm.value)
+                if (dm.type && typeof dm.type === 'string') legacyDataKey.push(dm.type)
+                break
+              case 'funnel':
+                if (dm.stage) legacyDataKey.push(dm.stage)
+                if (dm.value) legacyDataKey.push(dm.value)
+                break
+              case 'heatmap':
+                if (dm.xAxis && typeof dm.xAxis === 'string') legacyDataKey.push(dm.xAxis)
+                if (dm.yAxis && typeof dm.yAxis === 'string') legacyDataKey.push(dm.yAxis)
+                if (dm.value) legacyDataKey.push(dm.value)
+                break
+              case 'gauge':
+                if (dm.metric) legacyDataKey.push(dm.metric)
+                if (dm.target && typeof dm.target === 'string') legacyDataKey.push(dm.target)
+                break
+              case 'cohort':
+                if (dm.cohort) legacyDataKey.push(dm.cohort)
+                if (dm.period) legacyDataKey.push(dm.period)
+                if (dm.retention) legacyDataKey.push(dm.retention)
+                break
+              case 'bullet':
+                if (dm.category) legacyDataKey.push(dm.category)
+                if (dm.actual) legacyDataKey.push(dm.actual)
+                if (dm.target && typeof dm.target === 'string') legacyDataKey.push(dm.target)
+                break
+              case 'treemap':
+                if (dm.category) legacyDataKey.push(dm.category)
+                if (dm.value) legacyDataKey.push(dm.value)
+                if (dm.parent && typeof dm.parent === 'string') legacyDataKey.push(dm.parent)
+                break
+              case 'sankey':
+                if (dm.source) legacyDataKey.push(dm.source)
+                if (dm.target && typeof dm.target === 'string') legacyDataKey.push(dm.target)
+                if (dm.flow || dm.value) legacyDataKey.push(dm.flow || dm.value)
+                break
+              case 'sparkline':
+                if (dm.xAxis && typeof dm.xAxis === 'string') legacyDataKey.push(dm.xAxis)
+                if (dm.yAxis && typeof dm.yAxis === 'string') legacyDataKey.push(dm.yAxis)
+                if (dm.trend) legacyDataKey.push(dm.trend)
                 break
             }
           }

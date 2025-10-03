@@ -1,9 +1,16 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Space_Grotesk, Montserrat } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/lib/contexts/auth-context'
 
 const inter = Inter({ subsets: ['latin'] })
+const interTight = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter-tight',
+  weight: ['400', '500', '600', '700', '800', '900']
+})
+const spaceGrotesk = Space_Grotesk({ subsets: ['latin'], variable: '--font-space-grotesk' })
+const montserrat = Montserrat({ subsets: ['latin'], variable: '--font-montserrat' })
 
 export const metadata: Metadata = {
   title: 'DataCrafted - AI-Powered Data Analytics Dashboard',
@@ -16,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${interTight.variable} ${spaceGrotesk.variable} ${montserrat.variable}`}>
       <head>
         <style>{`
           :root {

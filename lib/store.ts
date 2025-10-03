@@ -72,13 +72,13 @@ export interface ChartCustomization {
   // Data mapping for custom column selection
   dataMapping?: {
     xAxis?: string
-    yAxis?: string | string[]
-    yAxis1?: string | string[] // For combo charts - left axis
-    yAxis2?: string | string[] // For combo charts - right axis
+    yAxis?: string | string[] // For single-axis charts (deprecated in favor of yAxis1)
+    yAxis1?: string | string[] // Left Y-axis - for dual-axis charts (bar, line, area, scatter, combo)
+    yAxis2?: string | string[] // Right Y-axis - for dual-axis charts (bar, line, area, scatter, combo)
     yAxis1Type?: 'bar' | 'line' | 'area' // For combo charts
     yAxis2Type?: 'bar' | 'line' | 'area' // For combo charts
-    yAxis1Label?: string // For combo charts
-    yAxis2Label?: string // For combo charts
+    yAxis1Label?: string // Left Y-axis label
+    yAxis2Label?: string // Right Y-axis label
     category?: string // For pie charts
     value?: string // For pie charts and scorecards
     type?: string // For waterfall charts - type column
@@ -328,6 +328,7 @@ interface DataStore {
   gridSnapping: boolean
   showGridLines: boolean
   autoSaveLayouts: boolean
+  draftChart: { id: string; type: string; title: string; description: string } | null // Chart being configured before adding to dashboard
 
   // Upload status state
   uploadProgress: number
@@ -417,6 +418,8 @@ interface DataStore {
   resetToDefaultLayout: () => void
   exportLayoutConfig: () => Promise<void>
   importLayoutConfig: (configFile: File) => Promise<void>
+  setDraftChart: (chart: { id: string; type: string; title: string; description: string } | null) => void
+  commitDraftChart: () => void
 
   // Upload status actions
   setUploadProgress: (progress: number) => void
@@ -751,6 +754,7 @@ export const useDataStore = create<DataStore>()(
       gridSnapping: true,
       showGridLines: false,
       autoSaveLayouts: true,
+      draftChart: null,
 
       // Upload status state
       uploadProgress: 0,
@@ -1669,6 +1673,17 @@ export const useDataStore = create<DataStore>()(
 
         if (dateColumns.length > 0) {
           filteredData = aggregateDataByGranularity(filteredData, granularity, dateColumns[0])
+
+          // Ensure data is always sorted chronologically by date (critical for time-series charts)
+          filteredData = filteredData.sort((a, b) => {
+            const dateA = new Date(a[dateColumns[0]] as string | number | Date)
+            const dateB = new Date(b[dateColumns[0]] as string | number | Date)
+
+            // Handle invalid dates gracefully
+            if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) return 0
+
+            return dateA.getTime() - dateB.getTime()
+          })
         }
 
         return filteredData
@@ -1679,235 +1694,46 @@ export const useDataStore = create<DataStore>()(
         const state = get()
         const chartId = `chart-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
+        console.log('🎨 [ADDCHART] Adding new chart:', {
+          chartId,
+          templateType: template.type,
+          templateName: template.name,
+          availableColumnsCount: state.availableColumns.length,
+          currentChartsCount: state.analysis?.chartConfig?.length || 0
+        })
+
         // Guard: Ensure we have columns before proceeding
         if (state.availableColumns.length === 0) {
-          console.error('Cannot add chart: no data columns available')
+          console.error('❌ [ADDCHART] Cannot add chart: no data columns available')
           return chartId
         }
 
-        // Generate data keys based on available columns and template requirements
-        const availableNumberColumns = state.availableColumns.filter(col => {
-          const sampleValue = state.rawData[0]?.[col]
-          return typeof sampleValue === 'number' || !isNaN(Number(sampleValue))
-        })
-        const availableStringColumns = state.availableColumns.filter(col => {
-          const sampleValue = state.rawData[0]?.[col]
-          return typeof sampleValue === 'string' && isNaN(Number(sampleValue))
-        })
-
-        // Count existing charts of the same type to rotate column assignments
-        const existingChartsOfType = state.analysis?.chartConfig?.filter(c => c.type === template.type) || []
-
-        // Cap the index to prevent infinite growth and unpredictable rotation
-        const maxColumns = template.type === 'scatter' || template.type === 'pie'
-          ? Math.max(availableNumberColumns.length, availableStringColumns.length, 1)
-          : Math.max(availableStringColumns.length, 1)
-        const chartTypeIndex = Math.min(existingChartsOfType.length, maxColumns * 3) // Allow up to 3x rotation
-
-        let dataKeys: string[] = []
-        let dataMapping: any = {}
-
-        if (template.type === 'pie') {
-          // Rotate through available columns for duplicate pie charts
-          const categoryOffset = chartTypeIndex % availableStringColumns.length
-          const valueOffset = chartTypeIndex % availableNumberColumns.length
-          const categoryCol = availableStringColumns[categoryOffset] || availableStringColumns[0]
-          const valueCol = availableNumberColumns[valueOffset] || availableNumberColumns[0]
-          dataKeys = [categoryCol, valueCol].filter(Boolean)
-          dataMapping = {
-            category: categoryCol,
-            value: valueCol
-          }
-        } else if (template.type === 'scorecard') {
-          // Rotate through metrics for duplicate scorecards
-          const metricOffset = chartTypeIndex % availableNumberColumns.length
-          const metricCol = availableNumberColumns[metricOffset] || availableNumberColumns[0]
-          dataKeys = [metricCol].filter(Boolean)
-          dataMapping = {
-            metric: metricCol
-          }
-        } else if (template.type === 'table') {
-          const tableColumns = state.availableColumns.slice(0, 8)
-          dataKeys = tableColumns
-          dataMapping = {
-            columns: tableColumns
-          }
-        } else if (template.type === 'scatter') {
-          // Rotate through available numeric columns for duplicate scatter charts
-          const columnOffset = chartTypeIndex * 2 // Each scatter uses 2 primary columns
-          const numCols = availableNumberColumns.length
-
-          // Ensure we have at least 2 numeric columns
-          if (numCols >= 2) {
-            const xKey = availableNumberColumns[columnOffset % numCols]
-            const yKey = availableNumberColumns[(columnOffset + 1) % numCols]
-            const sizeKey = numCols > 2 ? availableNumberColumns[(columnOffset + 2) % numCols] : undefined
-            const colorKey = availableStringColumns.length > 0 ? availableStringColumns[chartTypeIndex % availableStringColumns.length] : undefined
-
-            dataKeys = [xKey, yKey, sizeKey, colorKey].filter(Boolean)
-            dataMapping = {
-              xAxis: xKey,
-              yAxis: yKey,
-              size: sizeKey,
-              color: colorKey
-            }
-          } else {
-            // Fallback if not enough columns
-            const xKey = availableNumberColumns[0]
-            const yKey = availableNumberColumns[1] || availableNumberColumns[0]
-            dataKeys = [xKey, yKey].filter(Boolean)
-            dataMapping = {
-              xAxis: xKey,
-              yAxis: yKey
-            }
-          }
-        } else if (template.type === 'area') {
-          // For area charts - rotate through available columns like line/bar
-          const xOffset = chartTypeIndex % Math.max(availableStringColumns.length, 1)
-          const xKey = availableStringColumns[xOffset] || availableNumberColumns[0]
-          const yKeys = availableNumberColumns.slice(0, template.maxColumns ? template.maxColumns - 1 : 3)
-          dataKeys = [xKey, ...yKeys].filter(Boolean)
-          dataMapping = {
-            xAxis: xKey,
-            yAxis: yKeys.length > 1 ? yKeys : yKeys[0]
-          }
-        } else if (template.type === 'waterfall') {
-          // Waterfall chart: category + value
-          const categoryCol = availableStringColumns[0] || availableNumberColumns[0]
-          const valueCol = availableNumberColumns[0]
-          dataKeys = [categoryCol, valueCol].filter(Boolean)
-          dataMapping = {
-            category: categoryCol,
-            value: valueCol
-          }
-        } else if (template.type === 'funnel') {
-          // Funnel chart: stage + value
-          const stageCol = availableStringColumns[0] || availableNumberColumns[0]
-          const valueCol = availableNumberColumns[0]
-          dataKeys = [stageCol, valueCol].filter(Boolean)
-          dataMapping = {
-            category: stageCol,
-            value: valueCol
-          }
-        } else if (template.type === 'heatmap') {
-          // Heatmap: xAxis + yAxis + value
-          const xCol = availableStringColumns[0] || availableNumberColumns[0]
-          const yCol = availableStringColumns[1] || availableStringColumns[0]
-          const valueCol = availableNumberColumns[0]
-          dataKeys = [xCol, yCol, valueCol].filter(Boolean)
-          dataMapping = {
-            xAxis: xCol,
-            yAxis: yCol,
-            value: valueCol
-          }
-        } else if (template.type === 'gauge') {
-          // Gauge chart: single metric + optional target
-          const metricCol = availableNumberColumns[0]
-          const targetCol = availableNumberColumns[1]
-          dataKeys = [metricCol, targetCol].filter(Boolean)
-          dataMapping = {
-            metric: metricCol,
-            value: targetCol
-          }
-        } else if (template.type === 'cohort') {
-          // Cohort analysis: date + cohort + metric
-          const dateCol = state.availableColumns.find(col => {
-            const sampleValue = state.rawData[0]?.[col]
-            return sampleValue instanceof Date || !isNaN(Date.parse(String(sampleValue)))
-          }) || availableStringColumns[0]
-          const cohortCol = availableStringColumns[0]
-          const metricCol = availableNumberColumns[0]
-          dataKeys = [dateCol, cohortCol, metricCol].filter(Boolean)
-          dataMapping = {
-            xAxis: dateCol,
-            category: cohortCol,
-            value: metricCol
-          }
-        } else if (template.type === 'bullet') {
-          // Bullet chart: category + actual + target
-          const categoryCol = availableStringColumns[0] || availableNumberColumns[0]
-          const actualCol = availableNumberColumns[0]
-          const targetCol = availableNumberColumns[1] || availableNumberColumns[0]
-          dataKeys = [categoryCol, actualCol, targetCol].filter(Boolean)
-          dataMapping = {
-            category: categoryCol,
-            value: actualCol,
-            metric: targetCol
-          }
-        } else if (template.type === 'treemap') {
-          // Treemap: category + value (+ optional subcategory)
-          const categoryCol = availableStringColumns[0]
-          const subcategoryCol = availableStringColumns[1]
-          const valueCol = availableNumberColumns[0]
-          dataKeys = [categoryCol, subcategoryCol, valueCol].filter(Boolean)
-          dataMapping = {
-            category: categoryCol,
-            value: valueCol,
-            ...(subcategoryCol && { color: subcategoryCol })
-          }
-        } else if (template.type === 'sankey') {
-          // Sankey: source + target + value
-          const sourceCol = availableStringColumns[0]
-          const targetCol = availableStringColumns[1] || availableStringColumns[0]
-          const valueCol = availableNumberColumns[0]
-          dataKeys = [sourceCol, targetCol, valueCol].filter(Boolean)
-          dataMapping = {
-            xAxis: sourceCol,
-            yAxis: targetCol,
-            value: valueCol
-          }
-        } else if (template.type === 'sparkline') {
-          // Sparkline: single metric over time
-          const valueCol = availableNumberColumns[0]
-          dataKeys = [valueCol].filter(Boolean)
-          dataMapping = {
-            yAxis: valueCol
-          }
-        } else {
-          // For line, bar, combo charts - rotate through available columns
-          const xOffset = chartTypeIndex % Math.max(availableStringColumns.length, 1)
-          const xKey = availableStringColumns[xOffset] || availableNumberColumns[0]
-          const yKeys = availableNumberColumns.slice(0, template.maxColumns ? template.maxColumns - 1 : 3)
-          dataKeys = [xKey, ...yKeys].filter(Boolean)
-          dataMapping = {
-            xAxis: xKey,
-            yAxis: yKeys.length > 1 ? yKeys : yKeys[0]
-          }
-        }
-
-        // Create chart config with proper dataMapping structure
+        // Create chart config with EMPTY dataMapping - user must configure manually
         const newChart = {
           id: chartId,
           type: template.type,
           title: template.name,
           description: template.description,
-          dataKey: dataKeys,
-          dataMapping: dataMapping, // ⭐ NOW POPULATED
+          dataKey: [], // Empty - user must configure
+          dataMapping: {}, // Empty - user must configure in Data tab
         }
 
-        // Update analysis with new chart FIRST
-        set(state => ({
-          analysis: state.analysis ? {
-            ...state.analysis,
-            chartConfig: [...state.analysis.chartConfig, newChart]
-          } : null
-        }))
+        console.log('✅ [ADDCHART] Created draft chart object:', newChart)
 
-        // Create customization entry WITHOUT position initially
-        // The flexible-dashboard-layout will calculate the optimal position
+        // CRITICAL CHANGE: Store in draftChart instead of adding to analysis.chartConfig
+        set({ draftChart: newChart })
+
+        // Create customization entry for the draft chart so Data tab can work with it
         const customization: ChartCustomization = {
           id: chartId,
-          // CRITICAL: Don't set position here for new charts
-          // Let the layout component's bulletproof positioning handle it
           position: position ?
             { x: position.x, y: position.y, ...template.defaultPosition } :
-            undefined, // This will trigger smart positioning in the layout
+            undefined,
           isVisible: true,
           chartType: template.type,
         }
 
         get().updateChartCustomization(chartId, customization)
-        get().addToHistory('chart_add', { chartId, template })
 
         // Return the chartId so the caller can select/customize it
         return chartId
@@ -2092,6 +1918,29 @@ export const useDataStore = create<DataStore>()(
         } catch (error) {
           console.error('Failed to import layout config:', error)
         }
+      },
+
+      setDraftChart: (chart) => set({ draftChart: chart }),
+
+      commitDraftChart: () => {
+        const state = get()
+        if (!state.draftChart) {
+          console.warn('⚠️ [COMMIT_DRAFT] No draft chart to commit')
+          return
+        }
+
+        console.log('✅ [COMMIT_DRAFT] Committing draft chart to dashboard:', state.draftChart)
+
+        // Add the draft chart to analysis.chartConfig
+        set(state => ({
+          analysis: state.analysis ? {
+            ...state.analysis,
+            chartConfig: [...state.analysis.chartConfig, state.draftChart!]
+          } : null,
+          draftChart: null // Clear the draft
+        }))
+
+        get().addToHistory('chart_add', { chartId: state.draftChart.id, template: state.draftChart })
       },
 
       // Upload status actions

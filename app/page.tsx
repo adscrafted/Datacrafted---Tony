@@ -1,7 +1,7 @@
 'use client'
 
 import { DynamicFileUpload } from '@/components/upload/dynamic-file-upload'
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { preloadUploadResources, shouldPrefetch } from '@/lib/utils/preloader'
 import { MinimalHeader } from '@/components/ui/minimal-header'
@@ -19,6 +19,24 @@ export default function Home() {
     setUploadProjectId,
     setUploadProgress
   } = useDataStore()
+
+  // Typing animation state
+  const [typedText, setTypedText] = useState('')
+  const [isTypingComplete, setIsTypingComplete] = useState(false)
+  const fullText = 'Turn data into\ndecisions...'
+
+  // Typing animation effect
+  useEffect(() => {
+    if (typedText.length < fullText.length) {
+      const timeout = setTimeout(() => {
+        setTypedText(fullText.slice(0, typedText.length + 1))
+      }, 80) // Typing speed in ms
+      return () => clearTimeout(timeout)
+    } else {
+      // Typing complete, trigger glow effect
+      setIsTypingComplete(true)
+    }
+  }, [typedText, fullText])
 
   // Preload critical resources for file upload
   useEffect(() => {
@@ -82,35 +100,45 @@ export default function Home() {
   }, [router, user?.uid, createProject, saveProjectData, setUploadComplete, setUploadProjectId, setUploadProgress])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-gray-50 to-gray-100">
-      {/* Animated background blobs */}
+    <div className="min-h-screen flex items-center justify-center bg-black">
+      {/* Subtle white glow */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000" />
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-pink-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000" />
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-white/10 rounded-full mix-blend-normal filter blur-3xl animate-blob" />
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-white/8 rounded-full mix-blend-normal filter blur-3xl animate-blob animation-delay-2000" />
+        <div className="absolute top-0 right-1/4 w-80 h-80 bg-white/5 rounded-full mix-blend-normal filter blur-3xl animate-blob animation-delay-4000" />
       </div>
 
-      <div className="relative z-10 text-center px-4">
+      <div className="relative z-10 text-center px-4 w-full max-w-6xl mx-auto">
         {/* Logo */}
         <div className="mb-12">
-          <h1 className="text-2xl font-semibold text-gray-700">DataCrafted</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-white font-[family-name:var(--font-inter-tight)]">
+            DataCrafted
+          </h1>
         </div>
 
-        {/* Hero text */}
-        <h2 className="text-6xl md:text-7xl lg:text-8xl font-bold mb-20">
-          <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-            Turn data into
-          </span>
-          <br />
-          <span className="bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 bg-clip-text text-transparent">
-            decisions
-          </span>
+        {/* Hero text with typing animation */}
+        <h2 className="text-6xl md:text-7xl lg:text-8xl font-bold mb-8 min-h-[240px] flex flex-col items-center justify-center text-center tracking-tight font-[family-name:var(--font-inter-tight)] leading-[1.1]">
+          {typedText.split('\n').map((line, i) => (
+            <span key={i} className="text-white">
+              {line}
+              {/* Show blinking cursor after "decisions..." when typing completes */}
+              {i === 1 && isTypingComplete && (
+                <span className="inline-block w-1 h-16 md:h-20 ml-2 bg-white animate-blink align-middle" />
+              )}
+            </span>
+          ))}
         </h2>
 
-        {/* File upload - glass morphism style */}
-        <div className="max-w-xl mx-auto">
+        {/* Subtitle - appears after typing is complete */}
+        <p className={`text-sm md:text-base text-white/60 mb-16 max-w-2xl mx-auto font-[family-name:var(--font-inter-tight)] transition-opacity duration-1000 ${isTypingComplete ? 'opacity-100' : 'opacity-0'}`}>
+          Data transfer. Data storage. Business intelligence. Zero learning curve.
+        </p>
+
+        {/* File upload - fixed width to prevent layout shift */}
+        <div className="w-full max-w-xl mx-auto">
           <DynamicFileUpload
             onUploadComplete={handleUploadComplete}
+            isTypingComplete={isTypingComplete}
           />
         </div>
       </div>

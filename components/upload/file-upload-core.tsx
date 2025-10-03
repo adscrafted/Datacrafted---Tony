@@ -21,13 +21,15 @@ interface FileUploadCoreProps {
   onUploadComplete?: (data: any) => void
   onUploadError?: (error: string) => void
   disabled?: boolean
+  isTypingComplete?: boolean
 }
 
 export function FileUploadCore({
   onUploadStart,
   onUploadComplete,
   onUploadError,
-  disabled = false
+  disabled = false,
+  isTypingComplete = false
 }: FileUploadCoreProps) {
   const router = useRouter()
   const {
@@ -508,7 +510,7 @@ export function FileUploadCore({
       <div className="p-8">
         {/* Show upload progress */}
         {(isAnalyzing || autoProcessing) ? (
-          <div className="relative p-16 md:p-20 rounded-3xl bg-white/60 border-2 border-white/20 backdrop-blur-xl shadow-2xl">
+          <div className="relative p-16 md:p-20 rounded-[2rem] bg-white/60 border-2 border-white/20 backdrop-blur-xl shadow-2xl">
             <div className="flex flex-col items-center space-y-4">
               <div className="relative">
                 <Loader2 className="h-16 w-16 text-blue-500 animate-spin" />
@@ -523,11 +525,12 @@ export function FileUploadCore({
           <div
             {...getRootProps()}
             className={cn(
-              "relative p-16 md:p-20 rounded-3xl cursor-pointer transition-all duration-300 transform hover:scale-[1.02]",
+              "relative p-16 md:p-20 rounded-[2rem] cursor-pointer transition-all duration-300 transform hover:scale-[1.02]",
               isDragActive
                 ? "bg-blue-50/80 border-2 border-blue-300 scale-[1.02]"
                 : "bg-white/60 border-2 border-white/20 hover:bg-white/70",
-              "backdrop-blur-xl shadow-2xl hover:shadow-3xl"
+              "backdrop-blur-xl shadow-2xl hover:shadow-3xl",
+              isTypingComplete && "animate-glow-pulse"
             )}
           >
             <input {...getInputProps()} />

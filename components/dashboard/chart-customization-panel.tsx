@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Settings, Eye, EyeOff, Palette, Type, BarChart3, Move, Maximize2 as Resize, Copy, RotateCcw, Download, Save, Database } from 'lucide-react'
+import { Settings, Eye, EyeOff, Palette, Type, BarChart3, Move, Maximize2 as Resize, Copy, RotateCcw, Download, Save, Database, Sparkles, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -13,7 +13,7 @@ interface ChartCustomizationPanelProps {
   chartId: string
   title: string
   description: string
-  chartType: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo'
+  chartType: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo' | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline'
   customization?: ChartCustomization
   onCustomizationChange: (chartId: string, customization: Partial<ChartCustomization>) => void
   className?: string
@@ -29,7 +29,17 @@ const chartTypeOptions = [
   { value: 'area', label: 'Area Chart', icon: '📈' },
   { value: 'scatter', label: 'Scatter Plot', icon: '📍' },
   { value: 'scorecard', label: 'Scorecard', icon: '🎯' },
-  { value: 'table', label: 'Data Table', icon: '📋' }
+  { value: 'table', label: 'Data Table', icon: '📋' },
+  { value: 'combo', label: 'Combo Chart', icon: '📊📈' },
+  { value: 'waterfall', label: 'Waterfall Chart', icon: '💧' },
+  { value: 'funnel', label: 'Funnel Chart', icon: '🔽' },
+  { value: 'heatmap', label: 'Heatmap', icon: '🔥' },
+  { value: 'gauge', label: 'Gauge Chart', icon: '🎯' },
+  { value: 'cohort', label: 'Cohort Analysis', icon: '👥' },
+  { value: 'bullet', label: 'Bullet Chart', icon: '🎯' },
+  { value: 'treemap', label: 'Treemap', icon: '🗺️' },
+  { value: 'sankey', label: 'Sankey Diagram', icon: '🌊' },
+  { value: 'sparkline', label: 'Sparkline', icon: '✨' }
 ] as const
 
 export function ChartCustomizationPanel({
@@ -47,7 +57,9 @@ export function ChartCustomizationPanel({
   const [isOpen, setIsOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'general' | 'data' | 'style' | 'axes' | 'actions'>(initialTab || 'general')
   const [mounted, setMounted] = useState(false)
-  const { exportChart, addToHistory, dataSchema, rawData } = useDataStore()
+  const [isGeneratingTitle, setIsGeneratingTitle] = useState(false)
+  const [generationError, setGenerationError] = useState<string | null>(null)
+  const { exportChart, addToHistory, dataSchema, rawData, draftChart, commitDraftChart, setDraftChart } = useDataStore()
 
   React.useEffect(() => {
     setMounted(true)
@@ -55,21 +67,60 @@ export function ChartCustomizationPanel({
 
   // Auto-open panel if requested (for new charts)
   // Only trigger once when autoOpen changes from false to true
-  const prevAutoOpenRef = React.useRef(autoOpen)
+  const prevAutoOpenRef = React.useRef<boolean | undefined>(undefined)
   React.useEffect(() => {
+    console.log('🔍 [CUSTOMIZATION_PANEL] Auto-open useEffect triggered:', {
+      chartId,
+      autoOpen,
+      prevAutoOpen: prevAutoOpenRef.current,
+      isOpen,
+      willOpen: autoOpen && !prevAutoOpenRef.current && !isOpen
+    })
+
     // Only open if autoOpen is true AND it wasn't true before (edge trigger, not level trigger)
     if (autoOpen && !prevAutoOpenRef.current && !isOpen) {
+      console.log('📂 [CUSTOMIZATION_PANEL] Auto-opening panel for chart:', chartId)
       setIsOpen(true)
     }
     prevAutoOpenRef.current = autoOpen
-  }, [autoOpen])
+  }, [autoOpen, isOpen, chartId])
 
   // Allow external control of active tab via initialTab prop
+  // IMPORTANT: Set tab when panel opens OR when initialTab changes
   React.useEffect(() => {
-    if (initialTab) {
+    if (initialTab && isOpen) {
+      console.log('📂 [CUSTOMIZATION_PANEL] Setting active tab to:', initialTab)
       setActiveTab(initialTab)
     }
-  }, [initialTab])
+  }, [initialTab, isOpen])
+
+  // Check if this is a draft chart being configured
+  const isDraftChart = React.useMemo(() => {
+    return draftChart?.id === chartId
+  }, [draftChart, chartId])
+
+  // Clean up draft chart if panel is closed without committing
+  const handleClose = React.useCallback(() => {
+    if (isDraftChart) {
+      console.log('🗑️ [CUSTOMIZATION_PANEL] Canceling draft chart - clearing draft')
+      setDraftChart(null)
+    }
+    setIsOpen(false)
+  }, [isDraftChart, setDraftChart])
+
+  // Keyboard navigation: ESC to close
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        handleClose()
+      }
+    }
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown)
+      return () => document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOpen, handleClose])
 
   // Merged dataMapping: prefer customization, fallback to original config
   const effectiveDataMapping = React.useMemo(() => {
@@ -154,6 +205,67 @@ export function ChartCustomizationPanel({
     }
   }
 
+  const handleGenerateTitleAndDescription = async () => {
+    setIsGeneratingTitle(true)
+    setGenerationError(null)
+
+    try {
+      // Check if we have data mapping and data
+      if (!effectiveDataMapping || Object.keys(effectiveDataMapping).length === 0) {
+        throw new Error('Please configure chart data fields first')
+      }
+
+      if (!rawData || rawData.length === 0) {
+        throw new Error('No data available')
+      }
+
+      // Prepare sample data (first 5-10 rows)
+      const sampleData = rawData.slice(0, 10)
+
+      // Prepare data schema
+      const schema = dataSchema?.columns.map(col => ({
+        name: col.name,
+        type: col.type
+      }))
+
+      // Call the API
+      const response = await fetch('/api/generate-chart-title', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          chartType: customization?.chartType || chartType,
+          dataMapping: effectiveDataMapping,
+          sampleData,
+          dataSchema: schema
+        })
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to generate title and description')
+      }
+
+      const { title, description } = await response.json()
+
+      // Update the customization with generated title and description
+      handleUpdate({
+        customTitle: title,
+        customDescription: description
+      })
+
+      console.log('Generated title and description:', { title, description })
+    } catch (error) {
+      console.error('Error generating title/description:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate title and description'
+      setGenerationError(errorMessage)
+      setTimeout(() => setGenerationError(null), 5000) // Clear error after 5 seconds
+    } finally {
+      setIsGeneratingTitle(false)
+    }
+  }
+
   const tabs = [
     { id: 'general', label: 'General', icon: Settings },
     { id: 'data', label: 'Data', icon: Database },
@@ -173,6 +285,8 @@ export function ChartCustomizationPanel({
           isOpen && 'bg-primary/10 text-primary'
         )}
         title="Customize chart"
+        aria-label={isOpen ? "Close chart settings" : "Open chart settings"}
+        aria-expanded={isOpen}
       >
         <Settings className="h-4 w-4" />
       </Button>
@@ -180,9 +294,9 @@ export function ChartCustomizationPanel({
       {isOpen && mounted && createPortal(
         <>
           {/* Backdrop */}
-          <div 
-            className="fixed inset-0 z-40 bg-black/20" 
-            onClick={() => setIsOpen(false)}
+          <div
+            className="fixed inset-0 z-40 bg-black/20"
+            onClick={handleClose}
           />
           
           {/* Settings Panel */}
@@ -196,7 +310,7 @@ export function ChartCustomizationPanel({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setIsOpen(false)}
+                onClick={handleClose}
                 className="h-6 w-6 p-0"
               >
                 ×
@@ -251,6 +365,45 @@ export function ChartCustomizationPanel({
                   </div>
                 </div>
                 
+                {/* AI Generation Section */}
+                <div className="p-3 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-purple-600" />
+                      <span className="text-sm font-medium text-purple-900">AI-Powered Generation</span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleGenerateTitleAndDescription}
+                      disabled={isGeneratingTitle || !effectiveDataMapping || Object.keys(effectiveDataMapping).length === 0 || !rawData || rawData.length === 0}
+                      className="h-7 text-xs bg-white hover:bg-purple-50 border-purple-300 text-purple-700"
+                    >
+                      {isGeneratingTitle ? (
+                        <>
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-3 w-3 mr-1" />
+                          Generate
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-purple-700">
+                    {!effectiveDataMapping || Object.keys(effectiveDataMapping).length === 0
+                      ? 'Configure chart data fields first to enable AI generation'
+                      : 'Generate intelligent title and description based on your chart data'}
+                  </p>
+                  {generationError && (
+                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+                      {generationError}
+                    </div>
+                  )}
+                </div>
+
                 {/* Title */}
                 <div>
                   <label className="text-sm font-medium mb-1 block">Custom Title</label>
@@ -262,7 +415,7 @@ export function ChartCustomizationPanel({
                     className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
                   />
                 </div>
-                
+
                 {/* Description */}
                 <div>
                   <label className="text-sm font-medium mb-1 block">Custom Description</label>
@@ -274,7 +427,7 @@ export function ChartCustomizationPanel({
                     className="w-full px-3 py-2 border border-gray-300 rounded text-sm resize-none"
                   />
                 </div>
-                
+
               </div>
             )}
 
@@ -283,8 +436,11 @@ export function ChartCustomizationPanel({
                 {availableColumns.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
                     <Database className="h-12 w-12 mx-auto mb-3 opacity-40" />
-                    <p className="text-sm">No data available</p>
-                    <p className="text-xs mt-1">Upload data to configure chart axes</p>
+                    <p className="text-sm font-medium">No data available</p>
+                    <p className="text-xs mt-1 text-gray-400">Upload data to configure chart axes</p>
+                    <p className="text-xs mt-3 max-w-xs mx-auto text-gray-400">
+                      Go to the upload page to import a CSV or Excel file with your data.
+                    </p>
                   </div>
                 ) : (
                   <>
@@ -320,7 +476,10 @@ export function ChartCustomizationPanel({
                               })}
                             </div>
                           </div>
-                          <p className="text-xs text-gray-500 mt-2">Drag fields to X-axis and Y-axis zones below</p>
+                          <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
+                            <span className="mr-1">💡</span>
+                            Tip: Drag fields to X-axis and Y-axis zones below
+                          </p>
                         </div>
 
                         {/* Drop Zones */}
@@ -342,7 +501,8 @@ export function ChartCustomizationPanel({
                                 handleUpdate({
                                   dataMapping: {
                                     ...customization?.dataMapping,
-                                    xAxis: data.fieldName
+                                    xAxis: data.fieldName,
+                                    category: data.fieldName  // Also set category for consistency with AI format
                                   }
                                 })
                               } catch (error) {
@@ -352,14 +512,15 @@ export function ChartCustomizationPanel({
                             className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
                           >
                             <div className="text-sm font-medium text-gray-600 mb-2">X-Axis</div>
-                            {effectiveDataMapping?.xAxis ? (
+                            {(effectiveDataMapping?.xAxis || effectiveDataMapping?.category) ? (
                               <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
-                                <span className="text-sm text-blue-800">{effectiveDataMapping.xAxis}</span>
+                                <span className="text-sm text-blue-800">{effectiveDataMapping.xAxis || effectiveDataMapping.category}</span>
                                 <button
                                   onClick={() => handleUpdate({
                                     dataMapping: {
                                       ...customization?.dataMapping,
-                                      xAxis: undefined
+                                      xAxis: undefined,
+                                      category: undefined
                                     }
                                   })}
                                   className="text-blue-600 hover:text-blue-800 text-xs"
@@ -369,13 +530,14 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
+                                <span className="block text-lg mb-1">⬇️</span>
                                 Drop a field here for X-axis
                               </div>
                             )}
                           </div>
 
-                          {/* Combo Chart: Dual Y-Axis Drop Zones */}
-                          {chartType === 'combo' ? (
+                          {/* Dual Y-Axis Drop Zones - for combo, bar, line, area, and scatter charts */}
+                          {(chartType === 'combo' || chartType === 'bar' || chartType === 'line' || chartType === 'area' || chartType === 'scatter') ? (
                             <>
                               {/* Left Y-Axis (Primary) */}
                               <div
@@ -392,29 +554,29 @@ export function ChartCustomizationPanel({
                                   try {
                                     const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                     if (data.fieldType === 'number') {
-                                      const currentYAxis = customization?.dataMapping?.yAxis
-                                      let newYAxis: string | string[]
+                                      const currentYAxis1 = customization?.dataMapping?.yAxis1
+                                      let newYAxis1: string | string[]
 
-                                      if (Array.isArray(currentYAxis)) {
-                                        if (!currentYAxis.includes(data.fieldName)) {
-                                          newYAxis = [...currentYAxis, data.fieldName]
+                                      if (Array.isArray(currentYAxis1)) {
+                                        if (!currentYAxis1.includes(data.fieldName)) {
+                                          newYAxis1 = [...currentYAxis1, data.fieldName]
                                         } else {
-                                          newYAxis = currentYAxis
+                                          newYAxis1 = currentYAxis1
                                         }
-                                      } else if (currentYAxis) {
-                                        if (currentYAxis !== data.fieldName) {
-                                          newYAxis = [currentYAxis, data.fieldName]
+                                      } else if (currentYAxis1) {
+                                        if (currentYAxis1 !== data.fieldName) {
+                                          newYAxis1 = [currentYAxis1, data.fieldName]
                                         } else {
-                                          newYAxis = currentYAxis
+                                          newYAxis1 = currentYAxis1
                                         }
                                       } else {
-                                        newYAxis = [data.fieldName]
+                                        newYAxis1 = [data.fieldName]
                                       }
 
                                       handleUpdate({
                                         dataMapping: {
                                           ...customization?.dataMapping,
-                                          yAxis: newYAxis
+                                          yAxis1: newYAxis1
                                         }
                                       })
                                     }
@@ -425,33 +587,33 @@ export function ChartCustomizationPanel({
                                 className="min-h-20 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
                               >
                                 <div className="text-sm font-medium text-green-600 mb-2">Left Y-Axis (Primary)</div>
-                                {effectiveDataMapping?.yAxis && (Array.isArray(effectiveDataMapping.yAxis) ? effectiveDataMapping.yAxis.length > 0 : true) ? (
+                                {effectiveDataMapping?.yAxis1 && (Array.isArray(effectiveDataMapping.yAxis1) ? effectiveDataMapping.yAxis1.length > 0 : true) ? (
                                   <div className="space-y-2">
-                                    {(Array.isArray(effectiveDataMapping.yAxis) ? effectiveDataMapping.yAxis : [effectiveDataMapping.yAxis]).map((field: string) => (
+                                    {(Array.isArray(effectiveDataMapping.yAxis1) ? effectiveDataMapping.yAxis1 : [effectiveDataMapping.yAxis1]).map((field: string) => (
                                       <div key={field} className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
                                         <span className="text-sm text-green-800">{field}</span>
                                         <button
                                           onClick={() => {
-                                            const currentYAxis = customization?.dataMapping?.yAxis || effectiveDataMapping?.yAxis
-                                            let newYAxis: string | string[] | undefined
+                                            const currentYAxis1 = customization?.dataMapping?.yAxis1 || effectiveDataMapping?.yAxis1
+                                            let newYAxis1: string | string[] | undefined
 
-                                            if (Array.isArray(currentYAxis)) {
-                                              const filtered = currentYAxis.filter(f => f !== field)
+                                            if (Array.isArray(currentYAxis1)) {
+                                              const filtered = currentYAxis1.filter(f => f !== field)
                                               if (filtered.length === 1) {
-                                                newYAxis = filtered[0]
+                                                newYAxis1 = filtered[0]
                                               } else if (filtered.length === 0) {
-                                                newYAxis = undefined
+                                                newYAxis1 = undefined
                                               } else {
-                                                newYAxis = filtered
+                                                newYAxis1 = filtered
                                               }
                                             } else {
-                                              newYAxis = undefined
+                                              newYAxis1 = undefined
                                             }
 
                                             handleUpdate({
                                               dataMapping: {
                                                 ...customization?.dataMapping,
-                                                yAxis: newYAxis
+                                                yAxis1: newYAxis1
                                               }
                                             })
                                           }}
@@ -601,7 +763,8 @@ export function ChartCustomizationPanel({
                                     handleUpdate({
                                       dataMapping: {
                                         ...customization?.dataMapping,
-                                        yAxis: newYAxis
+                                        yAxis: newYAxis,
+                                        values: newYAxis  // Also set values for consistency with AI format
                                       }
                                     })
                                   }
@@ -612,48 +775,56 @@ export function ChartCustomizationPanel({
                               className="min-h-20 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
                             >
                               <div className="text-sm font-medium text-gray-600 mb-2">Y-Axis (Numeric Fields Only)</div>
-                              {effectiveDataMapping?.yAxis && (Array.isArray(effectiveDataMapping.yAxis) ? effectiveDataMapping.yAxis.length > 0 : true) ? (
-                                <div className="space-y-2">
-                                  {(Array.isArray(effectiveDataMapping.yAxis) ? effectiveDataMapping.yAxis : [effectiveDataMapping.yAxis]).map((field: string, index: number) => (
-                                    <div key={field} className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
-                                      <span className="text-sm text-green-800">{field}</span>
-                                      <button
-                                        onClick={() => {
-                                          const currentYAxis = customization?.dataMapping?.yAxis || effectiveDataMapping?.yAxis
-                                          let newYAxis: string | string[] | undefined
+                              {(() => {
+                                // Support both yAxis and values formats (AI uses 'values', manual uses 'yAxis')
+                                const yAxisData = effectiveDataMapping?.yAxis || effectiveDataMapping?.values
+                                const hasData = yAxisData && (Array.isArray(yAxisData) ? yAxisData.length > 0 : true)
 
-                                          if (Array.isArray(currentYAxis)) {
-                                            const filtered = currentYAxis.filter(f => f !== field)
-                                            if (filtered.length === 1) {
-                                              newYAxis = filtered[0]
-                                            } else if (filtered.length === 0) {
-                                              newYAxis = undefined
+                                return hasData ? (
+                                  <div className="space-y-2">
+                                    {(Array.isArray(yAxisData) ? yAxisData : [yAxisData]).map((field: string, index: number) => (
+                                      <div key={field} className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
+                                        <span className="text-sm text-green-800">{field}</span>
+                                        <button
+                                          onClick={() => {
+                                            const currentYAxis = customization?.dataMapping?.yAxis || customization?.dataMapping?.values || effectiveDataMapping?.yAxis || effectiveDataMapping?.values
+                                            let newYAxis: string | string[] | undefined
+
+                                            if (Array.isArray(currentYAxis)) {
+                                              const filtered = currentYAxis.filter(f => f !== field)
+                                              if (filtered.length === 1) {
+                                                newYAxis = filtered[0]
+                                              } else if (filtered.length === 0) {
+                                                newYAxis = undefined
+                                              } else {
+                                                newYAxis = filtered
+                                              }
                                             } else {
-                                              newYAxis = filtered
+                                              newYAxis = undefined
                                             }
-                                          } else {
-                                            newYAxis = undefined
-                                          }
 
-                                          handleUpdate({
-                                            dataMapping: {
-                                              ...customization?.dataMapping,
-                                              yAxis: newYAxis
-                                            }
-                                          })
-                                        }}
-                                        className="text-green-600 hover:text-green-800 text-xs"
-                                      >
-                                        Remove
-                                      </button>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <div className="text-center py-4 text-gray-500 text-sm">
-                                  Drop numeric fields here for Y-axis
-                                </div>
-                              )}
+                                            handleUpdate({
+                                              dataMapping: {
+                                                ...customization?.dataMapping,
+                                                yAxis: newYAxis,
+                                                values: newYAxis
+                                              }
+                                            })
+                                          }}
+                                          className="text-green-600 hover:text-green-800 text-xs"
+                                        >
+                                          Remove
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="text-center py-4 text-gray-500 text-sm">
+                                    <span className="block text-lg mb-1">⬇️</span>
+                                    Drop numeric fields here for Y-axis
+                                  </div>
+                                )
+                              })()}
                             </div>
                           )}
 
@@ -1160,6 +1331,211 @@ export function ChartCustomizationPanel({
                       </div>
                     )}
 
+                    {/* Waterfall Chart Data Mapping */}
+                    {chartType === 'waterfall' && (
+                      <div className="space-y-6">
+                        {/* Available Fields for Waterfall Chart */}
+                        <div>
+                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-40 overflow-y-auto">
+                            <div className="grid grid-cols-1 gap-2">
+                              {columnsByType.all.map((col, index) => {
+                                const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
+                                const icon = columnType === 'number' ? '🔢' : columnType === 'date' ? '📅' : '📝'
+
+                                return (
+                                  <div
+                                    key={col}
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.setData('application/json', JSON.stringify({
+                                        fieldName: col,
+                                        fieldType: columnType
+                                      }))
+                                    }}
+                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                  >
+                                    <span className="text-xs">{icon}</span>
+                                    <span className="text-sm font-medium text-gray-700">{col}</span>
+                                    <span className="text-xs text-gray-500 ml-auto">{columnType}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                          <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
+                            <span className="mr-1">💡</span>
+                            Tip: Drag fields to the zones below to configure your waterfall chart
+                          </p>
+                        </div>
+
+                        {/* Waterfall Chart Drop Zones */}
+                        <div className="grid grid-cols-1 gap-4">
+                          {/* Category Drop Zone */}
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-blue-400', 'bg-blue-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                handleUpdate({
+                                  dataMapping: {
+                                    ...customization?.dataMapping,
+                                    category: data.fieldName
+                                  }
+                                })
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">Category Field (Required)</div>
+                            {effectiveDataMapping?.category ? (
+                              <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
+                                <span className="text-sm text-blue-800">{effectiveDataMapping.category}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      category: undefined
+                                    }
+                                  })}
+                                  className="text-blue-600 hover:text-blue-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                <span className="block text-lg mb-1">⬇️</span>
+                                Drop a field here for categories (X-axis)
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Value Drop Zone */}
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-green-400', 'bg-green-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                // Prefer numeric fields for values
+                                if (data.fieldType === 'number') {
+                                  handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      value: data.fieldName
+                                    }
+                                  })
+                                }
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">Value Field (Required - Numeric Only)</div>
+                            {effectiveDataMapping?.value ? (
+                              <div className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
+                                <span className="text-sm text-green-800">{effectiveDataMapping.value}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      value: undefined
+                                    }
+                                  })}
+                                  className="text-green-600 hover:text-green-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                <span className="block text-lg mb-1">⬇️</span>
+                                Drop a numeric field here for values
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Type Drop Zone (Optional) */}
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-purple-400', 'bg-purple-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-purple-400', 'bg-purple-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-purple-400', 'bg-purple-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                handleUpdate({
+                                  dataMapping: {
+                                    ...customization?.dataMapping,
+                                    type: data.fieldName
+                                  }
+                                })
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-purple-600 mb-2">Type Field (Optional)</div>
+                            {effectiveDataMapping?.type ? (
+                              <div className="flex items-center justify-between p-2 bg-purple-100 border border-purple-300 rounded">
+                                <span className="text-sm text-purple-800">{effectiveDataMapping.type}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      type: undefined
+                                    }
+                                  })}
+                                  className="text-purple-600 hover:text-purple-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                <span className="block text-lg mb-1">⬇️</span>
+                                Drop a field to indicate increase/decrease/total (optional)
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Waterfall Chart Info */}
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <p className="text-xs text-blue-800 font-medium mb-1">About Waterfall Charts</p>
+                          <p className="text-xs text-blue-700">
+                            Waterfall charts show how an initial value is affected by a series of positive and negative values.
+                            The type field can specify if each value is an "increase", "decrease", or "total".
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Data Preview */}
                     <div className="pt-2 border-t border-gray-200">
                       <label className="text-sm font-medium mb-2 block">Data Preview</label>
@@ -1182,22 +1558,137 @@ export function ChartCustomizationPanel({
                     </div>
 
                     {/* Generate Chart Button */}
-                    <div className="pt-4 border-t border-gray-200">
+                    <div className="pt-4 border-t border-gray-200 bg-white sticky bottom-0">
                       <Button
                         onClick={() => {
-                          // Close the panel to show the updated chart
+                          // Validate required fields first
+                          const mapping = customization?.dataMapping || {}
+                          let isValid = false
+                          let missingFields = ''
+
+                          switch (chartType) {
+                            case 'line':
+                            case 'bar':
+                              isValid = !!(mapping.xAxis || mapping.category)
+                              if (!isValid) missingFields = 'Please select an X-axis field'
+                              break
+                            case 'area':
+                              // Area charts need both X-axis AND Y-axis
+                              const hasXAxisArea = !!(mapping.xAxis || mapping.category)
+                              const hasYAxisArea = !!(mapping.yAxis || mapping.yAxis1 || mapping.values)
+                              isValid = hasXAxisArea && hasYAxisArea
+                              if (!hasXAxisArea) missingFields = 'Please select an X-axis field'
+                              else if (!hasYAxisArea) missingFields = 'Please select a Y-axis field'
+                              break
+                            case 'scatter':
+                              // Scatter charts need both X-axis AND Y-axis
+                              const hasXAxisScatter = !!(mapping.xAxis || mapping.category)
+                              const hasYAxisScatter = !!(mapping.yAxis || mapping.yAxis1 || mapping.values)
+                              isValid = hasXAxisScatter && hasYAxisScatter
+                              if (!hasXAxisScatter) missingFields = 'Please select an X-axis field'
+                              else if (!hasYAxisScatter) missingFields = 'Please select a Y-axis field'
+                              break
+                            case 'pie':
+                              isValid = !!mapping.category
+                              if (!isValid) missingFields = 'Please select a category field'
+                              break
+                            case 'scorecard':
+                              isValid = !!mapping.metric
+                              if (!isValid) missingFields = 'Please select a metric field'
+                              break
+                            case 'table':
+                              isValid = !!(mapping.columns && mapping.columns.length > 0) || !!mapping.yAxis
+                              if (!isValid) missingFields = 'Please select at least one column'
+                              break
+                            case 'combo':
+                              isValid = !!(mapping.xAxis && (mapping.yAxis || mapping.yAxis1))
+                              if (!mapping.xAxis) missingFields = 'Please select an X-axis field'
+                              else if (!mapping.yAxis && !mapping.yAxis1) missingFields = 'Please select at least one Y-axis field'
+                              break
+                            case 'waterfall':
+                              isValid = !!(mapping.category && mapping.value)
+                              if (!mapping.category) missingFields = 'Please select a category field'
+                              else if (!mapping.value) missingFields = 'Please select a value field'
+                              break
+                            case 'funnel':
+                              isValid = !!(mapping.stage && mapping.value)
+                              if (!mapping.stage) missingFields = 'Please select a stage field'
+                              else if (!mapping.value) missingFields = 'Please select a value field'
+                              break
+                            case 'heatmap':
+                              isValid = !!(mapping.xAxis && mapping.yAxis && mapping.value)
+                              if (!mapping.xAxis) missingFields = 'Please select an X-axis field'
+                              else if (!mapping.yAxis) missingFields = 'Please select a Y-axis field'
+                              else if (!mapping.value) missingFields = 'Please select a value field'
+                              break
+                            case 'gauge':
+                              isValid = !!mapping.value
+                              if (!isValid) missingFields = 'Please select a value field'
+                              break
+                            case 'cohort':
+                              isValid = !!(mapping.cohort && mapping.period && mapping.value)
+                              if (!mapping.cohort) missingFields = 'Please select a cohort field'
+                              else if (!mapping.period) missingFields = 'Please select a period field'
+                              else if (!mapping.value) missingFields = 'Please select a value field'
+                              break
+                            case 'bullet':
+                              isValid = !!(mapping.actual && mapping.comparative)
+                              if (!mapping.actual) missingFields = 'Please select an actual field'
+                              else if (!mapping.comparative) missingFields = 'Please select a comparative field'
+                              break
+                            case 'treemap':
+                              isValid = !!(mapping.category && mapping.value)
+                              if (!mapping.category) missingFields = 'Please select a category field'
+                              else if (!mapping.value) missingFields = 'Please select a value field'
+                              break
+                            case 'sankey':
+                              isValid = !!(mapping.source && mapping.target_node && mapping.value)
+                              if (!mapping.source) missingFields = 'Please select a source field'
+                              else if (!mapping.target_node) missingFields = 'Please select a target field'
+                              else if (!mapping.value) missingFields = 'Please select a value field'
+                              break
+                            case 'sparkline':
+                              isValid = !!mapping.trend
+                              if (!isValid) missingFields = 'Please select a trend field'
+                              break
+                            default:
+                              isValid = true
+                          }
+
+                          if (!isValid) {
+                            // Show a more user-friendly error message
+                            console.error('❌ [CUSTOMIZATION_PANEL] Validation failed:', missingFields)
+
+                            // You could replace this with a toast notification in a real app
+                            const errorMessage = missingFields || 'Please configure required data fields before generating the chart'
+                            alert(errorMessage)
+                            return
+                          }
+
+                          // CRITICAL: If this is a draft chart, commit it to the dashboard
+                          if (isDraftChart) {
+                            console.log('✅ [CUSTOMIZATION_PANEL] Committing draft chart to dashboard')
+                            commitDraftChart()
+                          }
+
+                          // Close the panel to show the updated/new chart
                           setIsOpen(false)
                           // Log the action
-                          addToHistory('chart_data_updated', { chartId, dataMapping: customization?.dataMapping })
+                          addToHistory(isDraftChart ? 'chart_created' : 'chart_data_updated', { chartId, dataMapping: customization?.dataMapping })
                         }}
                         className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                        size="sm"
+                        size="lg"
+                        disabled={!customization?.dataMapping || Object.keys(customization.dataMapping).length === 0}
                       >
                         <Database className="h-4 w-4 mr-2" />
-                        Generate Chart
+                        {isDraftChart ? 'Generate Chart' : 'Update Chart'}
                       </Button>
                       <p className="text-xs text-gray-500 mt-2 text-center">
-                        Apply data field selections and update the chart
+                        {customization?.dataMapping && Object.keys(customization.dataMapping).length > 0
+                          ? isDraftChart
+                            ? 'Click to add this chart to your dashboard'
+                            : 'Click to apply your data selections and update the chart'
+                          : 'Configure required fields above before generating'}
                       </p>
                     </div>
                   </>

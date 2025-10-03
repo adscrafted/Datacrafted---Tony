@@ -273,14 +273,23 @@ export const ChartTemplateGallery: React.FC<ChartTemplateGalleryProps> = ({
   }
 
   const handleAddChart = (template: ChartTemplate) => {
+    console.log('📊 [CHART_GALLERY] User selected chart template:', template.name)
+
     // Add the chart and get the returned chartId
     const chartId = addChart(template)
+    console.log('📊 [CHART_GALLERY] Chart created with ID:', chartId)
 
-    // Close the gallery
-    onClose()
+    // SMOOTH UX: Delay gallery close slightly to show selection feedback
+    // This creates a more natural transition: click → visual feedback → close → panel opens
+    setTimeout(() => {
+      onClose()
+      console.log('📊 [CHART_GALLERY] Gallery closed')
+    }, 100)
 
     // Call the callback to select and customize the new chart
+    // This happens immediately - the panel will open while gallery is closing
     onChartAdded?.(chartId)
+    console.log('📊 [CHART_GALLERY] Triggered onChartAdded callback')
   }
 
   const categories = [

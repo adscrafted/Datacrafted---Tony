@@ -4,6 +4,102 @@ interface ChartValidationResult {
   isValid: boolean
   reason?: string
   suggestions?: string[]
+  errors?: string[]
+  warnings?: string[]
+}
+
+/**
+ * Validates chart configuration structure and required fields
+ */
+export function validateChartConfig(config: ChartConfig): ChartValidationResult {
+  const dm = (config as any).dataMapping
+
+  // Allow charts with empty dataMapping (unconfigured charts will show placeholder)
+  if (!dm || Object.keys(dm).length === 0) {
+    return {
+      isValid: true, // Allow unconfigured charts to be added
+      warnings: ['Chart needs data configuration']
+    }
+  }
+
+  switch (config.type) {
+    case 'funnel':
+      if (!dm.stage) {
+        return { isValid: false, errors: ['Funnel chart requires stage field in dataMapping'] }
+      }
+      if (!dm.value) {
+        return { isValid: false, errors: ['Funnel chart requires value field in dataMapping'] }
+      }
+      break
+
+    case 'heatmap':
+      if (!dm.xAxis) {
+        return { isValid: false, errors: ['Heatmap requires xAxis field in dataMapping'] }
+      }
+      if (!dm.yAxis) {
+        return { isValid: false, errors: ['Heatmap requires yAxis field in dataMapping'] }
+      }
+      if (!dm.value) {
+        return { isValid: false, errors: ['Heatmap requires value field in dataMapping'] }
+      }
+      break
+
+    case 'gauge':
+      if (!dm.metric) {
+        return { isValid: false, errors: ['Gauge chart requires metric field in dataMapping'] }
+      }
+      break
+
+    case 'cohort':
+      if (!dm.cohort) {
+        return { isValid: false, errors: ['Cohort chart requires cohort field in dataMapping'] }
+      }
+      if (!dm.period) {
+        return { isValid: false, errors: ['Cohort chart requires period field in dataMapping'] }
+      }
+      if (!dm.retention) {
+        return { isValid: false, errors: ['Cohort chart requires retention field in dataMapping'] }
+      }
+      break
+
+    case 'bullet':
+      if (!dm.actual && !dm.metric) {
+        return { isValid: false, errors: ['Bullet chart requires actual or metric field in dataMapping'] }
+      }
+      break
+
+    case 'treemap':
+      if (!dm.category) {
+        return { isValid: false, errors: ['Treemap requires category field in dataMapping'] }
+      }
+      if (!dm.value) {
+        return { isValid: false, errors: ['Treemap requires value field in dataMapping'] }
+      }
+      break
+
+    case 'sankey':
+      if (!dm.source) {
+        return { isValid: false, errors: ['Sankey diagram requires source field in dataMapping'] }
+      }
+      if (!dm.target) {
+        return { isValid: false, errors: ['Sankey diagram requires target field in dataMapping'] }
+      }
+      if (!dm.flow && !dm.value) {
+        return { isValid: false, errors: ['Sankey diagram requires flow or value field in dataMapping'] }
+      }
+      break
+
+    case 'sparkline':
+      if (!dm.xAxis) {
+        return { isValid: false, errors: ['Sparkline requires xAxis field in dataMapping'] }
+      }
+      if (!dm.yAxis) {
+        return { isValid: false, errors: ['Sparkline requires yAxis field in dataMapping'] }
+      }
+      break
+  }
+
+  return { isValid: true }
 }
 
 /**
@@ -87,6 +183,44 @@ export function validateChartData(
         if (dm.category) dataKeys.push(dm.category)
         if (dm.value) dataKeys.push(dm.value)
         break
+      case 'funnel':
+        if (dm.stage) dataKeys.push(dm.stage)
+        if (dm.value) dataKeys.push(dm.value)
+        break
+      case 'heatmap':
+        if (dm.xAxis) dataKeys.push(dm.xAxis)
+        if (dm.yAxis) dataKeys.push(dm.yAxis as string)
+        if (dm.value) dataKeys.push(dm.value)
+        break
+      case 'gauge':
+        if (dm.metric) dataKeys.push(dm.metric)
+        break
+      case 'cohort':
+        if (dm.cohort) dataKeys.push(dm.cohort)
+        if (dm.period) dataKeys.push(dm.period)
+        if (dm.retention) dataKeys.push(dm.retention)
+        break
+      case 'bullet':
+        if (dm.actual) dataKeys.push(dm.actual)
+        if (dm.metric) dataKeys.push(dm.metric)
+        break
+      case 'treemap':
+        if (dm.category) dataKeys.push(dm.category)
+        if (dm.value) dataKeys.push(dm.value)
+        break
+      case 'sankey':
+        if (dm.source) dataKeys.push(dm.source)
+        if (dm.target) dataKeys.push(dm.target)
+        if (dm.flow) dataKeys.push(dm.flow)
+        if (dm.value) dataKeys.push(dm.value)
+        break
+      case 'sparkline':
+        if (dm.xAxis) dataKeys.push(dm.xAxis)
+        if (dm.yAxis) {
+          const yValues = Array.isArray(dm.yAxis) ? dm.yAxis : [dm.yAxis]
+          dataKeys.push(...yValues)
+        }
+        break
     }
   } else if (chartConfig.dataKey) {
     // Fallback to legacy format
@@ -95,10 +229,11 @@ export function validateChartData(
       : [chartConfig.dataKey]
   }
 
-  // If no dataKeys extracted, chart is invalid
+  // If no dataKeys extracted, chart is unconfigured but still valid (will show placeholder)
   if (dataKeys.length === 0) {
     return {
-      isValid: false,
+      isValid: true, // Allow unconfigured charts to appear as placeholders
+      warnings: ['Chart needs data configuration'],
       reason: 'No data fields configured for this chart',
       suggestions: ['Configure dataMapping or dataKey for the chart']
     }

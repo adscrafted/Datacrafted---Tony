@@ -32,7 +32,8 @@ import {
   Settings,
   RefreshCw,
   Eye,
-  EyeOff
+  EyeOff,
+  Database
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -55,8 +56,10 @@ import { DataRow, useDataStore, ChartTemplate, ChartType } from '@/lib/store'
 import { cn } from '@/lib/utils/cn'
 import { QualityBadge } from './quality-indicator'
 import { renderCollapsibleLegend } from './collapsible-legend'
+import { aggregateChartData } from '@/lib/utils/data-aggregation'
 
 const TableChartLazy = React.lazy(() => import('./charts/table-chart').then(m => ({ default: m.TableChart })))
+const WaterfallChart = React.lazy(() => import('./charts/waterfall-chart'))
 
 interface EnhancedChartWrapperProps {
   id: string
@@ -155,15 +158,83 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
     chartTemplates,
     setContextMenu,
     contextMenuPosition,
-    contextMenuChartId
+    contextMenuChartId,
+    draftChart
   } = useDataStore()
 
   // Get chart customization
   const customization = chartCustomizations[id]
   const isVisible = customization?.isVisible !== false
 
+  // Check if this is a draft chart (newly added, not yet configured)
+  const isDraftChart = React.useMemo(() => {
+    return draftChart?.id === id
+  }, [draftChart, id])
+
+  // Check if chart has been configured with data
+  const isChartConfigured = React.useMemo(() => {
+    // Merge original config with customizations
+    const effectiveMapping = {
+      ...configDataMapping,
+      ...customization?.dataMapping
+    }
+
+    // If both are empty, chart is not configured
+    if (!effectiveMapping || Object.keys(effectiveMapping).length === 0) {
+      return false
+    }
+
+    // Check if required fields are configured based on chart type
+    switch (type) {
+      case 'line':
+      case 'bar':
+        return !!(effectiveMapping.xAxis || effectiveMapping.category)
+      case 'area':
+        // Area charts need both X-axis AND Y-axis configured
+        // Check for Y-axis in multiple formats: yAxis, yAxis1, or values
+        const hasXAxis = !!(effectiveMapping.xAxis || effectiveMapping.category)
+        const hasYAxis = !!(effectiveMapping.yAxis || effectiveMapping.yAxis1 || effectiveMapping.values)
+        return hasXAxis && hasYAxis
+      case 'scatter':
+        // Scatter charts need both X-axis AND Y-axis configured
+        // Check for Y-axis in multiple formats: yAxis, yAxis1, or values
+        const hasXAxisScatter = !!(effectiveMapping.xAxis || effectiveMapping.category)
+        const hasYAxisScatter = !!(effectiveMapping.yAxis || effectiveMapping.yAxis1 || effectiveMapping.values)
+        return hasXAxisScatter && hasYAxisScatter
+      case 'pie':
+        return !!effectiveMapping.category
+      case 'scorecard':
+        return !!effectiveMapping.metric
+      case 'table':
+        return !!(effectiveMapping.columns && effectiveMapping.columns.length > 0) || !!effectiveMapping.yAxis
+      case 'combo':
+        return !!(effectiveMapping.xAxis && (effectiveMapping.yAxis || effectiveMapping.yAxis1))
+      case 'waterfall':
+        return !!(effectiveMapping.category && effectiveMapping.value)
+      case 'funnel':
+        return !!(effectiveMapping.stage && effectiveMapping.value)
+      case 'heatmap':
+        return !!(effectiveMapping.xAxis && effectiveMapping.yAxis && effectiveMapping.value)
+      case 'gauge':
+        return !!effectiveMapping.value
+      case 'cohort':
+        return !!(effectiveMapping.cohort && effectiveMapping.period && effectiveMapping.value)
+      case 'bullet':
+        return !!(effectiveMapping.actual && effectiveMapping.comparative)
+      case 'treemap':
+        return !!(effectiveMapping.category && effectiveMapping.value)
+      case 'sankey':
+        return !!(effectiveMapping.source && effectiveMapping.target_node && effectiveMapping.value)
+      case 'sparkline':
+        return !!effectiveMapping.trend
+      default:
+        return true // Unknown chart types are considered configured
+    }
+  }, [customization?.dataMapping, configDataMapping, type])
+
   // Use data prop (filtered data is passed from parent)
   // Apply Top/Bottom X filtering if specified
+  // IMPORTANT: This hook MUST be called before any early returns
   const chartData = React.useMemo(() => {
     if (!data || !Array.isArray(data) || data.length === 0) {
       return []
@@ -171,14 +242,86 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
 
     let processedData = data.slice(0, 1000) // Limit for performance
 
+    // Get effective data mapping
+    const effectiveMapping = {
+      ...configDataMapping,
+      ...customization?.dataMapping
+    }
+
+    // Sort by X-axis for all charts that use X-axis (especially important for dates)
+    // Apply before other processing like Top/Bottom filtering
+    const xKey = effectiveMapping?.xAxis || effectiveMapping?.category
+    if (xKey && processedData.length > 0) {
+      // Check if X-axis appears to contain dates
+      const sampleValue = processedData[0]?.[xKey]
+      const isDateColumn = sampleValue && !isNaN(Date.parse(String(sampleValue)))
+
+      if (isDateColumn) {
+        // Sort chronologically by date for all chart types
+        processedData = [...processedData].sort((a, b) => {
+          const dateA = new Date(String(a[xKey]))
+          const dateB = new Date(String(b[xKey]))
+          return dateA.getTime() - dateB.getTime()
+        })
+      }
+    }
+
+    // Apply aggregation for line/bar/area/combo charts if aggregation method is set
+    const aggregationMethod = effectiveMapping?.aggregation
+    if (aggregationMethod && xKey && (type === 'line' || type === 'bar' || type === 'area' || type === 'combo')) {
+      // Extract Y-axis keys from dataMapping
+      const yAxisKeys: string[] = []
+
+      // Handle different Y-axis configurations
+      if (effectiveMapping.yAxis) {
+        const yValues = Array.isArray(effectiveMapping.yAxis) ? effectiveMapping.yAxis : [effectiveMapping.yAxis]
+        yAxisKeys.push(...yValues)
+      }
+      if (effectiveMapping.yAxis1) {
+        const y1Values = Array.isArray(effectiveMapping.yAxis1) ? effectiveMapping.yAxis1 : [effectiveMapping.yAxis1]
+        yAxisKeys.push(...y1Values)
+      }
+      if (effectiveMapping.yAxis2) {
+        const y2Values = Array.isArray(effectiveMapping.yAxis2) ? effectiveMapping.yAxis2 : [effectiveMapping.yAxis2]
+        yAxisKeys.push(...y2Values)
+      }
+      if (effectiveMapping.values) {
+        const values = Array.isArray(effectiveMapping.values) ? effectiveMapping.values : [effectiveMapping.values]
+        yAxisKeys.push(...values)
+      }
+
+      // Only aggregate if we have Y-axis keys
+      if (yAxisKeys.length > 0) {
+        console.log(`📊 [AGGREGATION_DEBUG] ${title}:`, {
+          aggregationMethod,
+          xKey,
+          yAxisKeys,
+          beforeAggregation: processedData.length
+        })
+
+        processedData = aggregateChartData(processedData, xKey, yAxisKeys, aggregationMethod)
+
+        console.log(`📊 [AGGREGATION_DEBUG] ${title} - After aggregation:`, {
+          afterAggregation: processedData.length,
+          sampleRow: processedData[0]
+        })
+      }
+    }
+
     // Apply Top/Bottom X filtering for bar charts
     if (type === 'bar') {
-      // Merge original config with customizations (customizations override)
-      const effectiveMapping = {
-        ...configDataMapping,
-        ...customization?.dataMapping
-      }
       const { sortBy, sortOrder, limit } = effectiveMapping
+
+      console.log(`📊 [BAR_CHART_DEBUG] ${title}:`, {
+        configDataMapping,
+        customizationDataMapping: customization?.dataMapping,
+        effectiveMapping,
+        sortBy,
+        sortOrder,
+        limit,
+        dataLength: processedData.length,
+        firstRow: processedData[0]
+      })
 
       // Apply sorting if sortBy is configured
       if (sortBy) {
@@ -232,6 +375,19 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
             const values = Array.isArray(mapping.values) ? mapping.values : [mapping.values]
             return [mapping.category, ...values]
           }
+          // Check for dual-axis format (yAxis1 + yAxis2)
+          if (mapping.xAxis && (mapping.yAxis1 || mapping.yAxis2)) {
+            const allYAxes = []
+            if (mapping.yAxis1) {
+              const yAxis1Values = Array.isArray(mapping.yAxis1) ? mapping.yAxis1 : [mapping.yAxis1]
+              allYAxes.push(...yAxis1Values)
+            }
+            if (mapping.yAxis2) {
+              const yAxis2Values = Array.isArray(mapping.yAxis2) ? mapping.yAxis2 : [mapping.yAxis2]
+              allYAxes.push(...yAxis2Values)
+            }
+            return [mapping.xAxis, ...allYAxes]
+          }
           // Fallback to xAxis + yAxis format
           if (mapping.xAxis && mapping.yAxis) {
             if (Array.isArray(mapping.yAxis)) {
@@ -244,6 +400,19 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
 
         case 'area':
         case 'scatter':
+          // Check for dual-axis format (yAxis1 + yAxis2)
+          if (mapping.xAxis && (mapping.yAxis1 || mapping.yAxis2)) {
+            const allYAxes = []
+            if (mapping.yAxis1) {
+              const yAxis1Values = Array.isArray(mapping.yAxis1) ? mapping.yAxis1 : [mapping.yAxis1]
+              allYAxes.push(...yAxis1Values)
+            }
+            if (mapping.yAxis2) {
+              const yAxis2Values = Array.isArray(mapping.yAxis2) ? mapping.yAxis2 : [mapping.yAxis2]
+              allYAxes.push(...yAxis2Values)
+            }
+            return [mapping.xAxis, ...allYAxes]
+          }
           if (mapping.xAxis && mapping.yAxis) {
             if (Array.isArray(mapping.yAxis)) {
               return [mapping.xAxis, ...mapping.yAxis]
@@ -280,9 +449,34 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
     return dataKey
   }, [dataKey, customization?.dataMapping, type])
 
-  // Detect if dual Y-axis is needed for bar/line charts with multiple metrics
+  // Detect if dual Y-axis is needed for bar/line/area/scatter charts with multiple metrics
   const dualAxisConfig = React.useMemo(() => {
-    // Only apply to bar and line charts with 2+ value columns
+    // Check if explicit yAxis1/yAxis2 configuration exists
+    const effectiveMapping = {
+      ...configDataMapping,
+      ...customization?.dataMapping
+    }
+
+    const hasExplicitDualAxis = !!(effectiveMapping?.yAxis1 && effectiveMapping?.yAxis2)
+
+    if (hasExplicitDualAxis) {
+      // Use explicit configuration
+      const leftMetrics = Array.isArray(effectiveMapping.yAxis1)
+        ? effectiveMapping.yAxis1
+        : [effectiveMapping.yAxis1]
+      const rightMetrics = Array.isArray(effectiveMapping.yAxis2)
+        ? effectiveMapping.yAxis2
+        : [effectiveMapping.yAxis2]
+
+      return {
+        leftMetrics,
+        rightMetrics,
+        leftLabel: effectiveMapping.yAxis1Label || leftMetrics.join(', '),
+        rightLabel: effectiveMapping.yAxis2Label || rightMetrics.join(', ')
+      }
+    }
+
+    // Only auto-detect for bar/line/area charts with 2+ value columns
     if ((type !== 'bar' && type !== 'line' && type !== 'area') || safeDataKey.length < 3) {
       return null
     }
@@ -331,7 +525,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
       leftLabel: leftMetrics.join(', '),
       rightLabel: rightMetrics.join(', ')
     }
-  }, [type, safeDataKey, chartData])
+  }, [type, safeDataKey, chartData, customization?.dataMapping, configDataMapping])
 
   // Enhanced container dimension tracking with debouncing
   const [rawDimensions, setRawDimensions] = React.useState({ width: 0, height: 0 })
@@ -455,10 +649,10 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
       bottomMargin = 50
     } else if (customization?.labelRotation === 'diagonal') {
       rotation = -45
-      bottomMargin = Math.max(60, maxLabelWidth * 0.7)
+      bottomMargin = Math.min(Math.max(60, maxLabelWidth * 0.7), 100) // Cap at 100px
     } else if (customization?.labelRotation === 'vertical') {
       rotation = -90
-      bottomMargin = Math.max(70, maxLabelWidth + 10)
+      bottomMargin = Math.min(Math.max(70, maxLabelWidth + 10), 120) // Cap at 120px
     } else {
       // Auto mode - intelligent rotation based on space constraints
       const estimatedLabelSpace = avgLabelWidth + 8 // Add padding
@@ -467,10 +661,10 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
       if (chartData.length > maxPossibleLabels || maxLabelWidth > availableWidth / chartData.length) {
         if (maxLabelLength > 12) {
           rotation = -45
-          bottomMargin = Math.max(70, maxLabelWidth * 0.7)
+          bottomMargin = Math.min(Math.max(70, maxLabelWidth * 0.7), 100) // Cap at 100px
         } else {
           rotation = -30
-          bottomMargin = Math.max(60, maxLabelWidth * 0.5)
+          bottomMargin = Math.min(Math.max(60, maxLabelWidth * 0.5), 80) // Cap at 80px
         }
       }
     }
@@ -507,7 +701,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
 
     return {
       rotation,
-      bottomMargin: Math.min(bottomMargin, Math.max(containerSizing.height * 0.4, 150)), // 40% or minimum 150px
+      bottomMargin: Math.min(bottomMargin, Math.max(containerSizing.height * 0.25, 80)), // 25% or minimum 80px (reduced from 40%/150px)
       leftMargin: Math.min(leftMargin, containerWidth * 0.2), // Cap at 20% of container width
       rightMargin,
       topMargin: responsiveFeatures.showLegend ? Math.max(topMargin, 40) : topMargin,
@@ -652,6 +846,111 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
     return Object.entries(counts).map(([name, value]) => ({ name, value }))
   }, [type, safeDataKey, chartData, customization?.dataMapping])
 
+  // Define colors early so scatter/combo data hooks can use it
+  const colors = customization?.colors || COLORS
+
+  // Scatter chart data processing - MUST be at component level to comply with React hooks rules
+  const scatterData = React.useMemo(() => {
+    if (type !== 'scatter' || safeDataKey.length < 2 || chartData.length === 0) {
+      return { numericData: [], groups: [] }
+    }
+
+    const effectiveDataMapping = customization?.dataMapping || configDataMapping
+    const sizeKey = effectiveDataMapping?.size
+    const colorKey = effectiveDataMapping?.color
+
+    // Helper to parse currency and formatted numbers
+    const parseNumericValue = (val: any): number => {
+      if (typeof val === 'number') return val
+      if (typeof val !== 'string') return 0
+      const cleaned = val.replace(/[€$£¥,\s%]/g, '')
+      const num = parseFloat(cleaned)
+      return isNaN(num) ? 0 : num
+    }
+
+    // Transform data to have numeric X/Y values for Recharts
+    const numericData = chartData.map(row => ({
+      ...row,
+      [safeDataKey[0]]: parseNumericValue(row[safeDataKey[0]]),
+      [safeDataKey[1]]: parseNumericValue(row[safeDataKey[1]]),
+      ...(sizeKey ? { [sizeKey]: parseNumericValue(row[sizeKey]) } : {})
+    }))
+
+    // Group data by color dimension if it exists
+    interface ScatterGroup {
+      name: string
+      color: string
+      data: DataRow[]
+    }
+
+    const groups: ScatterGroup[] = (() => {
+      if (!colorKey) {
+        return [{
+          name: 'Data',
+          color: colors[0],
+          data: numericData
+        }]
+      }
+
+      // Group by color dimension
+      const groupMap: Record<string, DataRow[]> = {}
+      numericData.forEach(row => {
+        const colorValue = String(row[colorKey] || 'Unknown')
+        if (!groupMap[colorValue]) {
+          groupMap[colorValue] = []
+        }
+        groupMap[colorValue].push(row)
+      })
+
+      // Convert to array and assign colors
+      return Object.entries(groupMap).map(([name, data], index) => ({
+        name,
+        color: colors[index % colors.length],
+        data
+      }))
+    })()
+
+    return { numericData, groups }
+  }, [type, safeDataKey, chartData, customization?.dataMapping, configDataMapping])
+
+  // Combo chart data processing - MUST be at component level to comply with React hooks rules
+  const comboData = React.useMemo(() => {
+    if (type !== 'combo' || chartData.length === 0) {
+      return []
+    }
+
+    const effectiveDataMapping = customization?.dataMapping || configDataMapping
+
+    // Get metrics for each axis
+    const yAxis1Metrics = effectiveDataMapping?.yAxis1
+      ? (Array.isArray(effectiveDataMapping.yAxis1) ? effectiveDataMapping.yAxis1 : [effectiveDataMapping.yAxis1])
+      : []
+    const yAxis2Metrics = effectiveDataMapping?.yAxis2
+      ? (Array.isArray(effectiveDataMapping.yAxis2) ? effectiveDataMapping.yAxis2 : [effectiveDataMapping.yAxis2])
+      : []
+
+    // Helper to parse currency and formatted numbers
+    const parseNumericValue = (val: any): number => {
+      if (typeof val === 'number') return val
+      if (typeof val !== 'string') return 0
+      const cleaned = val.replace(/[€$£¥,\s%]/g, '')
+      const num = parseFloat(cleaned)
+      return isNaN(num) ? 0 : num
+    }
+
+    // Transform data to have numeric values for Recharts
+    return chartData.map(row => {
+      const transformed = { ...row }
+      // Transform all metric columns
+      ;[...yAxis1Metrics, ...yAxis2Metrics].forEach(key => {
+        if (row[key] !== undefined) {
+          transformed[key] = parseNumericValue(row[key])
+        }
+      })
+      return transformed
+    })
+  }, [type, chartData, customization?.dataMapping, configDataMapping])
+
   // Render chart based on type
   const renderChart = () => {
     if (!chartData || chartData.length === 0) {
@@ -676,6 +975,38 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
       )
     }
 
+    // If not configured, show placeholder instead of chart
+    // IMPORTANT: This check happens AFTER all hooks are called to comply with React rules
+    if (!isChartConfigured) {
+      return (
+        <div
+          className={cn(
+            "h-full flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-8 transition-all",
+            isSelected && "ring-2 ring-blue-500 border-blue-500",
+            className
+          )}
+          onClick={() => onSelect?.(id)}
+        >
+          <Database className="h-16 w-16 text-gray-400 mb-4" />
+          <h3 className="text-lg font-semibold text-gray-700 mb-2">{title}</h3>
+          <p className="text-sm text-gray-500 mb-4 text-center max-w-xs">
+            Configure this chart's data mapping in the Data tab to visualize your data
+          </p>
+          <Button
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit?.(id)
+            }}
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <Settings className="h-4 w-4 mr-2" />
+            Configure Data
+          </Button>
+        </div>
+      )
+    }
+
     const commonProps = {
       data: chartData,
       margin: {
@@ -686,7 +1017,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
       }
     }
 
-    const colors = customization?.colors || COLORS
+    // colors is already defined at component level (line 850)
 
     switch (type) {
       case 'scorecard':
@@ -757,6 +1088,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
               {responsiveFeatures.showPrimaryLabels && (
                 <YAxis
                   yAxisId={dualAxisConfig ? "left" : undefined}
+                  orientation="left"
                   tick={{ fontSize: 11, fill: '#64748b' }}
                   axisLine={{ stroke: '#e2e8f0' }}
                   tickLine={{ stroke: '#e2e8f0' }}
@@ -850,6 +1182,13 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
         )
 
       case 'bar': {
+        console.log(`📊 [BAR_RENDER] ${title}:`, {
+          chartDataLength: chartData.length,
+          chartDataSample: chartData.slice(0, 3),
+          safeDataKey,
+          dataKeys: safeDataKey.slice(1)
+        })
+
         // Transform bar data to have numeric values for Recharts
         const parseNumericValueBar = (val: any): number => {
           if (typeof val === 'number') return val
@@ -869,6 +1208,38 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
           return transformed
         })
 
+        console.log(`📊 [BAR_RENDER_TRANSFORMED] ${title}:`, {
+          numericBarDataLength: numericBarData.length,
+          numericBarDataSample: numericBarData.slice(0, 3),
+          dataKeys: safeDataKey.slice(1),
+          salesValues: numericBarData.map(row => ({
+            campaign: row[safeDataKey[0]],
+            sales: row['Sales'],
+            salesType: typeof row['Sales']
+          }))
+        })
+
+        // Calculate Y-axis domain to ensure bars are visible
+        const allYValues = numericBarData.flatMap(row =>
+          safeDataKey.slice(1).map(key => row[key]).filter(v => typeof v === 'number' && !isNaN(v))
+        )
+        const maxYValue = Math.max(...allYValues, 0)
+        const minYValue = Math.min(...allYValues, 0)
+
+        console.log(`📊 [BAR_Y_AXIS] ${title}:`, {
+          allYValues: allYValues.slice(0, 10),
+          maxYValue,
+          minYValue,
+          domain: [0, maxYValue * 1.1]
+        })
+
+        console.log(`📊 [BAR_FINAL_RENDER] ${title}:`, {
+          numericBarDataLength: numericBarData.length,
+          commonProps,
+          firstBar: numericBarData[0],
+          chartDataFromCommonProps: commonProps.data.length
+        })
+
         return (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart {...commonProps} data={numericBarData}>
@@ -878,15 +1249,19 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
               {responsiveFeatures.showPrimaryLabels && (
                 <XAxis
                   dataKey={safeDataKey[0]}
-                  tick={{ fontSize: 11, fill: '#64748b' }}
+                  tick={{ fontSize: 9, fill: '#64748b' }}
                   axisLine={{ stroke: '#e2e8f0' }}
                   tickLine={{ stroke: '#e2e8f0' }}
                   angle={smartAxisScaling.rotation}
                   textAnchor={smartAxisScaling.rotation < 0 ? 'end' : 'middle'}
                   height={smartAxisScaling.bottomMargin}
-                  interval={smartAxisScaling.xAxisInterval}
+                  interval={0}
                   tickFormatter={(value) => {
                     const str = String(value)
+                    // More aggressive truncation for rotated labels to prevent overlap
+                    if (smartAxisScaling.rotation !== 0) {
+                      return str.length > 20 ? str.substring(0, 17) + '...' : str
+                    }
                     return str.length > 25 ? str.substring(0, 22) + '...' : str
                   }}
                   label={responsiveFeatures.showSecondaryLabels && enhancedAxisLabels.x ? {
@@ -900,6 +1275,8 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
               {responsiveFeatures.showPrimaryLabels && (
                 <YAxis
                   yAxisId={dualAxisConfig ? "left" : undefined}
+                  orientation="left"
+                  domain={[0, maxYValue > 0 ? maxYValue * 1.1 : 100]}
                   tick={{ fontSize: 11, fill: '#64748b' }}
                   axisLine={{ stroke: '#e2e8f0' }}
                   tickLine={{ stroke: '#e2e8f0' }}
@@ -960,12 +1337,14 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                 <Legend
                   content={renderCollapsibleLegend({
                     maxVisibleItems: 5,
-                    wrapperStyle: { fontSize: '11px', paddingTop: '30px', paddingBottom: '5px' },
+                    wrapperStyle: { fontSize: '11px', paddingTop: '12px', paddingBottom: '5px' },
                     formatter: (value) => {
                       const result = truncateLabel(String(value), 100)
                       return result.text
                     }
                   })}
+                  verticalAlign="bottom"
+                  height={36}
                 />
               )}
               {safeDataKey.slice(1).map((key, index) => {
@@ -1074,6 +1453,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
               {responsiveFeatures.showPrimaryLabels && (
                 <YAxis
                   yAxisId={dualAxisConfig ? "left" : undefined}
+                  orientation="left"
                   tick={{ fontSize: 11, fill: '#64748b' }}
                   axisLine={{ stroke: '#e2e8f0' }}
                   tickLine={{ stroke: '#e2e8f0' }}
@@ -1177,12 +1557,11 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
         const sizeKey = effectiveDataMapping?.size
         const colorKey = effectiveDataMapping?.color
 
-        // DEBUG: Uncomment to debug scatter chart rendering
-        // console.log('🔍 [SCATTER DEBUG] ===== SCATTER CHART RENDERING =====')
-        // console.log('🔍 [SCATTER DEBUG] Chart ID:', id)
-        // console.log('🔍 [SCATTER DEBUG] Chart title:', title)
+        // Use pre-computed scatter data from component-level hook
+        const numericScatterData = scatterData.numericData
+        const scatterGroups = scatterData.groups
 
-        // Helper to parse currency and formatted numbers
+        // Helper to parse currency and formatted numbers (for bubble size calculation)
         const parseNumericValue = (val: any): number => {
           if (typeof val === 'number') return val
           if (typeof val !== 'string') return 0
@@ -1191,24 +1570,10 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
           return isNaN(num) ? 0 : num
         }
 
-        // Transform data to have numeric X/Y values for Recharts
-        const numericScatterData = useMemo(() => {
-          return chartData.map(row => ({
-            ...row,
-            [safeDataKey[0]]: parseNumericValue(row[safeDataKey[0]]),
-            [safeDataKey[1]]: parseNumericValue(row[safeDataKey[1]]),
-            ...(sizeKey ? { [sizeKey]: parseNumericValue(row[sizeKey]) } : {})
-          }))
-        }, [chartData, safeDataKey, sizeKey])
-
         // Helper function to calculate bubble size based on size dimension
         let bubbleSizeLogCount = 0
         const calculateBubbleSize = (entry: DataRow, allData: DataRow[]): number => {
           if (!sizeKey) {
-            // if (bubbleSizeLogCount === 0) {
-            //   console.log('⚠️ [SCATTER DEBUG] No sizeKey - all bubbles will use default size 60')
-            //   bubbleSizeLogCount++
-            // }
             return 60 // Default size when no size dimension
           }
 
@@ -1255,54 +1620,6 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
           return calculatedSize
         }
 
-        // Group data by color dimension if it exists
-        interface ScatterGroup {
-          name: string
-          color: string
-          data: DataRow[]
-        }
-
-        const scatterGroups: ScatterGroup[] = React.useMemo(() => {
-          console.log('🔍 [SCATTER DEBUG] Creating scatter groups...')
-          console.log('🔍 [SCATTER DEBUG] colorKey for grouping:', colorKey)
-          console.log('🔍 [SCATTER DEBUG] numericScatterData.length:', numericScatterData.length)
-
-          if (!colorKey) {
-            // No color dimension - single group
-            console.log('⚠️ [SCATTER DEBUG] No colorKey - creating single group with color:', colors[0])
-            return [{
-              name: 'Data',
-              color: colors[0],
-              data: numericScatterData
-            }]
-          }
-
-          // Group by color dimension
-          const groups: Record<string, DataRow[]> = {}
-          numericScatterData.forEach(row => {
-            const colorValue = String(row[colorKey] || 'Unknown')
-            if (!groups[colorValue]) {
-              groups[colorValue] = []
-            }
-            groups[colorValue].push(row)
-          })
-
-          console.log('🔍 [SCATTER DEBUG] Groups created:', Object.keys(groups).length, 'groups')
-          console.log('🔍 [SCATTER DEBUG] Group names:', Object.keys(groups))
-          console.log('🔍 [SCATTER DEBUG] Group sizes:', Object.entries(groups).map(([name, data]) => `${name}: ${data.length}`))
-
-          // Convert to array and assign colors
-          const result = Object.entries(groups).map(([name, data], index) => ({
-            name,
-            color: colors[index % colors.length],
-            data
-          }))
-
-          console.log('🔍 [SCATTER DEBUG] Final scatter groups:', result.length)
-          console.log('🔍 [SCATTER DEBUG] Group colors:', result.map(g => `${g.name}: ${g.color}`))
-          return result
-        }, [numericScatterData, colorKey])
-
         return (
           <ResponsiveContainer width="100%" height="100%">
             <ScatterChart {...commonProps}>
@@ -1340,6 +1657,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                   type="number"
                   dataKey={safeDataKey[1]}
                   name={enhancedAxisLabels.y || safeDataKey[1]}
+                  orientation="left"
                   tick={{ fontSize: 11, fill: '#64748b' }}
                   axisLine={{ stroke: '#e2e8f0' }}
                   tickLine={{ stroke: '#e2e8f0' }}
@@ -1493,32 +1811,8 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
         const yAxis1Label = effectiveDataMapping?.yAxis1Label || yAxis1Metrics.join(', ')
         const yAxis2Label = effectiveDataMapping?.yAxis2Label || (yAxis2Metrics.length > 0 ? yAxis2Metrics.join(', ') : '')
 
-        // DEBUG: Uncomment to debug combo chart metrics
-        // console.log('🔄 [COMBO DEBUG] yAxis1Metrics:', yAxis1Metrics)
-        // console.log('🔄 [COMBO DEBUG] yAxis2Metrics:', yAxis2Metrics)
-
-        // Helper to parse currency and formatted numbers
-        const parseNumericValue = (val: any): number => {
-          if (typeof val === 'number') return val
-          if (typeof val !== 'string') return 0
-          const cleaned = val.replace(/[€$£¥,\s%]/g, '')
-          const num = parseFloat(cleaned)
-          return isNaN(num) ? 0 : num
-        }
-
-        // Transform data to have numeric values for Recharts
-        const numericComboData = useMemo(() => {
-          return chartData.map(row => {
-            const transformed = { ...row }
-            // Transform all metric columns
-            ;[...yAxis1Metrics, ...yAxis2Metrics].forEach(key => {
-              if (row[key] !== undefined) {
-                transformed[key] = parseNumericValue(row[key])
-              }
-            })
-            return transformed
-          })
-        }, [chartData, yAxis1Metrics, yAxis2Metrics])
+        // Use pre-computed combo data from component-level hook
+        const numericComboData = comboData
 
         // Determine color palette with distinct, visually appealing colors
         // Use blue shades for left axis (bars/volume) and distinct colors for right axis (lines)
@@ -1847,119 +2141,32 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
       }
 
       case 'waterfall': {
-        // Waterfall chart shows sequential positive/negative changes building to a total
-        // Data format: category (label), value (change amount), optional isTotal flag
-        const categoryKey = customization?.dataMapping?.category || safeDataKey[0]
-        const valueKey = customization?.dataMapping?.value || safeDataKey[1]
-
-        // Transform data for waterfall visualization
-        const waterfallData = useMemo(() => {
-          let cumulative = 0
-          return chartData.map((row, index) => {
-            const value = parseFloat(String(row[valueKey]).replace(/[€$£¥,\s%]/g, '')) || 0
-            const isTotal = row.isTotal || row['Is Total'] || false
-
-            // For waterfall: each bar starts at cumulative and adds value
-            const start = isTotal ? 0 : cumulative
-            const end = isTotal ? value : cumulative + value
-
-            if (!isTotal) {
-              cumulative += value
-            }
-
-            return {
-              category: row[categoryKey],
-              value: Math.abs(value),
-              start,
-              end,
-              isPositive: value >= 0,
-              isTotal,
-              originalValue: value
-            }
-          })
-        }, [chartData, categoryKey, valueKey])
+        const effectiveDataMapping = customization?.dataMapping || configDataMapping
 
         return (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart {...commonProps} data={waterfallData}>
-              {responsiveFeatures.showGrid && customization?.showGrid !== false && (
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              )}
-              {responsiveFeatures.showPrimaryLabels && (
-                <XAxis
-                  dataKey="category"
-                  tick={{ fontSize: 11, fill: '#64748b' }}
-                  axisLine={{ stroke: '#e2e8f0' }}
-                  tickLine={{ stroke: '#e2e8f0' }}
-                  angle={smartAxisScaling.rotation}
-                  textAnchor={smartAxisScaling.rotation < 0 ? 'end' : 'middle'}
-                  height={smartAxisScaling.bottomMargin}
-                  interval={smartAxisScaling.xAxisInterval}
-                  tickFormatter={(value) => {
-                    const str = String(value)
-                    return str.length > 25 ? str.substring(0, 22) + '...' : str
-                  }}
-                  label={responsiveFeatures.showSecondaryLabels && enhancedAxisLabels.x ? {
-                    value: enhancedAxisLabels.x,
-                    position: 'insideBottom',
-                    offset: -10,
-                    style: { textAnchor: 'middle', fontSize: '12px', fontWeight: '500', fill: '#374151' }
-                  } : undefined}
-                />
-              )}
-              {responsiveFeatures.showPrimaryLabels && (
-                <YAxis
-                  tick={{ fontSize: 11, fill: '#64748b' }}
-                  axisLine={{ stroke: '#e2e8f0' }}
-                  tickLine={{ stroke: '#e2e8f0' }}
-                  width={smartAxisScaling.leftMargin}
-                  tickFormatter={(value) => {
-                    if (typeof value === 'number') {
-                      return value > 1000 ? `${(value/1000).toFixed(1)}k` : value.toLocaleString()
-                    }
-                    return String(value)
-                  }}
-                  label={responsiveFeatures.showSecondaryLabels && enhancedAxisLabels.y ? {
-                    value: enhancedAxisLabels.y,
-                    angle: -90,
-                    position: 'insideLeft',
-                    style: { textAnchor: 'middle', fontSize: '12px', fontWeight: '500', fill: '#374151' }
-                  } : undefined}
-                />
-              )}
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: 'white',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
-                  fontSize: '12px'
-                }}
-                formatter={(value: any, name: string, props: any) => {
-                  const item = props.payload
-                  const displayValue = item.originalValue?.toLocaleString() || value
-                  return [`${item.isPositive ? '+' : ''}${displayValue}`, item.category]
-                }}
-              />
-              {responsiveFeatures.showLegend && (
-                <Legend
-                  wrapperStyle={{ fontSize: '12px' }}
-                  iconType="square"
-                  iconSize={10}
-                />
-              )}
-              {/* Invisible bars to create the waterfall base */}
-              <Bar dataKey="start" stackId="waterfall" fill="transparent" />
-              {/* Visible bars showing the change */}
-              <Bar dataKey="value" stackId="waterfall" animationDuration={customization?.animate !== false ? 1500 : 0}>
-                {waterfallData.map((entry, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={entry.isTotal ? '#6366f1' : entry.isPositive ? '#10b981' : '#ef4444'}
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <React.Suspense fallback={
+            <div className="flex items-center justify-center h-64">
+              <div className="text-sm text-gray-400">Loading waterfall chart...</div>
+            </div>
+          }>
+            <WaterfallChart
+              data={chartData}
+              dataMapping={{
+                category: effectiveDataMapping?.category || safeDataKey[0] || 'category',
+                value: effectiveDataMapping?.value || safeDataKey[1] || 'value',
+                type: effectiveDataMapping?.type
+              }}
+              customization={{
+                showLegend: customization?.showLegend,
+                showGrid: customization?.showGrid,
+                showLabels: customization?.showLabels,
+                showConnectors: customization?.showConnectors,
+                increaseColor: '#10b981',
+                decreaseColor: '#ef4444',
+                totalColor: '#3b82f6'
+              }}
+            />
+          </React.Suspense>
         )
       }
 
@@ -1968,12 +2175,12 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
     }
   }
 
-  if (!isVisible) {
-    return null
-  }
-
   // For scorecards, render with minimal wrapper - scorecard handles its own styling
   if (type === 'scorecard') {
+    // Handle invisible charts without early return (to comply with React hooks rules)
+    if (!isVisible) {
+      return null
+    }
     return (
       <ContextMenu>
         <ContextMenuTrigger asChild>
@@ -2007,7 +2214,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                   onCustomizationChange={updateChartCustomization}
                   initialTab={initialTab}
                   configDataMapping={configDataMapping}
-                  autoOpen={isSelected && initialTab === 'data'}
+                  autoOpen={(isSelected && initialTab === 'data') || isDraftChart}
                 />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -2103,6 +2310,11 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
   }
 
   // For all other chart types, render with full header/chrome
+  // Handle invisible charts without early return (to comply with React hooks rules)
+  if (!isVisible) {
+    return null
+  }
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -2219,7 +2431,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                   onCustomizationChange={updateChartCustomization}
                   initialTab={initialTab}
                   configDataMapping={configDataMapping}
-                  autoOpen={isSelected && initialTab === 'data'}
+                  autoOpen={(isSelected && initialTab === 'data') || isDraftChart}
                 />
 
                 <Button

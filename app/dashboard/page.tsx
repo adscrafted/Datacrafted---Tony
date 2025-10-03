@@ -306,34 +306,34 @@ function DashboardContent() {
     }
 
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Card className="w-full max-w-md">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+        <Card className="w-full max-w-md bg-gray-800/50 border-gray-700">
           <CardContent className="p-8">
             <div className="text-center space-y-6">
-              <Loader2 className="h-12 w-12 text-primary animate-spin mx-auto" />
+              <Loader2 className="h-12 w-12 text-white animate-spin mx-auto" />
               <div className="space-y-2">
-                <p className="text-lg font-medium">{loadingTitle}</p>
-                <p className="text-sm text-muted-foreground">{loadingSubtitle}</p>
+                <p className="text-lg font-medium text-white">{loadingTitle}</p>
+                <p className="text-sm text-gray-400">{loadingSubtitle}</p>
               </div>
-              
+
               {/* Progress bar - only show for analysis */}
               {(isAnalyzing || (rawData && rawData.length > 0 && !analysis)) && (
                 <div className="space-y-2">
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-primary h-2 rounded-full transition-all duration-300"
+                  <div className="w-full bg-gray-700 rounded-full h-2">
+                    <div
+                      className="bg-white h-2 rounded-full transition-all duration-300"
                       style={{ width: `${analysisProgress}%` }}
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-gray-400">
                     {analysisProgress}% complete
                   </p>
                 </div>
               )}
-              
+
               {error && (
-                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
-                  <p className="text-sm text-red-600">{error}</p>
+                <div className="mt-4 p-3 bg-red-900/30 border border-red-700/50 rounded-md">
+                  <p className="text-sm text-red-400">{error}</p>
                 </div>
               )}
             </div>
@@ -517,13 +517,37 @@ function DashboardContent() {
               ) : (
                 <div className="p-8 pb-24">
                   {/* Enhanced Flexible Dashboard Layout */}
-                  {analysis && (
-                    <FlexibleDashboardLayout
-                      analysis={analysis}
-                      data={rawData}
-                      className=""
-                    />
-                  )}
+                  {(() => {
+                    console.log('🔥 [DASHBOARD_PAGE] Render check:', {
+                      hasAnalysis: !!analysis,
+                      analysisIsNull: analysis === null,
+                      analysisIsUndefined: analysis === undefined,
+                      chartConfigLength: analysis?.chartConfig?.length || 0,
+                      chartTitles: analysis?.chartConfig?.map(c => c.title),
+                      dataLength: rawData.length,
+                      willRenderDashboard: !!analysis
+                    })
+
+                    if (!analysis) {
+                      console.warn('⚠️ [DASHBOARD_PAGE] Analysis is falsy - showing empty state instead of dashboard')
+                      return (
+                        <div className="flex items-center justify-center py-32">
+                          <div className="text-center space-y-4">
+                            <h3 className="text-xl font-semibold text-gray-900">No analysis available</h3>
+                            <p className="text-gray-500">Waiting for analysis to complete...</p>
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <FlexibleDashboardLayout
+                        analysis={analysis}
+                        data={rawData}
+                        className=""
+                      />
+                    )
+                  })()}
                 </div>
               )}
             </main>

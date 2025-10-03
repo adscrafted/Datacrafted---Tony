@@ -23,6 +23,7 @@ interface DynamicFileUploadProps {
   onUploadStart?: () => void
   onUploadComplete?: (data: any) => void
   onUploadError?: (error: string) => void
+  isTypingComplete?: boolean
 }
 
 export function DynamicFileUpload(props: DynamicFileUploadProps) {

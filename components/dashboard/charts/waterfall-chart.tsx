@@ -354,10 +354,11 @@ export default function WaterfallChart({
               position: 'top',
               formatter: (value: number, entry: any) => {
                 const point = entry as WaterfallDataPoint
+                if (!point || typeof point !== 'object') return ''
                 if (point.type === 'total') {
-                  return point.cumulative.toLocaleString(undefined, {
+                  return point.cumulative?.toLocaleString(undefined, {
                     maximumFractionDigits: 0
-                  })
+                  }) || ''
                 }
                 return point.displayValue >= 0
                   ? `+${point.displayValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
