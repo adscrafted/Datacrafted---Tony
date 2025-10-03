@@ -25,23 +25,76 @@ import { Maximize2, Download, X, Settings, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Scorecard } from './scorecard'
-import { DataRow, ChartCustomization, useDataStore } from '@/lib/store'
+import { DataRow, ChartCustomization, useDataStore, ChartType } from '@/lib/store'
 import { cn } from '@/lib/utils/cn'
 import { usePerformanceMonitor } from '@/lib/hooks/use-performance-monitor'
+import { renderCollapsibleLegend } from './collapsible-legend'
 
-// Lazy load table component for better performance
+// Lazy load table and waterfall components for better performance
 const TableChartLazy = lazy(() => import('./charts/table-chart').then(m => ({ default: m.TableChart })))
+const WaterfallChartLazy = lazy(() => import('./charts/waterfall-chart'))
+const FunnelChart = lazy(() => import('./charts/funnel-chart'))
+const HeatmapChart = lazy(() => import('./charts/heatmap-chart'))
+const GaugeChart = lazy(() => import('./charts/gauge-chart'))
+const CohortGrid = lazy(() => import('./charts/cohort-grid'))
+const BulletChart = lazy(() => import('./charts/bullet-chart'))
+const TreemapChart = lazy(() => import('./charts/treemap-chart'))
+const SankeyChart = lazy(() => import('./charts/sankey-chart'))
+const SparklineChart = lazy(() => import('./charts/sparkline-chart'))
 
 interface ChartWrapperProps {
   id?: string
-  type: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table'
+  type: ChartType
   title: string
   description: string
   data: DataRow[]
   dataKey: string[]
+  dataMapping?: {
+    xAxis?: string
+    yAxis?: string
+    size?: string
+    color?: string
+    xAxisLabel?: string
+    yAxisLabel?: string
+    category?: string
+    value?: string
+    type?: string
+    // Funnel-specific
+    stage?: string
+    // Heatmap-specific
+    xCategory?: string
+    yCategory?: string
+    intensity?: string
+    // Gauge-specific
+    metric?: string
+    min?: number
+    max?: number
+    target?: number
+    // Cohort-specific
+    cohort?: string
+    period?: string
+    // Bullet-specific
+    actual?: string
+    comparative?: string
+    ranges?: string
+    // Treemap-specific
+    parent?: string
+    // Sankey-specific
+    source?: string
+    target_node?: string
+    // Sparkline-specific
+    trend?: string
+  }
 }
 
 const DEFAULT_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D']
+
+// Chart Skeleton for Suspense fallback
+const ChartSkeleton = () => (
+  <div className="h-full flex items-center justify-center">
+    <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+  </div>
+)
 
 // Error Boundary Component
 class ChartErrorBoundary extends Component<
@@ -107,27 +160,46 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
   
   const customization = chartCustomizations[chartId]
   
-  // Use filtered data with better memoization
+  // PERFORMANCE OPTIMIZATION: Memoize filtered data with proper dependencies
   const filteredData = useMemo(() => {
     return getFilteredData()
-  }, [dashboardFilters, dateRange, granularity])
-  
-  // Safely serialize data to prevent circular references and infinite recursion
+  }, [getFilteredData]) // getFilteredData is already memoized in the store
+
+  // PERFORMANCE OPTIMIZATION: Memoize chart data processing with stable reference
+  // Create a stable string key for data comparison to prevent unnecessary recalculations
+  const dataKeyForCache = useMemo(() => {
+    const sourceData = (data && data.length > 0) ? data : filteredData
+    return `${sourceData.length}-${sourceData[0] ? Object.keys(sourceData[0]).length : 0}`
+  }, [data, filteredData])
+
+  // Apply customizations first (moved before chartData to avoid hoisting issues)
+  const displayTitle = customization?.customTitle || title
+  const displayDescription = customization?.customDescription || description
+  const chartType = customization?.chartType || type
+  const colors = customization?.colors || currentTheme.chartColors || DEFAULT_COLORS
+  const showLegend = customization?.showLegend ?? true
+  const showGrid = customization?.showGrid ?? true
+  const isVisible = customization?.isVisible ?? true
+  const axisLabels = customization?.axisLabels || {}
+
   const chartData = useMemo(() => {
     try {
-      // Safety check for data - use filtered data instead of raw data
-      if (!filteredData || !Array.isArray(filteredData) || filteredData.length === 0) {
+      // Prioritize prop data over store data
+      const sourceData = (data && data.length > 0) ? data : filteredData
+
+      // Safety check for data
+      if (!sourceData || !Array.isArray(sourceData) || sourceData.length === 0) {
         return []
       }
-      
-      // Deep clone and sanitize data to prevent circular references
-      // Use progressive loading for large datasets - limit to 500 for better performance
-      const dataLimit = filteredData.length > 1000 ? 500 : filteredData.length
-      const sanitizedData = filteredData.slice(0, dataLimit).map((row, index) => {
+
+      // PERFORMANCE: Increased limit to 1000 for better data visibility
+      // Only truncate for very large datasets
+      const dataLimit = sourceData.length > 2000 ? 1000 : sourceData.length
+      let sanitizedData = sourceData.slice(0, dataLimit).map((row, index) => {
         if (!row || typeof row !== 'object') {
           return { index, value: String(row || '') }
         }
-        
+
         const sanitizedRow: Record<string, any> = {}
         Object.keys(row).forEach(key => {
           const value = row[key]
@@ -143,43 +215,81 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
             sanitizedRow[key] = String(value)
           }
         })
-        
+
         return sanitizedRow
       })
-      
+
+      // Apply bar chart sorting and limiting if configured
+      if (chartType === 'bar' && customization?.dataMapping) {
+        const { sortBy, sortOrder, limit } = customization.dataMapping
+
+        // Apply sorting if sortBy is configured
+        if (sortBy) {
+          // Helper to parse values (handles currency, percentages, etc.)
+          const parseVal = (val: any): number => {
+            if (typeof val === 'number') return val
+            if (typeof val !== 'string') return 0
+            const cleaned = String(val).replace(/[€$£¥,\s%]/g, '')
+            const num = parseFloat(cleaned)
+            return isNaN(num) ? 0 : num
+          }
+
+          // Sort data with currency parsing (always sort descending for proper slicing)
+          sanitizedData = [...sanitizedData].sort((a, b) => {
+            const aVal = parseVal(a[sortBy])
+            const bVal = parseVal(b[sortBy])
+            return bVal - aVal // Always sort high to low first
+          })
+
+          // Apply limit if configured
+          if (limit) {
+            // If ascending (bottom X), take from the end; if descending (top X), take from the start
+            if (sortOrder === 'asc') {
+              sanitizedData = sanitizedData.slice(-limit) // Take last N items (smallest values)
+            } else {
+              sanitizedData = sanitizedData.slice(0, limit) // Take first N items (largest values)
+            }
+          }
+
+          // Now apply the final sort order for display
+          if (sortOrder === 'asc') {
+            sanitizedData = sanitizedData.reverse() // Reverse to show ascending order
+          }
+        }
+      }
+
       // Add metadata about data truncation for better UX
-      if (dataLimit < filteredData.length) {
+      if (dataLimit < sourceData.length) {
         (sanitizedData as any)._meta = {
           truncated: true,
-          totalRows: filteredData.length,
+          totalRows: sourceData.length,
           displayedRows: dataLimit
         }
       }
-      
+
       return sanitizedData
     } catch (error) {
       console.error('Error processing chart data:', error)
       return []
     }
-  }, [filteredData])
+  }, [dataKeyForCache, chartType, customization?.dataMapping]) // Add dependencies for bar chart sorting
   
-  // Safety check for dataKey
+  // Safety check for dataKey with intelligent fallback
   const safeDataKey = useMemo(() => {
     if (!dataKey || !Array.isArray(dataKey) || dataKey.length === 0) {
-      return ['index']
+      // Try to extract keys from data
+      const sourceData = (data && data.length > 0) ? data : filteredData
+      const firstRow = sourceData?.[0] || {}
+      const numericKeys = Object.keys(firstRow).filter(key =>
+        typeof firstRow[key] === 'number'
+      )
+      if (numericKeys.length > 0) {
+        return numericKeys.slice(0, 2)  // Return up to 2 numeric columns
+      }
+      return ['value']  // Better fallback than 'index'
     }
     return dataKey
-  }, [dataKey])
-  
-  // Apply customizations
-  const displayTitle = customization?.customTitle || title
-  const displayDescription = customization?.customDescription || description
-  const chartType = customization?.chartType || type
-  const colors = customization?.colors || currentTheme.chartColors || DEFAULT_COLORS
-  const showLegend = customization?.showLegend ?? true
-  const showGrid = customization?.showGrid ?? true
-  const isVisible = customization?.isVisible ?? true
-  const axisLabels = customization?.axisLabels || {}
+  }, [dataKey, data, filteredData])
   
   // Performance measurement
   useEffect(() => {
@@ -189,20 +299,39 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
     }
   }, [startMeasure, endMeasure, chartData.length])
   
+  // PERFORMANCE OPTIMIZATION: Memoize margin calculation
+  const calculateMargins = useMemo(() => {
+    return (data: any[], xKey: string) => {
+      if (!data || data.length === 0) return { top: 20, right: 30, left: 60, bottom: 100 }
+
+      // Sample first 5 labels
+      const sampleLabels = data.slice(0, 5).map(row => String(row[xKey] || ''))
+      const maxLength = Math.max(...sampleLabels.map(l => l.length), 0)
+
+      // Calculate needed bottom margin
+      let bottomMargin = 80
+      if (maxLength > 10) bottomMargin = 120
+      if (maxLength > 20) bottomMargin = 150
+      if (maxLength > 30) bottomMargin = 180
+
+      return { top: 20, right: 30, left: 60, bottom: bottomMargin }
+    }
+  }, []) // Empty deps - this function logic never changes
+
   // Memoize pie data processing - always call useMemo
   const pieData = useMemo(() => {
     if (chartType !== 'pie' || safeDataKey.length === 0 || chartData.length === 0) {
       return []
     }
-    
+
     const categoryKey = safeDataKey[0]
     const valueKey = safeDataKey[1] || 'count'
-    
+
     // Count occurrences if no value key specified
     const counts: Record<string, number> = {}
     chartData.forEach(row => {
       if (!row || typeof row !== 'object') return
-      
+
       const category = String(row[categoryKey] || 'Unknown')
       if (valueKey === 'count') {
         counts[category] = (counts[category] || 0) + 1
@@ -213,7 +342,7 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
         }
       }
     })
-    
+
     return Object.entries(counts).map(([name, value]) => ({ name, value }))
   }, [chartType, safeDataKey, chartData])
 
@@ -281,6 +410,11 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
     )
   }, [chartData, chartType, safeDataKey, displayTitle, displayDescription])
 
+  // PERFORMANCE OPTIMIZATION: Create stable keys for customization to prevent unnecessary re-renders
+  const chartConfigKey = useMemo(() => {
+    return `${chartType}-${showLegend}-${showGrid}`
+  }, [chartType, showLegend, showGrid])
+
   const renderChart = useMemo(() => {
     // Safety check
     if (!chartData || chartData.length === 0) {
@@ -290,10 +424,10 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
         </div>
       )
     }
-    
+
     // Get customization options
-    const showGrid = customization?.showGrid ?? true
-    const showLegend = customization?.showLegend ?? true
+    const showGridLocal = customization?.showGrid ?? true
+    const showLegendLocal = customization?.showLegend ?? true
     const axisLabels = customization?.axisLabels || {}
 
     // Handle different chart types
@@ -302,14 +436,25 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
         return renderSimpleChart
         
       case 'line':
+        const lineMargins = calculateMargins(chartData, safeDataKey[0])
         return (
-          <ResponsiveContainer width="100%" height="100%" minHeight={200}>
-            <LineChart data={chartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+          <ResponsiveContainer width="100%" height="100%" minHeight={400}>
+            <LineChart data={chartData} margin={lineMargins}>
               {showGrid && <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />}
-              <XAxis dataKey={safeDataKey[0]} tick={{ fontSize: 10 }} />
+              <XAxis
+                dataKey={safeDataKey[0]}
+                tick={{ fontSize: 11 }}
+                angle={-45}
+                textAnchor="end"
+                height={lineMargins.bottom}
+                tickFormatter={(value) => {
+                  const str = String(value)
+                  return str.length > 25 ? str.substring(0, 22) + '...' : str
+                }}
+              />
               <YAxis tick={{ fontSize: 10 }} />
               <Tooltip />
-              {showLegend && <Legend wrapperStyle={{ fontSize: '12px' }} />}
+              {showLegend && <Legend content={renderCollapsibleLegend({ maxVisibleItems: 5, wrapperStyle: { fontSize: '12px', paddingTop: '30px', paddingBottom: '5px' } })} />}
               {safeDataKey.slice(1).map((key, index) => (
                 <Line
                   key={key}
@@ -325,18 +470,75 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
         )
       
       case 'bar':
+        const barMargins = calculateMargins(chartData, safeDataKey[0])
+        const barPercentageMode = customization?.percentageStack === true
+
+        // Custom tooltip for percentage mode
+        const BarCustomTooltip = ({ active, payload, label }: any) => {
+          if (!active || !payload || !payload.length) return null
+
+          // Calculate total for percentage
+          const total = payload.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0)
+
+          return (
+            <div className="bg-white p-3 border border-gray-200 rounded shadow-lg">
+              <p className="font-medium text-gray-900 mb-2">{label}</p>
+              {payload.map((item: any, index: number) => {
+                const value = Number(item.value) || 0
+                const percentage = total > 0 ? (value / total * 100).toFixed(1) : '0.0'
+                return (
+                  <div key={index} className="flex items-center gap-2 text-sm">
+                    <div
+                      className="w-3 h-3 rounded-sm"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <span className="text-gray-700">{item.name}:</span>
+                    <span className="font-medium text-gray-900">
+                      {barPercentageMode
+                        ? `${percentage}% (${value.toLocaleString()})`
+                        : value.toLocaleString()
+                      }
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        }
+
         return (
-          <ResponsiveContainer width="100%" height="100%" minHeight={200}>
-            <BarChart data={chartData}>
+          <ResponsiveContainer width="100%" height="100%" minHeight={400}>
+            <BarChart
+              data={chartData}
+              margin={barMargins}
+              stackOffset={barPercentageMode ? "expand" : undefined}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey={safeDataKey[0]} tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Legend />
+              <XAxis
+                dataKey={safeDataKey[0]}
+                tick={{ fontSize: 11 }}
+                angle={-45}
+                textAnchor="end"
+                height={barMargins.bottom}
+                tickFormatter={(value) => {
+                  const str = String(value)
+                  return str.length > 25 ? str.substring(0, 22) + '...' : str
+                }}
+              />
+              <YAxis
+                tick={{ fontSize: 12 }}
+                tickFormatter={barPercentageMode
+                  ? (value) => `${(value * 100).toFixed(0)}%`
+                  : undefined
+                }
+              />
+              <Tooltip content={<BarCustomTooltip />} />
+              <Legend content={renderCollapsibleLegend({ maxVisibleItems: 5, wrapperStyle: { fontSize: '12px', paddingTop: '30px', paddingBottom: '5px' } })} />
               {safeDataKey.slice(1).map((key, index) => (
                 <Bar
                   key={key}
                   dataKey={key}
+                  stackId={barPercentageMode ? "stack" : undefined}
                   fill={DEFAULT_COLORS[index % DEFAULT_COLORS.length]}
                 />
               ))}
@@ -346,15 +548,15 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
       
       case 'pie':
         return (
-          <ResponsiveContainer width="100%" height="100%" minHeight={200}>
+          <ResponsiveContainer width="100%" height="100%" minHeight={400}>
             <PieChart>
               <Pie
                 data={pieData}
                 cx="50%"
-                cy="50%"
+                cy="40%"
                 labelLine={false}
-                label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
-                outerRadius={80}
+                label={({ name, percent }) => `${name} ${(Number(percent || 0) * 100).toFixed(0)}%`}
+                outerRadius="60%"
                 fill="#8884d8"
                 dataKey="value"
               >
@@ -363,26 +565,82 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
                 ))}
               </Pie>
               <Tooltip />
-              <Legend />
+              <Legend content={renderCollapsibleLegend({ maxVisibleItems: 5, wrapperStyle: { fontSize: '12px', paddingTop: '30px', paddingBottom: '10px' } })} />
             </PieChart>
           </ResponsiveContainer>
         )
       
       case 'area':
+        const areaMargins = calculateMargins(chartData, safeDataKey[0])
+        const areaPercentageMode = customization?.percentageStack === true
+
+        // Custom tooltip for percentage mode
+        const AreaCustomTooltip = ({ active, payload, label }: any) => {
+          if (!active || !payload || !payload.length) return null
+
+          // Calculate total for percentage
+          const total = payload.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0)
+
+          return (
+            <div className="bg-white p-3 border border-gray-200 rounded shadow-lg">
+              <p className="font-medium text-gray-900 mb-2">{label}</p>
+              {payload.map((item: any, index: number) => {
+                const value = Number(item.value) || 0
+                const percentage = total > 0 ? (value / total * 100).toFixed(1) : '0.0'
+                return (
+                  <div key={index} className="flex items-center gap-2 text-sm">
+                    <div
+                      className="w-3 h-3 rounded-sm"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <span className="text-gray-700">{item.name}:</span>
+                    <span className="font-medium text-gray-900">
+                      {areaPercentageMode
+                        ? `${percentage}% (${value.toLocaleString()})`
+                        : value.toLocaleString()
+                      }
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        }
+
         return (
-          <ResponsiveContainer width="100%" height="100%" minHeight={200}>
-            <AreaChart data={chartData}>
+          <ResponsiveContainer width="100%" height="100%" minHeight={400}>
+            <AreaChart
+              data={chartData}
+              margin={areaMargins}
+              stackOffset={areaPercentageMode ? "expand" : undefined}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey={safeDataKey[0]} tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Legend />
+              <XAxis
+                dataKey={safeDataKey[0]}
+                tick={{ fontSize: 11 }}
+                angle={-45}
+                textAnchor="end"
+                height={areaMargins.bottom}
+                tickFormatter={(value) => {
+                  const str = String(value)
+                  return str.length > 25 ? str.substring(0, 22) + '...' : str
+                }}
+              />
+              <YAxis
+                tick={{ fontSize: 12 }}
+                tickFormatter={areaPercentageMode
+                  ? (value) => `${(value * 100).toFixed(0)}%`
+                  : undefined
+                }
+              />
+              <Tooltip content={<AreaCustomTooltip />} />
+              <Legend content={renderCollapsibleLegend({ maxVisibleItems: 5, wrapperStyle: { fontSize: '12px', paddingTop: '30px', paddingBottom: '5px' } })} />
               {safeDataKey.slice(1).map((key, index) => (
                 <Area
                   key={key}
                   type="monotone"
                   dataKey={key}
-                  stackId="1"
+                  stackId={areaPercentageMode ? "stack" : "1"}
                   stroke={DEFAULT_COLORS[index % DEFAULT_COLORS.length]}
                   fill={DEFAULT_COLORS[index % DEFAULT_COLORS.length]}
                   fillOpacity={0.6}
@@ -393,11 +651,22 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
         )
       
       case 'scatter':
+        const scatterMargins = calculateMargins(chartData, safeDataKey[0])
         return (
-          <ResponsiveContainer width="100%" height="100%" minHeight={200}>
-            <ScatterChart>
+          <ResponsiveContainer width="100%" height="100%" minHeight={400}>
+            <ScatterChart margin={scatterMargins}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey={safeDataKey[0]} tick={{ fontSize: 12 }} />
+              <XAxis
+                dataKey={safeDataKey[0]}
+                tick={{ fontSize: 11 }}
+                angle={-45}
+                textAnchor="end"
+                height={scatterMargins.bottom}
+                tickFormatter={(value) => {
+                  const str = String(value)
+                  return str.length > 25 ? str.substring(0, 22) + '...' : str
+                }}
+              />
               <YAxis dataKey={safeDataKey[1]} tick={{ fontSize: 12 }} />
               <Tooltip cursor={{ strokeDasharray: '3 3' }} />
               <Scatter name="Data" data={chartData} fill={DEFAULT_COLORS[0]} />
@@ -415,7 +684,171 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
             <TableChartLazy data={chartData} dataKey={safeDataKey} />
           </React.Suspense>
         )
-      
+
+      case 'waterfall':
+        return (
+          <React.Suspense fallback={<ChartSkeleton />}>
+            <WaterfallChartLazy
+              data={chartData}
+              dataMapping={{
+                category: customization?.dataMapping?.category || safeDataKey[0] || 'category',
+                value: customization?.dataMapping?.value || safeDataKey[1] || 'value',
+                type: customization?.dataMapping?.type
+              }}
+              title={displayTitle}
+              description={displayDescription}
+              customization={{
+                showLegend: showLegendLocal,
+                showGrid: showGridLocal,
+                showLabels: customization?.showLabels ?? true,
+                showConnectors: customization?.showConnectors ?? true
+              }}
+            />
+          </React.Suspense>
+        )
+
+      case 'funnel':
+        return (
+          <React.Suspense fallback={<ChartSkeleton />}>
+            <FunnelChart
+              data={chartData}
+              dataMapping={{
+                stage: customization?.dataMapping?.stage || safeDataKey[0] || 'stage',
+                value: customization?.dataMapping?.value || safeDataKey[1] || 'value'
+              }}
+              customization={{
+                colors: customization?.colors,
+                showPercentages: true
+              }}
+            />
+          </React.Suspense>
+        )
+
+      case 'heatmap':
+        return (
+          <React.Suspense fallback={<ChartSkeleton />}>
+            <HeatmapChart
+              data={chartData}
+              dataMapping={{
+                xAxis: customization?.dataMapping?.xCategory || (typeof customization?.dataMapping?.xAxis === 'string' ? customization?.dataMapping?.xAxis : safeDataKey[0]) || safeDataKey[0] || 'xCategory',
+                yAxis: customization?.dataMapping?.yCategory || (typeof customization?.dataMapping?.yAxis === 'string' ? customization?.dataMapping?.yAxis : safeDataKey[1]) || safeDataKey[1] || 'yCategory',
+                value: customization?.dataMapping?.intensity || customization?.dataMapping?.value || safeDataKey[2] || 'value'
+              }}
+              customization={{
+                colorScale: 'blue',
+                showValues: false
+              }}
+            />
+          </React.Suspense>
+        )
+
+      case 'gauge':
+        return (
+          <React.Suspense fallback={<ChartSkeleton />}>
+            <GaugeChart
+              data={chartData}
+              dataMapping={{
+                metric: customization?.dataMapping?.metric || safeDataKey[0] || 'value',
+                target: typeof customization?.dataMapping?.target === 'string' ? customization?.dataMapping?.target : undefined
+              }}
+              customization={{
+                min: customization?.dataMapping?.min ?? 0,
+                max: customization?.dataMapping?.max ?? 100
+              }}
+            />
+          </React.Suspense>
+        )
+
+      case 'cohort':
+        return (
+          <React.Suspense fallback={<ChartSkeleton />}>
+            <CohortGrid
+              data={chartData}
+              dataMapping={{
+                cohort: customization?.dataMapping?.cohort || safeDataKey[0] || 'cohort',
+                period: customization?.dataMapping?.period || safeDataKey[1] || 'period',
+                retention: customization?.dataMapping?.value || safeDataKey[2] || 'retention'
+              }}
+              customization={{
+                maxPeriods: 12,
+                colorIntensity: true
+              }}
+            />
+          </React.Suspense>
+        )
+
+      case 'bullet':
+        return (
+          <React.Suspense fallback={<ChartSkeleton />}>
+            <BulletChart
+              data={chartData}
+              dataMapping={{
+                category: customization?.dataMapping?.category || safeDataKey[0] || 'category',
+                actual: customization?.dataMapping?.actual || safeDataKey[1] || 'actual',
+                target: customization?.dataMapping?.comparative || undefined,
+                ranges: undefined  // Would need to be configured specifically
+              }}
+              customization={{
+                showGrid: showGridLocal,
+                showLabels: customization?.showLabels ?? true
+              }}
+            />
+          </React.Suspense>
+        )
+
+      case 'treemap':
+        return (
+          <React.Suspense fallback={<ChartSkeleton />}>
+            <TreemapChart
+              data={chartData}
+              dataMapping={{
+                category: customization?.dataMapping?.category || safeDataKey[0] || 'name',
+                value: customization?.dataMapping?.value || safeDataKey[1] || 'value',
+                parentCategory: customization?.dataMapping?.parent
+              }}
+              customization={{
+                colors: customization?.colors,
+                showLabels: customization?.showLabels ?? true
+              }}
+            />
+          </React.Suspense>
+        )
+
+      case 'sankey':
+        return (
+          <React.Suspense fallback={<ChartSkeleton />}>
+            <SankeyChart
+              data={chartData}
+              dataMapping={{
+                source: customization?.dataMapping?.source || safeDataKey[0] || 'source',
+                target: customization?.dataMapping?.target_node || safeDataKey[1] || 'target',
+                value: customization?.dataMapping?.value || safeDataKey[2] || 'value'
+              }}
+              customization={{
+                colors: customization?.colors,
+                nodeWidth: 12,
+                nodePadding: 24
+              }}
+            />
+          </React.Suspense>
+        )
+
+      case 'sparkline':
+        return (
+          <React.Suspense fallback={<ChartSkeleton />}>
+            <SparklineChart
+              data={chartData}
+              dataMapping={{
+                xAxis: typeof customization?.dataMapping?.xAxis === 'string' ? customization?.dataMapping?.xAxis : (safeDataKey[0] || 'x'),
+                yAxis: customization?.dataMapping?.trend || (typeof customization?.dataMapping?.yAxis === 'string' ? customization?.dataMapping?.yAxis : (safeDataKey[1] || 'value'))
+              }}
+              color={customization?.colors?.[0]}
+              showTooltip={true}
+              showDots={false}
+            />
+          </React.Suspense>
+        )
+
       default:
         return renderSimpleChart
     }
@@ -430,7 +863,7 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
               <XAxis dataKey={safeDataKey[0]} label={axisLabels.x ? { value: axisLabels.x, position: 'insideBottom', offset: -5 } : undefined} />
               <YAxis label={axisLabels.y ? { value: axisLabels.y, angle: -90, position: 'insideLeft' } : undefined} />
               <Tooltip />
-              {showLegend && <Legend />}
+              {showLegend && <Legend content={renderCollapsibleLegend({ maxVisibleItems: 5 })} />}
               {safeDataKey.slice(1).map((key, index) => (
                 <Line
                   key={key}
@@ -452,7 +885,7 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
               <XAxis dataKey={safeDataKey[0]} label={axisLabels.x ? { value: axisLabels.x, position: 'insideBottom', offset: -5 } : undefined} />
               <YAxis label={axisLabels.y ? { value: axisLabels.y, angle: -90, position: 'insideLeft' } : undefined} />
               <Tooltip />
-              {showLegend && <Legend />}
+              {showLegend && <Legend content={renderCollapsibleLegend({ maxVisibleItems: 5 })} />}
               {safeDataKey.slice(1).map((key, index) => (
                 <Bar
                   key={key}
@@ -473,7 +906,7 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={({ name, percent }) => `${name} ${percent ? (percent * 100).toFixed(0) : 0}%`}
+                label={({ name, percent }) => `${name} ${percent ? (Number(percent) * 100).toFixed(0) : 0}%`}
                 outerRadius={80}
                 fill="#8884d8"
                 dataKey="value"
@@ -483,7 +916,7 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
                 ))}
               </Pie>
               <Tooltip />
-              {showLegend && <Legend />}
+              {showLegend && <Legend content={renderCollapsibleLegend({ maxVisibleItems: 5 })} />}
             </PieChart>
           </ResponsiveContainer>
         )
@@ -496,7 +929,7 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
               <XAxis dataKey={safeDataKey[0]} label={axisLabels.x ? { value: axisLabels.x, position: 'insideBottom', offset: -5 } : undefined} />
               <YAxis label={axisLabels.y ? { value: axisLabels.y, angle: -90, position: 'insideLeft' } : undefined} />
               <Tooltip />
-              {showLegend && <Legend />}
+              {showLegend && <Legend content={renderCollapsibleLegend({ maxVisibleItems: 5 })} />}
               {safeDataKey.slice(1).map((key, index) => (
                 <Area
                   key={key}
@@ -787,7 +1220,7 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
           )}
         </div>
       </CardHeader>
-      <CardContent className="flex-1 p-4" style={{ minHeight: '200px' }}>
+      <CardContent className="flex-1 p-4" style={{ minHeight: '360px' }}>
         <div className="h-full w-full">
           <ChartErrorBoundary>
             {renderChart}

@@ -3,6 +3,13 @@ import { persist } from 'zustand/middleware'
 import { DateRange } from 'react-day-picker'
 import { aggregateDataByGranularity } from '@/lib/utils/data-aggregation'
 import { dataStorage } from '@/lib/data-storage'
+import type {
+  EnhancedAnalysisResult,
+  ChartRecommendation,
+  CorrectedColumn,
+  DataContext,
+  isEnhancedAnalysisResult
+} from '@/lib/types/recommendation'
 
 export interface DataRow {
   [key: string]: string | number | boolean | Date | null
@@ -24,6 +31,8 @@ export interface ColumnSchema {
   }
   description?: string
   suggestedUsage?: string[]
+  confidence?: number
+  detectionReason?: string
 }
 
 export interface DataSchema {
@@ -47,23 +56,58 @@ export interface ChartCustomization {
   theme?: 'default' | 'light' | 'dark' | 'custom'
   showLegend?: boolean
   showGrid?: boolean
+  showLabels?: boolean
+  showConnectors?: boolean
   customTitle?: string
   customDescription?: string
   axisLabels?: { x?: string; y?: string }
   isVisible?: boolean
-  chartType?: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table'
+  chartType?: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo' | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline'
   animate?: boolean
   interactive?: boolean
   stacked?: boolean
+  percentageStack?: boolean  // For 100% stacked mode
   dataColumns?: string[]
   aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct'
   // Data mapping for custom column selection
   dataMapping?: {
     xAxis?: string
     yAxis?: string | string[]
+    yAxis1?: string | string[] // For combo charts - left axis
+    yAxis2?: string | string[] // For combo charts - right axis
+    yAxis1Type?: 'bar' | 'line' | 'area' // For combo charts
+    yAxis2Type?: 'bar' | 'line' | 'area' // For combo charts
+    yAxis1Label?: string // For combo charts
+    yAxis2Label?: string // For combo charts
     category?: string // For pie charts
     value?: string // For pie charts and scorecards
+    type?: string // For waterfall charts - type column
+    values?: string[] // For multi-value charts
     metric?: string // For scorecards
+    size?: string // For scatter charts - bubble sizing
+    color?: string // For scatter charts - color grouping
+    sortBy?: string // For bar charts - sorting column
+    sortOrder?: 'asc' | 'desc' // For bar charts - sorting order
+    limit?: number // For bar charts - Top/Bottom X
+    aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct' // Aggregation method
+    columns?: string[] // For table charts - columns to display
+    // New chart types
+    stage?: string // For funnel charts
+    xCategory?: string // For heatmap charts
+    yCategory?: string // For heatmap charts
+    intensity?: string // For heatmap charts
+    cohort?: string // For cohort charts
+    period?: string // For cohort charts
+    actual?: string // For bullet charts
+    comparative?: string // For bullet charts
+    ranges?: string // For bullet charts
+    parent?: string // For treemap charts
+    source?: string // For sankey charts
+    target_node?: string // For sankey charts
+    trend?: string // For sparkline charts
+    min?: number // For gauge charts
+    max?: number // For gauge charts
+    target?: number // For gauge charts
   }
   // Dynamic sizing options
   autoSize?: boolean
@@ -72,10 +116,14 @@ export interface ChartCustomization {
   labelRotation?: 'auto' | 'horizontal' | 'diagonal' | 'vertical'
 }
 
+export type ChartType =
+  | 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo'
+  | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline'
+
 export interface ChartTemplate {
   id: string
   name: string
-  type: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table'
+  type: ChartType
   description: string
   category: 'comparison' | 'distribution' | 'trend' | 'relationship' | 'summary'
   icon: string
@@ -121,15 +169,48 @@ export interface DashboardLayout {
   chartPositions: Record<string, { x: number; y: number; w: number; h: number }>
 }
 
+/**
+ * Legacy analysis result for backward compatibility
+ * New code should use EnhancedAnalysisResult from recommendation types
+ */
 export interface AnalysisResult {
   insights: string[]
   chartConfig: Array<{
     id?: string
-    type: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table'
+    type: ChartType
     title: string
-    dataKey: string[]
     description: string
+    // Chart-type-specific data mappings (primary)
+    dataMapping?: {
+      // Bar/Column charts
+      category?: string
+      values?: string[]
+      // Line/Area charts
+      xAxis?: string
+      yAxis?: string | string[]
+      // Pie charts
+      value?: string
+      // Scorecard
+      metric?: string
+      comparison?: string
+      // Scatter
+      size?: string
+      color?: string
+      // Table
+      columns?: string[]
+      // Common
+      aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct'
+    }
+    // Legacy fields for backward compatibility
+    dataKey?: string[]
+    xAxis?: string | string[]
+    yAxis?: string | string[]
     aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct'
+    // Quality metrics
+    confidence?: number
+    reasoning?: string
+    qualityScore?: number
+    qualityFactors?: any
   }>
   summary: {
     rowCount: number
@@ -187,7 +268,16 @@ interface DataStore {
   rawData: DataRow[]
   dataId: string | null // IndexedDB storage ID
   dataSchema: DataSchema | null
-  analysis: AnalysisResult | null
+
+  /** Analysis result - can be either legacy or enhanced format */
+  analysis: AnalysisResult | EnhancedAnalysisResult | null
+
+  /** User corrections from data tab for improved recommendations */
+  correctedSchema: CorrectedColumn[] | null
+
+  /** Data context extracted from AI analysis */
+  dataContext: DataContext | null
+
   isAnalyzing: boolean
   error: string | null
   analysisProgress: number
@@ -238,7 +328,13 @@ interface DataStore {
   gridSnapping: boolean
   showGridLines: boolean
   autoSaveLayouts: boolean
-  
+
+  // Upload status state
+  uploadProgress: number
+  uploadStage: string | null
+  uploadComplete: boolean
+  uploadProjectId: string | null
+
   // Session actions
   setCurrentSession: (session: SessionInfo | null) => void
   setRecentSessions: (sessions: RecentSession[]) => void
@@ -254,7 +350,16 @@ interface DataStore {
   setFileName: (name: string) => void
   setRawData: (data: DataRow[]) => Promise<void>
   setDataSchema: (schema: DataSchema) => void
-  setAnalysis: (analysis: AnalysisResult) => void
+
+  /** Set analysis result - supports both legacy and enhanced formats */
+  setAnalysis: (analysis: AnalysisResult | EnhancedAnalysisResult) => void
+
+  /** Update corrected schema from user feedback */
+  setCorrectedSchema: (schema: CorrectedColumn[]) => void
+
+  /** Set data context from AI analysis */
+  setDataContext: (context: DataContext) => void
+
   setIsAnalyzing: (isAnalyzing: boolean) => void
   setError: (error: string | null) => void
   setAnalysisProgress: (progress: number) => void
@@ -295,7 +400,7 @@ interface DataStore {
   getFilteredData: () => DataRow[]
 
   // Enhanced dashboard actions
-  addChart: (template: ChartTemplate, position?: { x: number; y: number }) => void
+  addChart: (template: ChartTemplate, position?: { x: number; y: number }) => string
   removeChart: (chartId: string) => void
   duplicateChart: (chartId: string) => void
   updateChartType: (chartId: string, type: ChartTemplate['type']) => void
@@ -312,6 +417,13 @@ interface DataStore {
   resetToDefaultLayout: () => void
   exportLayoutConfig: () => Promise<void>
   importLayoutConfig: (configFile: File) => Promise<void>
+
+  // Upload status actions
+  setUploadProgress: (progress: number) => void
+  setUploadStage: (stage: string | null) => void
+  setUploadComplete: (complete: boolean) => void
+  setUploadProjectId: (projectId: string | null) => void
+  dismissUpload: () => void
 
   // Utility actions
   reset: () => void
@@ -403,6 +515,109 @@ const defaultChartTemplates: ChartTemplate[] = [
     requiredDataTypes: ['string', 'number'],
     minColumns: 1,
     maxColumns: undefined,
+  },
+  {
+    id: 'waterfall-variance',
+    name: 'Waterfall Chart',
+    type: 'waterfall',
+    description: 'Show sequential positive and negative changes',
+    category: 'comparison',
+    icon: 'TrendingDown',
+    defaultPosition: { w: 8, h: 5 },
+    requiredDataTypes: ['string', 'number'],
+    minColumns: 2,
+  },
+  {
+    id: 'funnel-conversion',
+    name: 'Funnel Chart',
+    type: 'funnel',
+    description: 'Visualize conversion through stages',
+    category: 'trend',
+    icon: 'Filter',
+    defaultPosition: { w: 6, h: 5 },
+    requiredDataTypes: ['string', 'number'],
+    minColumns: 2,
+    maxColumns: 10,
+  },
+  {
+    id: 'heatmap-correlation',
+    name: 'Heatmap',
+    type: 'heatmap',
+    description: 'Show data density and correlations',
+    category: 'relationship',
+    icon: 'Grid3x3',
+    defaultPosition: { w: 8, h: 6 },
+    requiredDataTypes: ['string', 'number'],
+    minColumns: 3,
+  },
+  {
+    id: 'gauge-kpi',
+    name: 'Gauge Chart',
+    type: 'gauge',
+    description: 'Display progress toward a goal',
+    category: 'summary',
+    icon: 'Gauge',
+    defaultPosition: { w: 4, h: 4 },
+    requiredDataTypes: ['number'],
+    minColumns: 1,
+    maxColumns: 1,
+  },
+  {
+    id: 'cohort-retention',
+    name: 'Cohort Analysis',
+    type: 'cohort',
+    description: 'Track user retention over time',
+    category: 'trend',
+    icon: 'Users',
+    defaultPosition: { w: 10, h: 6 },
+    requiredDataTypes: ['date', 'string', 'number'],
+    minColumns: 3,
+  },
+  {
+    id: 'bullet-performance',
+    name: 'Bullet Chart',
+    type: 'bullet',
+    description: 'Compare performance against targets',
+    category: 'comparison',
+    icon: 'Target',
+    defaultPosition: { w: 6, h: 3 },
+    requiredDataTypes: ['string', 'number'],
+    minColumns: 2,
+    maxColumns: 4,
+  },
+  {
+    id: 'treemap-hierarchy',
+    name: 'Treemap',
+    type: 'treemap',
+    description: 'Visualize hierarchical data structures',
+    category: 'distribution',
+    icon: 'LayoutGrid',
+    defaultPosition: { w: 8, h: 6 },
+    requiredDataTypes: ['string', 'number'],
+    minColumns: 2,
+  },
+  {
+    id: 'sankey-flow',
+    name: 'Sankey Diagram',
+    type: 'sankey',
+    description: 'Show flow and connections between entities',
+    category: 'relationship',
+    icon: 'GitBranch',
+    defaultPosition: { w: 10, h: 6 },
+    requiredDataTypes: ['string', 'number'],
+    minColumns: 3,
+  },
+  {
+    id: 'sparkline-trend',
+    name: 'Sparkline',
+    type: 'sparkline',
+    description: 'Compact line chart for trends',
+    category: 'trend',
+    icon: 'TrendingUp',
+    defaultPosition: { w: 3, h: 2 },
+    requiredDataTypes: ['number'],
+    minColumns: 1,
+    maxColumns: 1,
   },
 ]
 
@@ -496,6 +711,8 @@ export const useDataStore = create<DataStore>()(
       dataId: null,
       dataSchema: null,
       analysis: null,
+      correctedSchema: null,
+      dataContext: null,
       isAnalyzing: false,
       error: null,
       analysisProgress: 0,
@@ -534,7 +751,13 @@ export const useDataStore = create<DataStore>()(
       gridSnapping: true,
       showGridLines: false,
       autoSaveLayouts: true,
-      
+
+      // Upload status state
+      uploadProgress: 0,
+      uploadStage: null,
+      uploadComplete: false,
+      uploadProjectId: null,
+
       // Session actions
       setCurrentSession: (session) => set({ currentSession: session }),
       
@@ -727,34 +950,16 @@ export const useDataStore = create<DataStore>()(
       // Data actions
       setFileName: (name) => set({ fileName: name }),
       setRawData: async (data) => {
-        console.log('🔵 [STORE] setRawData called:', {
-          hasData: !!data,
-          dataLength: data?.length,
-          dataType: typeof data,
-          isArray: Array.isArray(data),
-          firstRowKeys: data?.[0] ? Object.keys(data[0]) : null,
-          timestamp: new Date().toISOString()
-        })
-        
         try {
           // For large datasets, store in IndexedDB
           if (data && data.length > 1000) {
-            console.log('🔵 [STORE] Large dataset detected, storing in IndexedDB...')
             const fileName = get().fileName || 'untitled'
             const dataId = await dataStorage.saveData(fileName, data)
-            console.log('✅ [STORE] Data stored in IndexedDB with dataId:', dataId)
             set({ rawData: data, dataId })
           } else {
             // For small datasets, just store in memory
-            console.log('🔵 [STORE] Small dataset, storing in memory...')
             set({ rawData: data, dataId: null })
           }
-          
-          console.log('✅ [STORE] setRawData completed successfully, current state:', {
-            rawDataLength: get().rawData?.length,
-            dataId: get().dataId,
-            fileName: get().fileName
-          })
         } catch (error) {
           console.error('❌ [STORE] Failed to store data:', {
             error,
@@ -763,13 +968,46 @@ export const useDataStore = create<DataStore>()(
             timestamp: new Date().toISOString()
           })
           // Fallback to memory storage
-          console.log('🔄 [STORE] Falling back to memory storage...')
           set({ rawData: data, dataId: null })
-          console.log('✅ [STORE] Fallback to memory storage completed')
         }
       },
       setDataSchema: (schema) => set({ dataSchema: schema }),
-      setAnalysis: (analysis) => set({ analysis }),
+
+      setAnalysis: (analysis) => {
+        // CRITICAL LOGGING: Track what's being stored
+        console.log('📦 [STORE] ===== STORING ANALYSIS =====')
+        console.log('📦 [STORE] analysis.chartConfig.length:', analysis?.chartConfig?.length || 0)
+        console.log('📦 [STORE] Chart titles stored:', analysis?.chartConfig?.map(c => c.title).join(', '))
+        console.log('📦 [STORE] Chart types stored:', analysis?.chartConfig?.map(c => c.type).join(', '))
+
+        // DEBUG: Log scatter chart configurations
+        const scatterCharts = analysis?.chartConfig?.filter(c => c.type === 'scatter') || []
+        console.log('📦 [STORE] Scatter charts found:', scatterCharts.length)
+        scatterCharts.forEach((chart, idx) => {
+          console.log(`📦 [STORE] Scatter ${idx}:`, chart.title)
+          console.log(`📦 [STORE] Scatter ${idx} dataMapping:`, chart.dataMapping)
+          console.log(`📦 [STORE] Scatter ${idx} dataMapping.size:`, chart.dataMapping?.size)
+          console.log(`📦 [STORE] Scatter ${idx} dataMapping.color:`, chart.dataMapping?.color)
+        })
+        console.log('📦 [STORE] ===== END STORING =====')
+
+        set({
+          analysis,
+          // CRITICAL FIX: Clear chart customizations when analysis updates
+          // to force recalculation of positions and prevent misalignment
+          // when chart order changes (e.g., after "Push to AI")
+          chartCustomizations: {}
+        })
+        // Extract data context if available from enhanced analysis
+        if (analysis && typeof analysis === 'object' && 'dataContext' in analysis && analysis.dataContext) {
+          set({ dataContext: analysis.dataContext })
+        }
+      },
+
+      setCorrectedSchema: (schema) => set({ correctedSchema: schema }),
+
+      setDataContext: (context) => set({ dataContext: context }),
+
       setIsAnalyzing: (isAnalyzing) => set({ isAnalyzing }),
       setError: (error) => set({ error }),
       setAnalysisProgress: (progress) => set({ analysisProgress: progress }),
@@ -1352,11 +1590,13 @@ export const useDataStore = create<DataStore>()(
         }
       },
       
+      // PERFORMANCE OPTIMIZATION: Memoized filtered data getter
       getFilteredData: () => {
         const state = get()
         const { rawData, dashboardFilters, dateRange, granularity } = state
 
-        if (!rawData.length) return rawData
+        // Quick return for empty data
+        if (!rawData || rawData.length === 0) return []
 
         let filteredData = rawData
 
@@ -1439,6 +1679,12 @@ export const useDataStore = create<DataStore>()(
         const state = get()
         const chartId = `chart-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
+        // Guard: Ensure we have columns before proceeding
+        if (state.availableColumns.length === 0) {
+          console.error('Cannot add chart: no data columns available')
+          return chartId
+        }
+
         // Generate data keys based on available columns and template requirements
         const availableNumberColumns = state.availableColumns.filter(col => {
           const sampleValue = state.rawData[0]?.[col]
@@ -1449,30 +1695,197 @@ export const useDataStore = create<DataStore>()(
           return typeof sampleValue === 'string' && isNaN(Number(sampleValue))
         })
 
+        // Count existing charts of the same type to rotate column assignments
+        const existingChartsOfType = state.analysis?.chartConfig?.filter(c => c.type === template.type) || []
+
+        // Cap the index to prevent infinite growth and unpredictable rotation
+        const maxColumns = template.type === 'scatter' || template.type === 'pie'
+          ? Math.max(availableNumberColumns.length, availableStringColumns.length, 1)
+          : Math.max(availableStringColumns.length, 1)
+        const chartTypeIndex = Math.min(existingChartsOfType.length, maxColumns * 3) // Allow up to 3x rotation
+
         let dataKeys: string[] = []
+        let dataMapping: any = {}
+
         if (template.type === 'pie') {
-          dataKeys = [availableStringColumns[0], availableNumberColumns[0]].filter(Boolean)
+          // Rotate through available columns for duplicate pie charts
+          const categoryOffset = chartTypeIndex % availableStringColumns.length
+          const valueOffset = chartTypeIndex % availableNumberColumns.length
+          const categoryCol = availableStringColumns[categoryOffset] || availableStringColumns[0]
+          const valueCol = availableNumberColumns[valueOffset] || availableNumberColumns[0]
+          dataKeys = [categoryCol, valueCol].filter(Boolean)
+          dataMapping = {
+            category: categoryCol,
+            value: valueCol
+          }
         } else if (template.type === 'scorecard') {
-          dataKeys = [availableNumberColumns[0]].filter(Boolean)
+          // Rotate through metrics for duplicate scorecards
+          const metricOffset = chartTypeIndex % availableNumberColumns.length
+          const metricCol = availableNumberColumns[metricOffset] || availableNumberColumns[0]
+          dataKeys = [metricCol].filter(Boolean)
+          dataMapping = {
+            metric: metricCol
+          }
         } else if (template.type === 'table') {
-          dataKeys = state.availableColumns.slice(0, 8) // Limit table columns
-        } else {
-          // For line, bar, area, scatter charts
-          const xKey = availableStringColumns[0] || availableNumberColumns[0]
+          const tableColumns = state.availableColumns.slice(0, 8)
+          dataKeys = tableColumns
+          dataMapping = {
+            columns: tableColumns
+          }
+        } else if (template.type === 'scatter') {
+          // Rotate through available numeric columns for duplicate scatter charts
+          const columnOffset = chartTypeIndex * 2 // Each scatter uses 2 primary columns
+          const numCols = availableNumberColumns.length
+
+          // Ensure we have at least 2 numeric columns
+          if (numCols >= 2) {
+            const xKey = availableNumberColumns[columnOffset % numCols]
+            const yKey = availableNumberColumns[(columnOffset + 1) % numCols]
+            const sizeKey = numCols > 2 ? availableNumberColumns[(columnOffset + 2) % numCols] : undefined
+            const colorKey = availableStringColumns.length > 0 ? availableStringColumns[chartTypeIndex % availableStringColumns.length] : undefined
+
+            dataKeys = [xKey, yKey, sizeKey, colorKey].filter(Boolean)
+            dataMapping = {
+              xAxis: xKey,
+              yAxis: yKey,
+              size: sizeKey,
+              color: colorKey
+            }
+          } else {
+            // Fallback if not enough columns
+            const xKey = availableNumberColumns[0]
+            const yKey = availableNumberColumns[1] || availableNumberColumns[0]
+            dataKeys = [xKey, yKey].filter(Boolean)
+            dataMapping = {
+              xAxis: xKey,
+              yAxis: yKey
+            }
+          }
+        } else if (template.type === 'area') {
+          // For area charts - rotate through available columns like line/bar
+          const xOffset = chartTypeIndex % Math.max(availableStringColumns.length, 1)
+          const xKey = availableStringColumns[xOffset] || availableNumberColumns[0]
           const yKeys = availableNumberColumns.slice(0, template.maxColumns ? template.maxColumns - 1 : 3)
           dataKeys = [xKey, ...yKeys].filter(Boolean)
+          dataMapping = {
+            xAxis: xKey,
+            yAxis: yKeys.length > 1 ? yKeys : yKeys[0]
+          }
+        } else if (template.type === 'waterfall') {
+          // Waterfall chart: category + value
+          const categoryCol = availableStringColumns[0] || availableNumberColumns[0]
+          const valueCol = availableNumberColumns[0]
+          dataKeys = [categoryCol, valueCol].filter(Boolean)
+          dataMapping = {
+            category: categoryCol,
+            value: valueCol
+          }
+        } else if (template.type === 'funnel') {
+          // Funnel chart: stage + value
+          const stageCol = availableStringColumns[0] || availableNumberColumns[0]
+          const valueCol = availableNumberColumns[0]
+          dataKeys = [stageCol, valueCol].filter(Boolean)
+          dataMapping = {
+            category: stageCol,
+            value: valueCol
+          }
+        } else if (template.type === 'heatmap') {
+          // Heatmap: xAxis + yAxis + value
+          const xCol = availableStringColumns[0] || availableNumberColumns[0]
+          const yCol = availableStringColumns[1] || availableStringColumns[0]
+          const valueCol = availableNumberColumns[0]
+          dataKeys = [xCol, yCol, valueCol].filter(Boolean)
+          dataMapping = {
+            xAxis: xCol,
+            yAxis: yCol,
+            value: valueCol
+          }
+        } else if (template.type === 'gauge') {
+          // Gauge chart: single metric + optional target
+          const metricCol = availableNumberColumns[0]
+          const targetCol = availableNumberColumns[1]
+          dataKeys = [metricCol, targetCol].filter(Boolean)
+          dataMapping = {
+            metric: metricCol,
+            value: targetCol
+          }
+        } else if (template.type === 'cohort') {
+          // Cohort analysis: date + cohort + metric
+          const dateCol = state.availableColumns.find(col => {
+            const sampleValue = state.rawData[0]?.[col]
+            return sampleValue instanceof Date || !isNaN(Date.parse(String(sampleValue)))
+          }) || availableStringColumns[0]
+          const cohortCol = availableStringColumns[0]
+          const metricCol = availableNumberColumns[0]
+          dataKeys = [dateCol, cohortCol, metricCol].filter(Boolean)
+          dataMapping = {
+            xAxis: dateCol,
+            category: cohortCol,
+            value: metricCol
+          }
+        } else if (template.type === 'bullet') {
+          // Bullet chart: category + actual + target
+          const categoryCol = availableStringColumns[0] || availableNumberColumns[0]
+          const actualCol = availableNumberColumns[0]
+          const targetCol = availableNumberColumns[1] || availableNumberColumns[0]
+          dataKeys = [categoryCol, actualCol, targetCol].filter(Boolean)
+          dataMapping = {
+            category: categoryCol,
+            value: actualCol,
+            metric: targetCol
+          }
+        } else if (template.type === 'treemap') {
+          // Treemap: category + value (+ optional subcategory)
+          const categoryCol = availableStringColumns[0]
+          const subcategoryCol = availableStringColumns[1]
+          const valueCol = availableNumberColumns[0]
+          dataKeys = [categoryCol, subcategoryCol, valueCol].filter(Boolean)
+          dataMapping = {
+            category: categoryCol,
+            value: valueCol,
+            ...(subcategoryCol && { color: subcategoryCol })
+          }
+        } else if (template.type === 'sankey') {
+          // Sankey: source + target + value
+          const sourceCol = availableStringColumns[0]
+          const targetCol = availableStringColumns[1] || availableStringColumns[0]
+          const valueCol = availableNumberColumns[0]
+          dataKeys = [sourceCol, targetCol, valueCol].filter(Boolean)
+          dataMapping = {
+            xAxis: sourceCol,
+            yAxis: targetCol,
+            value: valueCol
+          }
+        } else if (template.type === 'sparkline') {
+          // Sparkline: single metric over time
+          const valueCol = availableNumberColumns[0]
+          dataKeys = [valueCol].filter(Boolean)
+          dataMapping = {
+            yAxis: valueCol
+          }
+        } else {
+          // For line, bar, combo charts - rotate through available columns
+          const xOffset = chartTypeIndex % Math.max(availableStringColumns.length, 1)
+          const xKey = availableStringColumns[xOffset] || availableNumberColumns[0]
+          const yKeys = availableNumberColumns.slice(0, template.maxColumns ? template.maxColumns - 1 : 3)
+          dataKeys = [xKey, ...yKeys].filter(Boolean)
+          dataMapping = {
+            xAxis: xKey,
+            yAxis: yKeys.length > 1 ? yKeys : yKeys[0]
+          }
         }
 
-        // Create chart config
+        // Create chart config with proper dataMapping structure
         const newChart = {
           id: chartId,
           type: template.type,
           title: template.name,
           description: template.description,
           dataKey: dataKeys,
+          dataMapping: dataMapping, // ⭐ NOW POPULATED
         }
 
-        // Update analysis with new chart
+        // Update analysis with new chart FIRST
         set(state => ({
           analysis: state.analysis ? {
             ...state.analysis,
@@ -1480,20 +1893,24 @@ export const useDataStore = create<DataStore>()(
           } : null
         }))
 
-        // Create customization entry - let the layout component handle positioning
-        // by NOT setting a position here, the flexible layout will use findOptimalPosition
+        // Create customization entry WITHOUT position initially
+        // The flexible-dashboard-layout will calculate the optimal position
         const customization: ChartCustomization = {
           id: chartId,
-          // Don't set position here - let flexible-dashboard-layout handle it
+          // CRITICAL: Don't set position here for new charts
+          // Let the layout component's bulletproof positioning handle it
           position: position ?
             { x: position.x, y: position.y, ...template.defaultPosition } :
-            undefined, // This will trigger findOptimalPosition in the layout
+            undefined, // This will trigger smart positioning in the layout
           isVisible: true,
           chartType: template.type,
         }
 
         get().updateChartCustomization(chartId, customization)
         get().addToHistory('chart_add', { chartId, template })
+
+        // Return the chartId so the caller can select/customize it
+        return chartId
       },
 
       removeChart: (chartId) => {
@@ -1676,7 +2093,19 @@ export const useDataStore = create<DataStore>()(
           console.error('Failed to import layout config:', error)
         }
       },
-      
+
+      // Upload status actions
+      setUploadProgress: (progress) => set({ uploadProgress: progress }),
+      setUploadStage: (stage) => set({ uploadStage: stage }),
+      setUploadComplete: (complete) => set({ uploadComplete: complete }),
+      setUploadProjectId: (projectId) => set({ uploadProjectId: projectId }),
+      dismissUpload: () => set({
+        uploadProgress: 0,
+        uploadStage: null,
+        uploadComplete: false,
+        uploadProjectId: null,
+      }),
+
       // Utility actions
       reset: () => set({
         currentSession: null,
@@ -1685,6 +2114,8 @@ export const useDataStore = create<DataStore>()(
         dataId: null,
         dataSchema: null,
         analysis: null,
+        correctedSchema: null,
+        dataContext: null,
         isAnalyzing: false,
         error: null,
         analysisProgress: 0,
@@ -1743,24 +2174,23 @@ export const useDataStore = create<DataStore>()(
         dataId: state.dataId, // Store reference to IndexedDB data
         dataSchema: state.dataSchema,
         analysis: state.analysis,
+        correctedSchema: state.correctedSchema,
+        dataContext: state.dataContext,
         currentSession: state.currentSession,
         // Store a flag indicating data exists
         hasData: state.rawData && state.rawData.length > 0,
       }),
       onRehydrateStorage: (state) => {
-        console.log('Store rehydrating...')
         return (rehydratedState, error) => {
           if (error) {
             console.error('Failed to rehydrate store:', error)
             return
           }
-          
+
           // Load data from IndexedDB after store hydration
           if (rehydratedState && rehydratedState.dataId && !rehydratedState.rawData?.length) {
-            console.log('Loading data from IndexedDB with ID:', rehydratedState.dataId)
             dataStorage.loadData(rehydratedState.dataId).then(data => {
               if (data) {
-                console.log('Data loaded from IndexedDB, rows:', data.length)
                 useDataStore.setState({ rawData: data })
               }
             }).catch(error => {
@@ -1772,3 +2202,86 @@ export const useDataStore = create<DataStore>()(
     }
   )
 )
+
+/**
+ * Helper function to check if analysis result is in enhanced format
+ */
+export function isEnhancedAnalysis(
+  analysis: AnalysisResult | EnhancedAnalysisResult | null
+): analysis is EnhancedAnalysisResult {
+  if (!analysis) return false
+  return 'recommendations' in analysis && 'dataContext' in analysis
+}
+
+/**
+ * Helper function to convert legacy analysis to enhanced format
+ * Used for backward compatibility
+ */
+export function convertLegacyToEnhancedAnalysis(
+  legacy: AnalysisResult
+): EnhancedAnalysisResult {
+  return {
+    insights: legacy.insights,
+    recommendations: legacy.chartConfig.map((chart, index) => ({
+      id: chart.id || `chart-${index}`,
+      priority: index + 1,
+      confidence: 0.8, // Default confidence
+      type: chart.type,
+      title: chart.title,
+      description: chart.description,
+      reasoning: chart.description,
+      businessValue: 'Provides insights from your data',
+      dataMapping: {
+        yAxis: chart.dataKey,
+        xAxis: chart.dataKey[0],
+      },
+      chartConfig: {
+        aggregation: chart.aggregation,
+      },
+    })),
+    dataContext: {
+      domain: 'general',
+      description: legacy.summary.businessContext || 'General data analysis',
+      keyEntities: [],
+      timeGranularity: 'none',
+      suggestedQuestions: [],
+    },
+    summary: {
+      rowCount: legacy.summary.rowCount,
+      columnCount: legacy.summary.columnCount,
+      columns: legacy.summary.columns,
+      dataQuality: legacy.summary.dataQuality || 'Good',
+      keyFindings: legacy.summary.keyFindings || '',
+      recommendations: legacy.summary.recommendations || '',
+    },
+  }
+}
+
+/**
+ * Helper function to convert enhanced analysis to legacy format
+ * Used for components that still expect legacy format
+ */
+export function convertEnhancedToLegacyAnalysis(
+  enhanced: EnhancedAnalysisResult
+): AnalysisResult {
+  return {
+    insights: enhanced.insights,
+    chartConfig: enhanced.recommendations.map((rec) => ({
+      id: rec.id,
+      type: rec.type,
+      title: rec.title,
+      dataKey: rec.dataMapping.yAxis,
+      description: rec.description,
+      aggregation: rec.chartConfig.aggregation,
+    })),
+    summary: {
+      rowCount: enhanced.summary.rowCount,
+      columnCount: enhanced.summary.columnCount,
+      columns: enhanced.summary.columns,
+      dataQuality: enhanced.summary.dataQuality,
+      keyFindings: enhanced.summary.keyFindings,
+      recommendations: enhanced.summary.recommendations,
+      businessContext: enhanced.dataContext.description,
+    },
+  }
+}

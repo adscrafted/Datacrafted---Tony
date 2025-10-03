@@ -1,26 +1,25 @@
 'use client'
 
-import { FileUpload } from '@/components/upload/file-upload'
-import { BarChart3, BrainCircuit, Sparkles, Zap } from 'lucide-react'
-import { useEffect } from 'react'
-import { preloadUploadResources, shouldPrefetch } from '@/lib/utils/preloader'
-import { useAuth } from '@/lib/contexts/auth-context'
+import { DynamicFileUpload } from '@/components/upload/dynamic-file-upload'
+import { useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import Link from 'next/link'
+import { preloadUploadResources, shouldPrefetch } from '@/lib/utils/preloader'
+import { MinimalHeader } from '@/components/ui/minimal-header'
+import { useProjectStore } from '@/lib/stores/project-store'
+import { useDataStore } from '@/lib/store'
+import { useAuth } from '@/lib/contexts/auth-context'
+import { UploadStatusBar } from '@/components/ui/upload-status-bar'
 
 export default function Home() {
-  const { user, loading } = useAuth()
   const router = useRouter()
-  
-  // Redirect authenticated users to projects
-  // Commented out to allow testing upload flow without authentication
-  // useEffect(() => {
-  //   if (!loading && user) {
-  //     router.push('/projects')
-  //   }
-  // }, [user, loading, router])
-  
+  const { user } = useAuth()
+  const { createProject, saveProjectData } = useProjectStore()
+  const {
+    setUploadComplete,
+    setUploadProjectId,
+    setUploadProgress
+  } = useDataStore()
+
   // Preload critical resources for file upload
   useEffect(() => {
     if (shouldPrefetch()) {
@@ -30,146 +29,94 @@ export default function Home() {
     }
   }, [])
 
+  // Handle successful upload - create project and set status for navigation
+  const handleUploadComplete = useCallback(async (data: any) => {
+    console.log('🔵 [PAGE] Upload complete, creating project')
+    setUploadProgress(100)
+
+    try {
+      // Get the current store state
+      const currentState = useDataStore.getState()
+      console.log('🔍 [PAGE] Current store state:', {
+        fileName: currentState.fileName,
+        hasRawData: !!currentState.rawData,
+        rawDataLength: currentState.rawData?.length,
+        hasSchema: !!currentState.dataSchema
+      })
+
+      // Create a new project with the uploaded file data
+      const project = await createProject({
+        userId: user?.uid || 'anonymous',
+        name: currentState.fileName || 'Untitled Project',
+        description: `Data analysis project for ${currentState.fileName}`,
+        fileInfo: currentState.dataSchema ? {
+          fileName: currentState.fileName || 'unknown',
+          fileSize: 0,
+          rowCount: currentState.dataSchema.rowCount,
+          columnCount: currentState.dataSchema.columnCount
+        } : undefined
+      })
+
+      console.log('✅ [PAGE] Project created:', project.id)
+
+      // Save the project data if available
+      if (currentState.rawData && currentState.rawData.length > 0) {
+        await saveProjectData(
+          project.id,
+          currentState.rawData,
+          currentState.analysis || undefined,
+          currentState.dataSchema || undefined
+        )
+        console.log('✅ [PAGE] Project data saved')
+      }
+
+      // Set upload complete and project ID - status bar will handle navigation to dashboard
+      setUploadProjectId(project.id)
+      setUploadComplete(true)
+
+      console.log('✅ [PAGE] Upload complete, status bar will navigate to /dashboard')
+    } catch (error) {
+      console.error('❌ [PAGE] Failed to create project:', error)
+      // Log error but don't navigate away - let user retry
+    }
+  }, [router, user?.uid, createProject, saveProjectData, setUploadComplete, setUploadProjectId, setUploadProgress])
+
   return (
-    <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-      {/* Header */}
-      <header className="border-b bg-white/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <BarChart3 className="h-8 w-8 text-primary" />
-            <span className="text-xl font-bold">DataCrafted</span>
-          </div>
-          <nav className="flex items-center space-x-6">
-            <a href="#features" className="text-sm font-medium hover:text-primary transition-colors">
-              Features
-            </a>
-            <a href="#how-it-works" className="text-sm font-medium hover:text-primary transition-colors">
-              How it Works
-            </a>
-            <Link href="/auth/signin">
-              <Button variant="ghost" size="sm">Sign In</Button>
-            </Link>
-            <Link href="/auth/signup">
-              <Button size="sm">Get Started</Button>
-            </Link>
-          </nav>
-        </div>
-      </header>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-gray-50 to-gray-100">
+      {/* Animated background blobs */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob" />
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000" />
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-pink-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000" />
+      </div>
 
-      {/* Hero Section */}
-      <section className="py-20 px-4">
-        <div className="container mx-auto max-w-6xl">
-          <div className="text-center space-y-6 mb-12">
-            <h1 className="text-5xl md:text-6xl font-bold tracking-tight">
-              Transform Your Data Into
-              <span className="block text-primary mt-2">Beautiful Insights</span>
-            </h1>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Upload your spreadsheet and let AI automatically generate stunning dashboards 
-              with meaningful insights in seconds.
-            </p>
-          </div>
-          
-          <div className="max-w-2xl mx-auto">
-            <FileUpload />
-          </div>
+      <div className="relative z-10 text-center px-4">
+        {/* Logo */}
+        <div className="mb-12">
+          <h1 className="text-2xl font-semibold text-gray-700">DataCrafted</h1>
         </div>
-      </section>
 
-      {/* Features Section */}
-      <section id="features" className="py-20 px-4 bg-gray-50">
-        <div className="container mx-auto max-w-6xl">
-          <h2 className="text-3xl font-bold text-center mb-12">
-            Powerful Features for Data Analysis
-          </h2>
-          
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
-                <BrainCircuit className="h-6 w-6 text-primary" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">AI-Powered Analysis</h3>
-              <p className="text-muted-foreground">
-                Advanced AI algorithms analyze your data patterns and generate relevant insights automatically.
-              </p>
-            </div>
-            
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
-                <Sparkles className="h-6 w-6 text-primary" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Smart Visualizations</h3>
-              <p className="text-muted-foreground">
-                Automatically selects the best chart types for your data to maximize clarity and impact.
-              </p>
-            </div>
-            
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
-                <Zap className="h-6 w-6 text-primary" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Instant Results</h3>
-              <p className="text-muted-foreground">
-                Get your complete dashboard with insights in seconds, no configuration required.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
+        {/* Hero text */}
+        <h2 className="text-6xl md:text-7xl lg:text-8xl font-bold mb-20">
+          <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+            Turn data into
+          </span>
+          <br />
+          <span className="bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 bg-clip-text text-transparent">
+            decisions
+          </span>
+        </h2>
 
-      {/* How it Works Section */}
-      <section id="how-it-works" className="py-20 px-4">
-        <div className="container mx-auto max-w-4xl">
-          <h2 className="text-3xl font-bold text-center mb-12">
-            How It Works
-          </h2>
-          
-          <div className="space-y-8">
-            <div className="flex items-start space-x-4">
-              <div className="w-10 h-10 bg-primary text-white rounded-full flex items-center justify-center flex-shrink-0 font-semibold">
-                1
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold mb-1">Upload Your Data</h3>
-                <p className="text-muted-foreground">
-                  Simply drag and drop your CSV or Excel file. We support files up to 50MB.
-                </p>
-              </div>
-            </div>
-            
-            <div className="flex items-start space-x-4">
-              <div className="w-10 h-10 bg-primary text-white rounded-full flex items-center justify-center flex-shrink-0 font-semibold">
-                2
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold mb-1">AI Analysis</h3>
-                <p className="text-muted-foreground">
-                  Our AI analyzes your data structure, identifies patterns, and determines the best visualizations.
-                </p>
-              </div>
-            </div>
-            
-            <div className="flex items-start space-x-4">
-              <div className="w-10 h-10 bg-primary text-white rounded-full flex items-center justify-center flex-shrink-0 font-semibold">
-                3
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold mb-1">Get Your Dashboard</h3>
-                <p className="text-muted-foreground">
-                  View your custom dashboard with interactive charts and actionable insights instantly.
-                </p>
-              </div>
-            </div>
-          </div>
+        {/* File upload - glass morphism style */}
+        <div className="max-w-xl mx-auto">
+          <DynamicFileUpload
+            onUploadComplete={handleUploadComplete}
+          />
         </div>
-      </section>
+      </div>
 
-      {/* Footer */}
-      <footer className="border-t py-8 px-4">
-        <div className="container mx-auto text-center text-sm text-muted-foreground">
-          <p>© 2025 DataCrafted. Transform your data into insights.</p>
-        </div>
-      </footer>
-    </main>
+      {/* Upload Status Bar */}
+      <UploadStatusBar />
+    </div>
   )
 }

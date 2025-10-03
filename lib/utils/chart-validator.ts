@@ -7,6 +7,20 @@ interface ChartValidationResult {
 }
 
 /**
+ * Parses numeric values including currency-formatted strings
+ * Handles: € 0, € 50.00, $1,234.56, £100, ¥1000, 50%, etc.
+ */
+function parseNumericValue(value: any): number | null {
+  if (typeof value === 'number') return value
+  if (typeof value !== 'string') return null
+
+  // Remove currency symbols, commas, spaces, and percentages
+  const cleaned = value.replace(/[€$£¥,\s%]/g, '')
+  const num = parseFloat(cleaned)
+  return isNaN(num) ? null : num
+}
+
+/**
  * Validates if a chart has meaningful data to display
  */
 export function validateChartData(
@@ -22,10 +36,73 @@ export function validateChartData(
     }
   }
 
-  // Extract the data keys
-  const dataKeys = Array.isArray(chartConfig.dataKey) 
-    ? chartConfig.dataKey 
-    : [chartConfig.dataKey]
+  // Extract the data keys from dataMapping (new format) or dataKey (legacy)
+  let dataKeys: string[] = []
+
+  if ((chartConfig as any).dataMapping) {
+    const dm = (chartConfig as any).dataMapping
+    switch (chartConfig.type) {
+      case 'bar':
+        if (dm.category) dataKeys.push(dm.category)
+        if (dm.values) dataKeys.push(...(Array.isArray(dm.values) ? dm.values : [dm.values]))
+        break
+      case 'line':
+      case 'area':
+        if (dm.xAxis) dataKeys.push(dm.xAxis)
+        if (dm.yAxis) {
+          const yValues = Array.isArray(dm.yAxis) ? dm.yAxis : [dm.yAxis]
+          dataKeys.push(...yValues)
+        }
+        break
+      case 'pie':
+        if (dm.category) dataKeys.push(dm.category)
+        if (dm.value) dataKeys.push(dm.value)
+        break
+      case 'scorecard':
+        if (dm.metric) dataKeys.push(dm.metric)
+        if (dm.comparison) dataKeys.push(dm.comparison)
+        break
+      case 'scatter':
+        if (dm.xAxis) dataKeys.push(dm.xAxis)
+        if (dm.yAxis) dataKeys.push(dm.yAxis as string)
+        if (dm.size) dataKeys.push(dm.size)
+        if (dm.color) dataKeys.push(dm.color)
+        break
+      case 'table':
+        if (dm.columns) dataKeys.push(...dm.columns)
+        break
+      case 'combo':
+        // Combo charts combine line and bar data
+        if (dm.xAxis) dataKeys.push(dm.xAxis)
+        if (dm.yAxis) {
+          const yValues = Array.isArray(dm.yAxis) ? dm.yAxis : [dm.yAxis]
+          dataKeys.push(...yValues)
+        }
+        if (dm.yAxis2) {
+          const y2Values = Array.isArray(dm.yAxis2) ? dm.yAxis2 : [dm.yAxis2]
+          dataKeys.push(...y2Values)
+        }
+        break
+      case 'waterfall':
+        if (dm.category) dataKeys.push(dm.category)
+        if (dm.value) dataKeys.push(dm.value)
+        break
+    }
+  } else if (chartConfig.dataKey) {
+    // Fallback to legacy format
+    dataKeys = Array.isArray(chartConfig.dataKey)
+      ? chartConfig.dataKey
+      : [chartConfig.dataKey]
+  }
+
+  // If no dataKeys extracted, chart is invalid
+  if (dataKeys.length === 0) {
+    return {
+      isValid: false,
+      reason: 'No data fields configured for this chart',
+      suggestions: ['Configure dataMapping or dataKey for the chart']
+    }
+  }
 
   // Check if all required data keys exist in the data
   const firstRow = data[0]
@@ -41,13 +118,14 @@ export function validateChartData(
   // Type-specific validations
   switch (chartConfig.type) {
     case 'scorecard':
-      // Scorecards need at least one numeric value
-      const scorecardValue = data[0]?.[dataKeys[0]]
-      if (scorecardValue === null || scorecardValue === undefined || isNaN(Number(scorecardValue))) {
+      // Scorecards need at least SOME numeric values (not necessarily in first row)
+      // Check if any row has a valid numeric value for the metric
+      const scorecardValues = data.map(row => parseNumericValue(row[dataKeys[0]])).filter(v => v !== null)
+      if (scorecardValues.length === 0) {
         return {
           isValid: false,
-          reason: 'Scorecard requires a numeric value',
-          suggestions: ['Select a numeric field for the scorecard']
+          reason: 'Scorecard requires numeric values',
+          suggestions: ['Select a field with numeric data for the scorecard']
         }
       }
       break
@@ -74,8 +152,8 @@ export function validateChartData(
       }
       
       // Check if values are numeric and not all zero
-      const values = data.map(row => Number(row[dataKeys[1]]))
-      const nonZeroValues = values.filter(v => !isNaN(v) && v !== 0)
+      const values = data.map(row => parseNumericValue(row[dataKeys[1]])).filter(v => v !== null)
+      const nonZeroValues = values.filter(v => v !== 0)
       if (nonZeroValues.length === 0) {
         return {
           isValid: false,
@@ -97,9 +175,9 @@ export function validateChartData(
       }
       
       // Check if all values are the same (flat line) or all zero
-      const lineValues = dataKeys.flatMap(key => 
-        data.map(row => Number(row[key]))
-      ).filter(v => !isNaN(v))
+      const lineValues = dataKeys.flatMap(key =>
+        data.map(row => parseNumericValue(row[key]))
+      ).filter(v => v !== null)
       
       const uniqueLineValues = new Set(lineValues)
       if (uniqueLineValues.size === 1) {
@@ -118,23 +196,23 @@ export function validateChartData(
         }
       }
       
-      // Check if we have mostly zeros (more than 90%)
+      // Only reject if ALL values are zero (some zeros is normal for real-world data)
       const nonZeroLineValues = lineValues.filter(v => v !== 0)
-      if (nonZeroLineValues.length < lineValues.length * 0.1) {
+      if (nonZeroLineValues.length === 0) {
         return {
           isValid: false,
-          reason: 'Data is mostly zeros',
-          suggestions: ['This metric has insufficient variation for meaningful visualization']
+          reason: 'All values are zero',
+          suggestions: ['This metric has no data to visualize']
         }
       }
       break
 
     case 'bar':
       // Bar charts need at least some variation
-      const barValues = dataKeys.flatMap(key => 
-        data.map(row => Number(row[key]))
-      ).filter(v => !isNaN(v))
-      
+      const barValues = dataKeys.flatMap(key =>
+        data.map(row => parseNumericValue(row[key]))
+      ).filter(v => v !== null)
+
       if (barValues.length === 0) {
         return {
           isValid: false,
@@ -142,7 +220,7 @@ export function validateChartData(
           suggestions: ['Select numeric fields for bar chart visualization']
         }
       }
-      
+
       // Check if all values are zero
       if (barValues.every(v => v === 0)) {
         return {
@@ -172,18 +250,98 @@ export function validateChartData(
         }
       }
       
+      // Check if we have enough valid numeric values (not nulls)
+      const xValues = data.map(row => parseNumericValue(row[dataKeys[0]])).filter(v => v !== null)
+      const yValues = data.map(row => parseNumericValue(row[dataKeys[1]])).filter(v => v !== null)
+
+      if (xValues.length < 3 || yValues.length < 3) {
+        return {
+          isValid: false,
+          reason: 'Not enough valid numeric values',
+          suggestions: ['Scatter plots need numeric data with fewer null values']
+        }
+      }
+
       // Check if all points are at the same location
-      const xValues = data.map(row => Number(row[dataKeys[0]])).filter(v => !isNaN(v))
-      const yValues = data.map(row => Number(row[dataKeys[1]])).filter(v => !isNaN(v))
-      
       const uniqueXValues = new Set(xValues)
       const uniqueYValues = new Set(yValues)
-      
+
       if (uniqueXValues.size === 1 && uniqueYValues.size === 1) {
         return {
           isValid: false,
           reason: 'All data points are at the same location',
           suggestions: ['Scatter plots need variation in data to show patterns']
+        }
+      }
+      break
+
+    case 'combo':
+      // Combo charts combine line and bar, similar validation to line charts
+      if (data.length < 2) {
+        return {
+          isValid: false,
+          reason: 'Combo chart needs at least 2 data points',
+          suggestions: ['Add more data points for meaningful visualization']
+        }
+      }
+
+      // Check if we have numeric values for the axes
+      const comboValues = dataKeys.flatMap(key =>
+        data.map(row => parseNumericValue(row[key]))
+      ).filter(v => v !== null)
+
+      if (comboValues.length === 0) {
+        return {
+          isValid: false,
+          reason: 'No numeric values found',
+          suggestions: ['Combo charts require numeric data fields']
+        }
+      }
+
+      // Only reject if ALL values are zero (some zeros is normal for real-world data)
+      const nonZeroComboValues = comboValues.filter(v => v !== 0)
+      if (nonZeroComboValues.length === 0) {
+        return {
+          isValid: false,
+          reason: 'All values are zero',
+          suggestions: ['This metric has no data to visualize']
+        }
+      }
+      break
+
+    case 'waterfall':
+      // Waterfall charts need at least 2 data points (start and end values)
+      if (data.length < 2) {
+        return {
+          isValid: false,
+          reason: 'Waterfall chart needs at least 2 data points',
+          suggestions: ['Add more sequential steps for waterfall visualization']
+        }
+      }
+
+      // Check if value field contains numeric data
+      const waterfallValueKey = dataKeys.find(key => key.toLowerCase().includes('value') || key.toLowerCase().includes('amount'))
+        || dataKeys[dataKeys.length - 1]
+
+      const waterfallValues = data.map(row => parseNumericValue(row[waterfallValueKey])).filter(v => v !== null)
+
+      if (waterfallValues.length === 0) {
+        return {
+          isValid: false,
+          reason: 'Waterfall chart requires numeric value field',
+          suggestions: ['Ensure the value column contains numeric data']
+        }
+      }
+
+      // Check if we have category labels
+      const waterfallCategoryKey = dataKeys[0]
+      const waterfallCategories = data.map(row => row[waterfallCategoryKey]).filter(Boolean)
+
+      if (waterfallCategories.length === 0) {
+        return {
+          isValid: false,
+          reason: 'Waterfall chart requires category labels',
+          suggestions: ['Ensure each step has a descriptive label']
         }
       }
       break
@@ -232,15 +390,31 @@ export function filterValidCharts(
   chartConfigs: ChartConfig[],
   data: DataRow[]
 ): ChartConfig[] {
-  return chartConfigs.filter(config => {
+  console.log('🔍 [CHART_VALIDATOR] Starting chart validation:', {
+    totalCharts: chartConfigs.length,
+    chartTypes: chartConfigs.map(c => c.type).join(', ')
+  })
+
+  const validCharts = chartConfigs.filter((config, index) => {
     const validation = validateChartData(config, data)
-    if (!validation.isValid) {
-      console.log(`📊 [CHART-VALIDATOR] Filtering out invalid chart:`, {
-        title: config.title,
-        type: config.type,
-        reason: validation.reason
-      })
-    }
+
+    console.log(`🔍 [CHART_VALIDATOR] Chart ${index} (${config.type} - "${config.title}"):`, {
+      isValid: validation.isValid,
+      reason: validation.reason,
+      suggestions: validation.suggestions,
+      dataKey: config.dataKey,
+      dataMapping: (config as any).dataMapping
+    })
+
     return validation.isValid
   })
+
+  console.log('✅ [CHART_VALIDATOR] Validation complete:', {
+    totalCharts: chartConfigs.length,
+    validCharts: validCharts.length,
+    filteredOut: chartConfigs.length - validCharts.length,
+    validChartTypes: validCharts.map(c => c.type).join(', ')
+  })
+
+  return validCharts
 }

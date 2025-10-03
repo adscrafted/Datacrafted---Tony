@@ -289,9 +289,15 @@ class StreamingCSVParser {
 
       // Check for dates
       const dateValues = values.filter(val => {
-        const dateStr = String(val)
-        return !isNaN(Date.parse(dateStr)) && 
-               (dateStr.match(/\d{4}-\d{2}-\d{2}/) || 
+        const dateStr = String(val).trim()
+
+        // Reject pure numbers to avoid Date.parse false positives
+        const isPureNumber = /^-?\d+(\.\d+)?$/.test(dateStr)
+        const isYearLike = /^\d{4}$/.test(dateStr)
+        if (isPureNumber && !isYearLike) return false
+
+        return !isNaN(Date.parse(dateStr)) &&
+               (dateStr.match(/\d{4}-\d{2}-\d{2}/) ||
                 dateStr.match(/\d{2}\/\d{2}\/\d{4}/) ||
                 dateStr.match(/\d{4}\/\d{2}\/\d{2}/))
       })

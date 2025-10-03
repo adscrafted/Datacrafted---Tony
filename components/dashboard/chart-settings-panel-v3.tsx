@@ -297,7 +297,7 @@ export function ChartSettingsPanel({ chartId, isOpen, onClose, chartConfig, onCo
   const handleDimensionRemove = (field: string) => {
     const newConfig = { 
       ...config, 
-      dimensions: config.dimensions.filter(d => d !== field) 
+      dimensions: config.dimensions.filter((d: string) => d !== field) 
     }
     setConfig(newConfig)
     onConfigUpdate(newConfig)
@@ -314,7 +314,7 @@ export function ChartSettingsPanel({ chartId, isOpen, onClose, chartConfig, onCo
   const handleMetricRemove = (field: string) => {
     const newConfig = { 
       ...config, 
-      metrics: config.metrics.filter(m => m !== field) 
+      metrics: config.metrics.filter((m: string) => m !== field) 
     }
     setConfig(newConfig)
     onConfigUpdate(newConfig)
@@ -345,7 +345,7 @@ export function ChartSettingsPanel({ chartId, isOpen, onClose, chartConfig, onCo
   }
 
   const handleFilterFieldRemove = (field: string) => {
-    const newFilters = config.filters.filter(f => f.field !== field)
+    const newFilters = config.filters.filter((f: any) => f.field !== field)
     const newConfig = { ...config, filters: newFilters }
     setConfig(newConfig)
     onConfigUpdate(newConfig)
@@ -360,7 +360,7 @@ export function ChartSettingsPanel({ chartId, isOpen, onClose, chartConfig, onCo
   }
 
   const handleRemoveFilter = (index: number) => {
-    const newFilters = config.filters.filter((_, i) => i !== index)
+    const newFilters = config.filters.filter((_: any, i: number) => i !== index)
     const newConfig = { ...config, filters: newFilters }
     setConfig(newConfig)
     onConfigUpdate(newConfig)
@@ -519,7 +519,7 @@ export function ChartSettingsPanel({ chartId, isOpen, onClose, chartConfig, onCo
                           <DropZone
                             title="Filters"
                             description="Drag fields here to filter your data"
-                            fields={config.filters.map(f => f.field).filter(f => f)}
+                            fields={config.filters.map((f: any) => f.field).filter((f: string) => f)}
                             onDrop={handleFilterFieldDrop}
                             onRemove={handleFilterFieldRemove}
                             allowMultiple={true}
@@ -533,7 +533,7 @@ export function ChartSettingsPanel({ chartId, isOpen, onClose, chartConfig, onCo
                                 <Filter className="h-4 w-4" />
                                 Filter Configuration
                               </h5>
-                              {config.filters.map((filter, index) => (
+                              {config.filters.map((filter: any, index: number) => (
                                 filter.field && (
                                   <div key={index} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                                     <FilterItem
@@ -578,7 +578,7 @@ export function ChartSettingsPanel({ chartId, isOpen, onClose, chartConfig, onCo
                                       <SelectItem disabled value="dimensions-header" className="font-medium text-xs text-gray-500 uppercase tracking-wider">
                                         Dimensions
                                       </SelectItem>
-                                      {config.dimensions.map((dim) => (
+                                      {config.dimensions.map((dim: string) => (
                                         <SelectItem key={`dim-${dim}`} value={dim}>
                                           <div className="flex items-center space-x-2">
                                             <Type className="h-3 w-3 text-orange-500" />
@@ -594,7 +594,7 @@ export function ChartSettingsPanel({ chartId, isOpen, onClose, chartConfig, onCo
                                       <SelectItem disabled value="metrics-header" className="font-medium text-xs text-gray-500 uppercase tracking-wider">
                                         Metrics
                                       </SelectItem>
-                                      {config.metrics.map((metric) => (
+                                      {config.metrics.map((metric: string) => (
                                         <SelectItem key={`metric-${metric}`} value={metric}>
                                           <div className="flex items-center space-x-2">
                                             <Hash className="h-3 w-3 text-green-500" />

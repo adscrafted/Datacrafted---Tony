@@ -3,48 +3,46 @@ import { DataRow, AnalysisResult, ChartConfig } from '@/lib/store'
 /**
  * Analyzes data using OpenAI GPT-4 for intelligent insights and visualization recommendations
  */
+// Global abort controller to cancel previous requests
+let currentController: AbortController | null = null
+
 export async function analyzeData(
-  data: DataRow[], 
+  data: DataRow[],
   onProgress?: (progress: number, usingAI: boolean) => void
 ): Promise<AnalysisResult> {
-  console.log('🔵 [AI-ANALYSIS] analyzeData called with data:', {
-    dataLength: data?.length,
-    dataType: typeof data,
-    isArray: Array.isArray(data),
-    firstRow: data?.[0],
-    sampleKeys: data?.[0] ? Object.keys(data[0]) : null,
-    timestamp: new Date().toISOString()
-  })
-  
   if (!data || data.length === 0) {
-    console.error('❌ [AI-ANALYSIS] No data provided for analysis:', {
-      data,
-      hasData: !!data,
-      dataLength: data?.length,
-      dataType: typeof data,
-      timestamp: new Date().toISOString()
-    })
+    console.error('❌ [AI-ANALYSIS] No data provided for analysis')
     throw new Error('No data provided for analysis')
   }
 
+  // Cancel any previous ongoing request
+  if (currentController) {
+    currentController.abort()
+    currentController = null
+  }
+
+  // Create new controller for this request (outside try block so catch can access it)
+  const controller = new AbortController()
+  currentController = controller
+
   try {
-    console.log('🚀 [AI-ANALYSIS] Starting AI analysis process...')
-    onProgress?.(20, true)
-    
-    // Call our API route for OpenAI analysis
-    console.log('🔵 [AI-ANALYSIS] Making fetch request to /api/analyze...', {
-      url: '/api/analyze',
-      method: 'POST',
-      dataLength: data.length,
-      timestamp: new Date().toISOString()
-    })
-    
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 25000) // 25 second timeout to match server
-    
-    const requestStartTime = Date.now()
-    console.log('🔵 [AI-ANALYSIS] Sending request to API with payload size:', JSON.stringify({ data }).length, 'characters')
-    
+    let currentProgress = 10
+    onProgress?.(currentProgress, true)
+
+    // Simulate incremental progress during the request
+    const progressInterval = setInterval(() => {
+      // Gradually increase progress from 10% to 70% over time
+      if (currentProgress < 70) {
+        currentProgress = Math.min(70, currentProgress + 5)
+        onProgress?.(currentProgress, true)
+      }
+    }, 2000) // Update every 2 seconds
+
+    const timeoutId = setTimeout(() => {
+      console.warn('⚠️ [AI-ANALYSIS] Request timeout after 120 seconds')
+      controller.abort()
+    }, 120000) // 120 second timeout (2 minutes) to allow for large datasets and complex analysis
+
     const response = await fetch('/api/analyze', {
       method: 'POST',
       headers: {
@@ -53,33 +51,24 @@ export async function analyzeData(
       body: JSON.stringify({ data }),
       signal: controller.signal
     })
-    
-    clearTimeout(timeoutId)
-    const requestDuration = Date.now() - requestStartTime
-    console.log('✅ [AI-ANALYSIS] Fetch response received:', {
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok,
-      duration: requestDuration + 'ms',
-      timestamp: new Date().toISOString()
-    })
 
-    onProgress?.(70, true)
+    clearTimeout(timeoutId)
+    clearInterval(progressInterval)
+    currentController = null // Clear the controller after successful response
+    onProgress?.(80, true)
 
     if (!response.ok) {
-      console.log('❌ [AI-ANALYSIS] API request failed, attempting to parse error...')
       const errorData = await response.json().catch((e) => {
         console.error('❌ [AI-ANALYSIS] Failed to parse error response:', e)
         return {}
       })
-      
+
       console.error('❌ [AI-ANALYSIS] API error response:', {
         status: response.status,
         statusText: response.statusText,
-        errorData,
-        timestamp: new Date().toISOString()
+        errorData
       })
-      
+
       if (response.status === 429) {
         throw new Error('Rate limit exceeded. Please try again in a few minutes.')
       } else if (response.status === 500 && errorData.error?.includes('API key')) {
@@ -89,48 +78,58 @@ export async function analyzeData(
       }
     }
 
-    console.log('🔵 [AI-ANALYSIS] Parsing response JSON...')
     const result: AnalysisResult = await response.json()
-    
-    console.log('✅ [AI-ANALYSIS] Response parsed successfully:', {
-      hasInsights: !!result.insights,
-      insightsCount: result.insights?.length,
-      hasChartConfig: !!result.chartConfig,
-      chartCount: result.chartConfig?.length,
-      hasSummary: !!result.summary,
-      timestamp: new Date().toISOString()
-    })
-    
     onProgress?.(90, true)
-    
+
+    // CRITICAL LOGGING: Check what frontend receives from API
+    console.log('🔍 [AI-ANALYSIS] ===== RECEIVED FROM API =====')
+    console.log('🔍 [AI-ANALYSIS] result.chartConfig.length:', result?.chartConfig?.length || 0)
+    console.log('🔍 [AI-ANALYSIS] Chart titles received:', result?.chartConfig?.map(c => c.title).join(', '))
+    console.log('🔍 [AI-ANALYSIS] Chart types received:', result?.chartConfig?.map(c => c.type).join(', '))
+    console.log('🔍 [AI-ANALYSIS] ===== END RECEIVED =====')
+
     // Validate the response structure
-    console.log('🔍 [AI-ANALYSIS] Validating response structure...')
     if (!result.insights || !Array.isArray(result.insights)) {
       console.error('❌ [AI-ANALYSIS] Invalid insights format:', result.insights)
       throw new Error('Invalid analysis response format')
     }
-    
+
     if (!result.chartConfig || !Array.isArray(result.chartConfig)) {
       console.error('❌ [AI-ANALYSIS] Invalid chartConfig format:', result.chartConfig)
       throw new Error('Invalid chart configuration in response')
     }
-    
+
     if (!result.summary || typeof result.summary !== 'object') {
       console.error('❌ [AI-ANALYSIS] Invalid summary format:', result.summary)
       throw new Error('Invalid summary in response')
     }
 
-    console.log('✅ [AI-ANALYSIS] Response validation successful')
     onProgress?.(100, true)
-    console.log('🏁 [AI-ANALYSIS] Analysis completed successfully')
+
+    // CRITICAL LOGGING: Check what we're returning to the app
+    console.log('✅ [AI-ANALYSIS] ===== RETURNING TO APP =====')
+    console.log('✅ [AI-ANALYSIS] result.chartConfig.length:', result?.chartConfig?.length || 0)
+    console.log('✅ [AI-ANALYSIS] Chart titles returning:', result?.chartConfig?.map(c => c.title).join(', '))
+    console.log('✅ [AI-ANALYSIS] ===== END RETURNING =====')
+
     return result
 
   } catch (error) {
+    // Clear the controller reference
+    if (currentController === controller) {
+      currentController = null
+    }
+
+    // Handle abort errors gracefully - they're expected when we cancel duplicate requests
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.warn('⚠️ [AI-ANALYSIS] Request was cancelled (likely due to a new request or timeout)')
+      throw new Error('Analysis request was cancelled. Please try again.')
+    }
+
     console.error('❌ [AI-ANALYSIS] Error in analyzeData:', {
       error,
       message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-      timestamp: new Date().toISOString()
+      stack: error instanceof Error ? error.stack : undefined
     })
     throw error
   }
@@ -140,8 +139,6 @@ export async function analyzeData(
  * Generates a basic analysis without AI when OpenAI is unavailable
  */
 function generateBasicAnalysis(data: DataRow[]): AnalysisResult {
-  console.log('generateBasicAnalysis called with data length:', data?.length)
-  
   if (!data || data.length === 0) {
     throw new Error('No data provided for analysis')
   }

@@ -440,7 +440,7 @@ export const ChatInterfaceWithTabs = React.memo(function ChatInterfaceWithTabs({
               disabled={isChatLoading || isStreaming}
             />
             <Button
-              onClick={handleSendMessage}
+              onClick={() => handleSendMessage()}
               disabled={!message.trim() || isChatLoading || isStreaming}
               size="sm"
               className="h-10 px-3"

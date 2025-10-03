@@ -77,24 +77,47 @@ class CacheManager<T = any> {
     if (!this.options.compressionEnabled) {
       return JSON.stringify(data)
     }
-    
-    // Simple compression using JSON + basic encoding
-    // In production, you might want to use a proper compression library
+
+    // Simple compression using JSON + Unicode-safe encoding
+    // Use TextEncoder to convert UTF-8 to bytes, then to base64
     const jsonStr = JSON.stringify(data)
-    return btoa(jsonStr)
+
+    // Unicode-safe base64 encoding
+    try {
+      // Convert string to UTF-8 bytes, then to base64
+      const uint8Array = new TextEncoder().encode(jsonStr)
+      const binaryString = Array.from(uint8Array, byte => String.fromCharCode(byte)).join('')
+      return btoa(binaryString)
+    } catch (error) {
+      // Fallback: return uncompressed if encoding fails
+      console.warn('Compression failed, using uncompressed data:', error)
+      return jsonStr
+    }
   }
 
   private decompress(compressedData: string): T {
     if (!this.options.compressionEnabled) {
       return JSON.parse(compressedData)
     }
-    
+
     try {
-      const jsonStr = atob(compressedData)
+      // Decode base64 to bytes, then to UTF-8 string
+      const binaryString = atob(compressedData)
+      const uint8Array = new Uint8Array(binaryString.length)
+      for (let i = 0; i < binaryString.length; i++) {
+        uint8Array[i] = binaryString.charCodeAt(i)
+      }
+      const jsonStr = new TextDecoder().decode(uint8Array)
       return JSON.parse(jsonStr)
-    } catch {
-      // Fallback for uncompressed data
-      return JSON.parse(compressedData)
+    } catch (error) {
+      // Fallback for uncompressed or old format data
+      try {
+        return JSON.parse(compressedData)
+      } catch {
+        // Try old btoa format as last resort
+        const jsonStr = atob(compressedData)
+        return JSON.parse(jsonStr)
+      }
     }
   }
 

@@ -11,9 +11,9 @@ interface ResizableChatInterfaceProps {
 }
 
 export function ResizableChatInterface({
-  minWidth = 320,
-  maxWidth = 600,
-  defaultWidth = 384,
+  minWidth = 360,
+  maxWidth = 800,
+  defaultWidth = 400,
   onWidthChange
 }: ResizableChatInterfaceProps) {
   // Load saved width from localStorage or use default

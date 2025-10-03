@@ -1,6 +1,119 @@
 import { DataRow, DataSchema, ColumnSchema } from '@/lib/store'
 import { schemaCache, getCacheKey } from './cache-manager'
 
+// Enhanced date format patterns for better detection
+const DATE_PATTERNS = [
+  // ISO formats
+  /^\d{4}-\d{2}-\d{2}$/,                          // 2023-01-01
+  /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/,          // 2023-01-01T12:00 or 2023-01-01 12:00
+
+  // US formats
+  /^\d{1,2}\/\d{1,2}\/\d{4}$/,                   // 1/1/2023 or 01/01/2023
+  /^\d{1,2}-\d{1,2}-\d{4}$/,                       // 1-1-2023
+
+  // EU formats
+  /^\d{1,2}\.\d{1,2}\.\d{4}$/,                   // 01.01.2023
+
+  // Natural language formats
+  /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4}$/i, // Jan 1, 2023
+  /^\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}$/i,    // 1 Jan 2023
+  /^\d{1,2}-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{2,4}$/i,      // 09-Sep-25 or 09-Sep-2025
+  /^\d{1,2}\/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\/\d{2,4}$/i,    // 09/Sep/25
+
+  // Quarter formats
+  /^Q[1-4]\s+\d{4}$/i,                              // Q1 2023
+  /^\d{4}\s+Q[1-4]$/i,                              // 2023 Q1
+
+  // Month-Year formats
+  /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}$/i,  // Jan 2023
+  /^\d{4}-(0[1-9]|1[0-2])$/,                        // 2023-01
+
+  // Year only
+  /^\d{4}$/,                                         // 2023
+
+  // Time only
+  /^\d{1,2}:\d{2}(:\d{2})?\s*(AM|PM)?$/i         // 14:30 or 2:30 PM
+]
+
+export function detectDateWithConfidence(values: any[]): { isDate: boolean; confidence: number; format?: string } {
+  if (!values || values.length === 0) {
+    return { isDate: false, confidence: 0 }
+  }
+
+  const nonNullValues = values.filter(v => v !== null && v !== undefined && v !== '')
+  if (nonNullValues.length === 0) {
+    return { isDate: false, confidence: 0 }
+  }
+
+  let matchCount = 0
+  let formatCounts: Record<string, number> = {}
+  let parsableCount = 0
+
+  for (const value of nonNullValues) {
+    const str = String(value).trim()
+
+    // CRITICAL FIX: Reject pure numbers before Date.parse()
+    // Date.parse() incorrectly parses numbers like "1", "5", "37" as dates
+    // e.g., "1" -> Jan 2001, "5" -> May 2001, "37" -> year 2037
+    // Only allow numbers that match year patterns (e.g., "2023")
+    const isPureNumber = /^-?\d+(\.\d+)?$/.test(str)
+    const isYearLike = /^\d{4}$/.test(str) // 4-digit year is ok
+
+    if (isPureNumber && !isYearLike) {
+      // Skip pure numbers (except 4-digit years) to avoid false positives
+      continue
+    }
+
+    // Check against our patterns FIRST (more reliable than Date.parse)
+    let patternMatched = false
+    for (let i = 0; i < DATE_PATTERNS.length; i++) {
+      if (DATE_PATTERNS[i].test(str)) {
+        matchCount++
+        parsableCount++ // Pattern match implies parseable
+        formatCounts[`pattern_${i}`] = (formatCounts[`pattern_${i}`] || 0) + 1
+        patternMatched = true
+        break
+      }
+    }
+
+    // If no pattern matched, try Date.parse as fallback
+    if (!patternMatched) {
+      const parsed = Date.parse(str)
+      if (!isNaN(parsed)) {
+        parsableCount++
+      }
+    }
+  }
+
+  const matchRatio = matchCount / nonNullValues.length
+  const parseRatio = parsableCount / nonNullValues.length
+
+  // Calculate confidence based on multiple factors
+  let confidence = 0
+  if (matchRatio >= 0.8) {
+    confidence = 90 + (matchRatio - 0.8) * 50 // 90-100% for very high match
+  } else if (matchRatio >= 0.5) {
+    confidence = 70 + (matchRatio - 0.5) * 40 // 70-90% for good match
+  } else if (parseRatio >= 0.7) {
+    confidence = 50 + (parseRatio - 0.7) * 67 // 50-70% for parseable dates
+  } else {
+    confidence = parseRatio * 50 // 0-50% for low match
+  }
+
+  // Detect the most common format
+  let dominantFormat = ''
+  if (Object.keys(formatCounts).length > 0) {
+    dominantFormat = Object.entries(formatCounts)
+      .sort((a, b) => b[1] - a[1])[0][0]
+  }
+
+  return {
+    isDate: confidence >= 60, // 60% threshold for date detection
+    confidence: Math.round(confidence),
+    format: dominantFormat
+  }
+}
+
 export function analyzeDataSchema(data: DataRow[], fileName: string, file?: File): DataSchema {
   if (!data || data.length === 0) {
     return {
@@ -35,40 +148,42 @@ export function analyzeDataSchema(data: DataRow[], fileName: string, file?: File
     // Determine column type with improved heuristics
     let type: ColumnSchema['type'] = 'string'
     let stats: ColumnSchema['stats'] = undefined
-    
+    let confidence = 0
+    let detectionReason = ''
+
     if (nonNullValues.length > 0) {
       // First check column name patterns for strong hints
       const lowerColumnName = columnName.toLowerCase()
-      
-      // Date/Time detection - check name patterns first, then values
-      if (lowerColumnName.includes('date') || 
-          lowerColumnName.includes('time') || 
-          lowerColumnName.includes('created') || 
-          lowerColumnName.includes('updated') ||
-          lowerColumnName.includes('modified') ||
-          lowerColumnName.endsWith('_at') ||
-          lowerColumnName.endsWith('_on')) {
-        
-        // Check if values look like dates
-        const dateValues = nonNullValues.filter(v => {
-          const dateStr = String(v).trim()
-          // More comprehensive date pattern matching
-          return !isNaN(Date.parse(dateStr)) && (
-            dateStr.match(/^\d{4}-\d{2}-\d{2}/) ||           // 2023-01-01
-            dateStr.match(/^\d{2}\/\d{2}\/\d{4}/) ||         // 01/01/2023
-            dateStr.match(/^\d{4}\/\d{2}\/\d{2}/) ||         // 2023/01/01
-            dateStr.match(/^\d{2}-\d{2}-\d{4}/) ||           // 01-01-2023
-            dateStr.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/) || // ISO datetime
-            dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}/) ||     // M/D/YYYY
-            dateStr.match(/^[A-Za-z]{3}\s+\d{1,2},?\s+\d{4}/) // Jan 1, 2023
-          )
-        })
-        
-        if (dateValues.length >= nonNullValues.length * 0.8) { // 80% threshold
-          type = 'date'
-        }
+
+      // Enhanced Date/Time detection with confidence scoring
+      const dateNamePatterns = [
+        'date', 'time', 'datetime', 'timestamp',
+        'created', 'updated', 'modified', 'deleted',
+        'start', 'end', 'begin', 'expire',
+        'dob', 'birth', 'joined', 'registered'
+      ]
+
+      const hasDateName = dateNamePatterns.some(pattern => lowerColumnName.includes(pattern)) ||
+                         lowerColumnName.endsWith('_at') ||
+                         lowerColumnName.endsWith('_on') ||
+                         lowerColumnName.endsWith('_date')
+
+      // Always check date patterns, but weight by column name
+      const dateDetection = detectDateWithConfidence(nonNullValues)
+
+      // Boost confidence if column name suggests date
+      if (hasDateName && dateDetection.confidence > 30) {
+        dateDetection.confidence = Math.min(100, dateDetection.confidence + 20)
+        detectionReason = 'Column name and pattern match'
+      } else if (dateDetection.confidence > 0) {
+        detectionReason = 'Pattern match'
       }
-      
+
+      if (dateDetection.isDate) {
+        type = 'date'
+        confidence = dateDetection.confidence
+      }
+
       // Numeric detection - improved patterns and percentage handling
       if (type === 'string') {
         const numericValues = nonNullValues
@@ -79,9 +194,9 @@ export function analyzeDataSchema(data: DataRow[], fileName: string, file?: File
               const num = parseFloat(str.slice(0, -1))
               return isNaN(num) ? NaN : num
             }
-            // Handle currency symbols
-            if (str.match(/^[\$£€¥₹]?[\d,]+\.?\d*$/)) {
-              const cleaned = str.replace(/[\$£€¥₹,]/g, '')
+            // Handle currency symbols (with optional space after symbol)
+            if (str.match(/^[\$£€¥₹]\s?[\d,]+\.?\d*$/)) {
+              const cleaned = str.replace(/[\$£€¥₹,\s]/g, '')
               return parseFloat(cleaned)
             }
             // Handle comma-separated thousands
@@ -181,7 +296,9 @@ export function analyzeDataSchema(data: DataRow[], fileName: string, file?: File
       sampleValues: Array.from(uniqueValues).slice(0, 5),
       stats,
       description,
-      suggestedUsage
+      suggestedUsage,
+      confidence,
+      detectionReason
     }
   })
 

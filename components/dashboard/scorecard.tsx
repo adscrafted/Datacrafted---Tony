@@ -1,45 +1,81 @@
 'use client'
 
 import React from 'react'
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
 interface ScorecardProps {
   title: string
   value: string | number
+  unit?: string
   subtitle?: string
+  description?: string
   trend?: number
   trendLabel?: string
   icon?: React.ReactNode
   className?: string
+  aggregationType?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct'
 }
 
-export function Scorecard({ 
-  title, 
-  value, 
-  subtitle, 
-  trend, 
-  trendLabel, 
-  icon,
-  className 
+export function Scorecard({
+  title,
+  value,
+  aggregationType,
+  className
 }: ScorecardProps) {
-  const getTrendIcon = () => {
-    if (!trend) return null
-    if (trend > 0) return <TrendingUp className="h-4 w-4" />
-    if (trend < 0) return <TrendingDown className="h-4 w-4" />
-    return <Minus className="h-4 w-4" />
+  const getBorderColor = () => {
+    return 'border-gray-200'
   }
 
-  const getTrendColor = () => {
-    if (!trend) return ''
-    if (trend > 0) return 'text-green-600'
-    if (trend < 0) return 'text-red-600'
-    return 'text-gray-600'
+  const getAggregationLabel = () => {
+    if (!aggregationType) return null
+
+    const labels: Record<string, string> = {
+      sum: 'TOTAL',
+      avg: 'AVERAGE',
+      count: 'COUNT',
+      min: 'MIN',
+      max: 'MAX',
+      distinct: 'UNIQUE'
+    }
+
+    return labels[aggregationType] || aggregationType.toUpperCase()
+  }
+
+  const getAggregationColor = () => {
+    if (!aggregationType) return 'bg-gray-100 text-gray-700'
+
+    const colors: Record<string, string> = {
+      sum: 'bg-blue-100 text-blue-700',
+      avg: 'bg-purple-100 text-purple-700',
+      count: 'bg-green-100 text-green-700',
+      min: 'bg-orange-100 text-orange-700',
+      max: 'bg-red-100 text-red-700',
+      distinct: 'bg-teal-100 text-teal-700'
+    }
+
+    return colors[aggregationType] || 'bg-gray-100 text-gray-700'
   }
 
   const formatValue = (val: string | number) => {
     if (typeof val === 'number') {
-      // Format large numbers
+      // Count aggregation - always show whole numbers
+      if (aggregationType === 'count' || aggregationType === 'distinct') {
+        return Math.round(val).toLocaleString()
+      }
+
+      // Average aggregation - show more precision
+      if (aggregationType === 'avg') {
+        if (val >= 1000000) {
+          return `${(val / 1000000).toFixed(2)}M`
+        } else if (val >= 1000) {
+          return `${(val / 1000).toFixed(2)}K`
+        } else if (Math.abs(val) < 1) {
+          return val.toFixed(3)
+        }
+        return val.toFixed(2)
+      }
+
+      // For sum, min, max - standard formatting
       if (val >= 1000000) {
         return `${(val / 1000000).toFixed(1)}M`
       } else if (val >= 10000) {
@@ -61,41 +97,34 @@ export function Scorecard({
   }
 
   return (
-    <div className={cn("p-3 bg-white rounded-lg border h-full flex flex-col relative", className)}>
-      <div className="flex flex-col h-full">
-        {/* Title - no truncation, allow wrapping */}
-        <p className="text-xs font-medium text-gray-600 leading-tight mb-1">{title}</p>
-        
-        {/* Value - prominent display */}
-        <p className="text-xl font-bold mb-2">{formatValue(value)}</p>
-        
-        {/* Subtitle/Trend section - allow text to wrap */}
-        {(subtitle || trend !== undefined) && (
-          <div className="mt-auto">
-            {trend !== undefined && (
-              <div className={cn("flex items-center space-x-1 mb-1", getTrendColor())}>
-                {getTrendIcon()}
-                <span className="text-xs font-medium">
-                  {trend > 0 ? '+' : ''}{trend.toFixed(1)}%
-                </span>
-                {trendLabel && (
-                  <span className="text-xs text-gray-500">{trendLabel}</span>
-                )}
-              </div>
-            )}
-            {subtitle && (
-              <p className="text-xs text-gray-500 leading-tight">{subtitle}</p>
-            )}
-          </div>
-        )}
-        
-        {/* Icon - optional, positioned absolutely if needed */}
-        {icon && (
-          <div className="absolute top-3 right-3 p-1.5 bg-gray-100 rounded">
-            <div className="w-3 h-3 text-gray-600">{icon}</div>
-          </div>
-        )}
+    <div
+      className={cn(
+        "h-full w-full flex flex-col justify-center items-center bg-white rounded-lg border-l-4 p-6",
+        getBorderColor(),
+        className
+      )}
+    >
+      {/* Title */}
+      <h3 className="text-sm font-semibold text-gray-900 mb-4">
+        {title}
+      </h3>
+
+      {/* Value */}
+      <div className="text-5xl font-bold text-gray-900 tabular-nums">
+        {formatValue(value)}
       </div>
+
+      {/* Aggregation badge */}
+      {aggregationType && (
+        <div className="mt-4">
+          <span className={cn(
+            "text-xs font-semibold px-2 py-1 rounded-md",
+            getAggregationColor()
+          )}>
+            {getAggregationLabel()}
+          </span>
+        </div>
+      )}
     </div>
   )
 }

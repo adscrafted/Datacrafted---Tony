@@ -112,10 +112,7 @@ export function parseStreamingResponse(
 // Utility function to detect if a message contains chart suggestions
 export function extractChartSuggestions(message: string): ChartSuggestion[] {
   const suggestions: ChartSuggestion[] = []
-  
-  // Debug logging
-  console.log('Extracting chart suggestions from message:', message)
-  
+
   // First, look for the new structured format
   const structuredRegex = /\*\*CHART_SUGGESTION\*\*[\s\S]*?Type:\s*(\w+)[\s\S]*?Title:\s*(.+?)[\s\S]*?Columns:\s*(.+?)[\s\S]*?Description:\s*(.+?)[\s\S]*?\*\*END_SUGGESTION\*\*/g
   
@@ -186,13 +183,11 @@ export function extractChartSuggestions(message: string): ChartSuggestion[] {
   const validSuggestions = suggestions.filter(s => 
     s.title && 
     s.title.length > 2 && 
-    s.dataKey && 
+    s.dataKey &&
     s.dataKey.length > 0 &&
     s.dataKey.every(key => key && key.length > 0)
   )
-  
-  console.log('Valid suggestions found:', validSuggestions)
-  
+
   return validSuggestions
 }
 

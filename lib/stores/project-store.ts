@@ -56,9 +56,9 @@ interface ProjectStore {
   setCurrentProject: (projectId: string | null) => void
   
   // Project data management (debug mode)
-  saveProjectData: (projectId: string, data: DataRow[], analysis?: AnalysisResult, schema?: DataSchema) => Promise<void>
-  getProjectData: (projectId: string) => { rawData: DataRow[], analysis: AnalysisResult | null, dataSchema: DataSchema | null } | null
-  loadProjectDataAsync: (projectId: string) => Promise<{ rawData: DataRow[], analysis: AnalysisResult | null, dataSchema: DataSchema | null } | null>
+  saveProjectData: (projectId: string, data: DataRow[], analysis?: AnalysisResult | import('./types/recommendation').EnhancedAnalysisResult, schema?: DataSchema) => Promise<void>
+  getProjectData: (projectId: string) => { rawData: DataRow[], analysis: AnalysisResult | import('./types/recommendation').EnhancedAnalysisResult | null, dataSchema: DataSchema | null } | null
+  loadProjectDataAsync: (projectId: string) => Promise<{ rawData: DataRow[], analysis: AnalysisResult | import('./types/recommendation').EnhancedAnalysisResult | null, dataSchema: DataSchema | null } | null>
 
   // Dashboard configuration management
   saveDashboardConfig: (projectId: string, config: {

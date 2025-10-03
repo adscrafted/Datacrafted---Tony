@@ -15,6 +15,7 @@ export const ChatInterface = React.memo(function ChatInterface() {
   const {
     fileName,
     rawData,
+    dataSchema,
     analysis,
     chatMessages,
     isChatOpen,
@@ -133,6 +134,7 @@ export const ChatInterface = React.memo(function ChatInterface() {
         body: JSON.stringify({
           message: userMessage.content,
           data: rawData,
+          dataSchema,
           fileName,
           conversationHistory,
           preferredChartType: selectedChartType !== 'auto' ? selectedChartType : undefined,
@@ -288,8 +290,8 @@ export const ChatInterface = React.memo(function ChatInterface() {
   const hasData = rawData && rawData.length > 0
 
   return (
-    <div className="h-full flex flex-col min-h-0">
-      <Card className="h-full shadow-none border-0 rounded-none flex flex-col min-h-0">
+    <div className="h-full flex flex-col min-h-0 overflow-hidden">
+      <Card className="h-full shadow-none border-0 rounded-none flex flex-col min-h-0 overflow-hidden">
         <CardHeader className="pb-3 border-b flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">

@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { ChartWrapper } from '../chart-wrapper'
+import { ChartWrapper } from './chart-wrapper'
 import { Lightbulb, Plus, TrendingUp, BarChart3, PieChart, LineChart, Table as TableIcon } from 'lucide-react'
 import { logger } from '@/lib/utils/logger'
 
@@ -56,13 +56,13 @@ export function ChartSuggestionBuilder({ suggestions, onCreateChart }: ChartSugg
         description: suggestion.description,
         dataKey: suggestion.type === 'table' 
           ? suggestion.tableConfig?.columns.map(col => col.key) || []
-          : [suggestion.chartConfig.x, ...(suggestion.chartConfig.y || [])].filter(Boolean)
+          : [suggestion.chartConfig.x, ...(Array.isArray(suggestion.chartConfig.y) ? suggestion.chartConfig.y : [suggestion.chartConfig.y])].filter((item): item is string => Boolean(item))
       }
 
       // Add to analysis
       const updatedAnalysis = {
         ...analysis,
-        chartConfig: [...analysis.chartConfig, chartConfig]
+        chartConfig: [...(analysis.chartConfig || []), chartConfig]
       }
 
       setAnalysis(updatedAnalysis)
@@ -181,7 +181,7 @@ export function ChartSuggestionBuilder({ suggestions, onCreateChart }: ChartSugg
                     title={suggestion.title}
                     description=""
                     data={previewData[suggestion.id]}
-                    dataKey={[suggestion.chartConfig.x, ...(suggestion.chartConfig.y || [])].filter(Boolean)}
+                    dataKey={[suggestion.chartConfig.x, ...(Array.isArray(suggestion.chartConfig.y) ? suggestion.chartConfig.y : [suggestion.chartConfig.y])].filter((item): item is string => Boolean(item))}
                   />
                 </div>
               )}

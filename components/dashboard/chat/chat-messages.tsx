@@ -7,9 +7,10 @@ import { ChatMessage } from '@/lib/store'
 interface ChatMessagesProps {
   messages: ChatMessage[]
   streamingMessage?: string
+  isStreaming?: boolean
 }
 
-export function ChatMessages({ messages, streamingMessage }: ChatMessagesProps) {
+export function ChatMessages({ messages, streamingMessage, isStreaming }: ChatMessagesProps) {
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp)
     const now = new Date()

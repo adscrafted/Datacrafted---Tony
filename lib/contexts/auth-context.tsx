@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { 
+import {
   User,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -14,6 +14,7 @@ import {
 } from 'firebase/auth'
 import { auth, DEBUG_MODE, DEBUG_USER } from '@/lib/config/firebase'
 import { useRouter } from 'next/navigation'
+import { useProjectStore } from '@/lib/stores/project-store'
 
 interface AuthContextType {
   user: User | null
@@ -30,6 +31,48 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+/**
+ * Migrates anonymous projects to authenticated user
+ * Called automatically when user logs in or signs up
+ */
+async function migrateAnonymousProjects(userId: string) {
+  try {
+    console.log('🔄 [AUTH] Starting anonymous project migration for user:', userId)
+
+    const { projects, updateProject } = useProjectStore.getState()
+
+    // Find all anonymous projects
+    const anonymousProjects = projects.filter(p => p.userId === 'anonymous' && p.status === 'active')
+
+    if (anonymousProjects.length === 0) {
+      console.log('✅ [AUTH] No anonymous projects to migrate')
+      return
+    }
+
+    console.log(`🔄 [AUTH] Found ${anonymousProjects.length} anonymous project(s) to migrate`)
+
+    // Migrate each anonymous project to the authenticated user
+    for (const project of anonymousProjects) {
+      try {
+        await updateProject(project.id, {
+          userId: userId,
+          name: `${project.name} (migrated)`,
+          updatedAt: new Date().toISOString()
+        })
+        console.log(`✅ [AUTH] Migrated project: ${project.id}`)
+      } catch (error) {
+        console.error(`❌ [AUTH] Failed to migrate project ${project.id}:`, error)
+        // Continue with other projects even if one fails
+      }
+    }
+
+    console.log('✅ [AUTH] Anonymous project migration completed successfully')
+  } catch (error) {
+    // Log error but don't throw - we don't want to block authentication
+    console.error('❌ [AUTH] Error during anonymous project migration:', error)
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
@@ -41,12 +84,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (DEBUG_MODE) {
       setUser(DEBUG_USER as any)
       setLoading(false)
+      // Migrate anonymous projects in debug mode too
+      migrateAnonymousProjects(DEBUG_USER.uid)
       return
     }
 
     // Normal authentication flow
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user)
+
+      // Automatically migrate anonymous projects when user logs in
+      if (user) {
+        await migrateAnonymousProjects(user.uid)
+      }
+
       setLoading(false)
     })
 

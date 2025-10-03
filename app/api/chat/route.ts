@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
-import { DataRow } from '@/lib/store'
+import { DataRow, DataSchema } from '@/lib/store'
 
 // Initialize OpenAI client
 function getOpenAIClient() {
@@ -35,18 +35,67 @@ function checkRateLimit(clientId: string): boolean {
   return true
 }
 
-function generateDataContext(data: DataRow[], fileName: string | null) {
+function generateDataContext(data: DataRow[], schema: DataSchema | null, fileName: string | null) {
   if (!data || data.length === 0) {
     return "No data is currently loaded."
   }
 
+  // If we have a rich schema, use it for better context
+  if (schema && schema.columns) {
+    const columnInfo = schema.columns.map(col => {
+      let info = `${col.name} (${col.type}): ${col.description || 'No description'}`
+
+      // Add statistics for numeric columns
+      if (col.stats && col.stats.min !== undefined && col.stats.max !== undefined && col.stats.avg !== undefined) {
+        info += ` | Range: [${col.stats.min.toFixed(2)}, ${col.stats.max.toFixed(2)}], Avg: ${col.stats.avg.toFixed(2)}`
+      }
+
+      // Add unique values and null info
+      info += ` | ${col.uniqueValues} unique values`
+      if (col.nullPercentage > 0) {
+        info += `, ${col.nullPercentage.toFixed(1)}% missing`
+      }
+
+      // Add suggested usage if available
+      if (col.suggestedUsage) {
+        info += ` | Suggested use: ${col.suggestedUsage}`
+      }
+
+      return info
+    })
+
+    // Get a sample of the data for context
+    const sampleData = data.slice(0, 3)
+
+    let context = `Dataset Context:
+File: ${fileName || schema.fileName || 'Uploaded data'}
+Rows: ${schema.rowCount.toLocaleString()}
+Columns: ${schema.columnCount}
+`
+
+    // Add business context if available
+    if (schema.businessContext) {
+      context += `\nBusiness Context: ${schema.businessContext}\n`
+    }
+
+    // Add relationships if detected
+    if (schema.relationships && schema.relationships.length > 0) {
+      context += `\nDetected Relationships:\n${schema.relationships.join('\n')}\n`
+    }
+
+    context += `\nColumn Details:\n${columnInfo.join('\n')}\n\nSample Data (first 3 rows):\n${JSON.stringify(sampleData, null, 2)}`
+
+    return context
+  }
+
+  // Fallback to basic analysis if no schema
   const columns = Object.keys(data[0] || {})
   const columnInfo = columns.map(col => {
     const values = data.map(row => row[col])
     const nonNullValues = values.filter(v => v !== null && v !== undefined)
     const uniqueValues = new Set(nonNullValues)
     const nullCount = values.length - nonNullValues.length
-    
+
     // Determine column type
     let type = 'text'
     if (nonNullValues.length > 0) {
@@ -58,7 +107,7 @@ function generateDataContext(data: DataRow[], fileName: string | null) {
         type = 'categorical'
       }
     }
-    
+
     // Calculate basic statistics for numeric columns
     let stats = ''
     if (type === 'numeric') {
@@ -70,13 +119,13 @@ function generateDataContext(data: DataRow[], fileName: string | null) {
         stats = ` (range: ${min.toFixed(2)}-${max.toFixed(2)}, avg: ${avg.toFixed(2)})`
       }
     }
-    
+
     return `${col} (${type}): ${uniqueValues.size} unique values${stats}${nullCount > 0 ? `, ${nullCount} missing` : ''}`
   })
 
   // Get a sample of the data for context
   const sampleData = data.slice(0, 3)
-  
+
   return `Dataset Context:
 File: ${fileName || 'Uploaded data'}
 Rows: ${data.length.toLocaleString()}
@@ -113,7 +162,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse request body
-    const { message, data, fileName, conversationHistory, preferredChartType, selectedChart, granularity } = await request.json()
+    const { message, data, dataSchema, fileName, conversationHistory, preferredChartType, selectedChart, granularity } = await request.json()
 
     if (!message || typeof message !== 'string') {
       return NextResponse.json(
@@ -122,8 +171,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate data context
-    const dataContext = generateDataContext(data, fileName)
+    // Generate data context with schema if available
+    const dataContext = generateDataContext(data, dataSchema, fileName)
 
     // Prepare conversation messages
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [

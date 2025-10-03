@@ -2,14 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
-/* React Grid Layout fixes */
+/* React Grid Layout Enhanced Styles */
+.dashboard-container {
+  min-height: 100vh;
+  width: 100%;
+}
+
 .draggable-grid-container .react-grid-layout {
   position: relative;
+  min-height: 100vh;
 }
 
 .draggable-grid-container .react-grid-item {
   transition: all 200ms ease;
   transition-property: left, top, width, height;
+  display: flex;
+  box-sizing: border-box;
+  /* Ensure minimum chart size - at least 400px wide, 300px tall */
+  min-width: 400px !important;
+  min-height: 300px !important;
+}
+
+/* EXCEPTION: Scorecards should NOT have the 400x300 minimum - they use their own sizing */
+.draggable-grid-container .react-grid-item[data-chart-type="scorecard"] {
+  min-width: unset !important;
+  min-height: unset !important;
 }
 
 .draggable-grid-container .react-grid-item.cssTransforms {
@@ -17,71 +34,158 @@
 }
 
 .draggable-grid-container .react-grid-item.resizing {
-  transition: none;
-  z-index: 1;
+  transition: none !important;
+  z-index: 10 !important;
   will-change: width, height;
+  opacity: 0.9;
 }
 
 .draggable-grid-container .react-grid-item.react-draggable-dragging {
-  transition: none;
-  z-index: 3;
+  transition: none !important;
+  z-index: 15 !important;
   will-change: transform;
   opacity: 0.8;
-  cursor: move;
+  cursor: move !important;
+  transform-origin: center;
 }
 
 .draggable-grid-container .react-grid-item.react-grid-placeholder {
-  background: #3b82f6;
-  opacity: 0.2;
-  transition-duration: 100ms;
+  background: #3b82f6 !important;
+  opacity: 0.3 !important;
+  border-radius: 12px;
+  border: 2px dashed #3b82f6;
+  transition-duration: 150ms;
   z-index: 2;
   user-select: none;
 }
 
+/* Enhanced Resize Handle */
 .draggable-grid-container .react-grid-item > .react-resizable-handle {
   position: absolute;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   bottom: 0;
   right: 0;
   cursor: se-resize;
-  z-index: 10;
+  z-index: 20;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 6px 0 12px 0;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  transition: all 200ms ease;
+}
+
+.draggable-grid-container .react-grid-item > .react-resizable-handle::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 30%, rgba(59, 130, 246, 0.1) 30%, rgba(59, 130, 246, 0.1) 50%, transparent 50%);
+  border-radius: inherit;
 }
 
 .draggable-grid-container .react-grid-item > .react-resizable-handle::after {
   content: "";
   position: absolute;
-  right: 3px;
-  bottom: 3px;
-  width: 5px;
-  height: 5px;
-  border-right: 2px solid rgba(0, 0, 0, 0.4);
-  border-bottom: 2px solid rgba(0, 0, 0, 0.4);
+  right: 4px;
+  bottom: 4px;
+  width: 8px;
+  height: 8px;
+  background: linear-gradient(135deg, transparent 40%, #3b82f6 40%, #3b82f6 60%, transparent 60%),
+              linear-gradient(45deg, transparent 40%, #3b82f6 40%, #3b82f6 60%, transparent 60%);
+  background-size: 4px 4px;
+  background-position: 0 0, 2px 2px;
+  opacity: 0.7;
 }
 
-/* Make resize handle more visible in customize mode */
-.draggable-grid-container .react-grid-item:hover > .react-resizable-handle::after {
-  border-right: 2px solid #3b82f6;
-  border-bottom: 2px solid #3b82f6;
+/* Make resize handle more visible on hover and during customization */
+.draggable-grid-container .react-grid-item:hover > .react-resizable-handle,
+.draggable-grid-container .react-grid-item.react-resizable-resizing > .react-resizable-handle {
+  background: rgba(59, 130, 246, 0.15) !important;
+  border-color: rgba(59, 130, 246, 0.4) !important;
+  transform: scale(1.1);
 }
 
-/* Ensure drag handle is visible */
-.draggable-grid-container .react-grid-item .react-grid-dragHandleExample {
-  cursor: move;
+.draggable-grid-container .react-grid-item:hover > .react-resizable-handle::after,
+.draggable-grid-container .react-grid-item.react-resizable-resizing > .react-resizable-handle::after {
+  opacity: 1;
+  transform: scale(1.2);
+}
+
+/* Always show resize handles in layout mode */
+.dashboard-container.layout-mode .react-grid-item > .react-resizable-handle {
+  background: rgba(59, 130, 246, 0.2) !important;
+  border-color: rgba(59, 130, 246, 0.5) !important;
+  opacity: 1;
 }
 
 /* Responsive chart containers */
 .draggable-grid-container .react-grid-item {
   display: flex;
-  min-height: 240px; /* Minimum height for charts */
+  overflow: hidden;
 }
 
-/* Ensure charts fill their containers */
+/* Ensure charts fill their containers properly */
 .draggable-grid-container .react-grid-item > div {
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
+  min-height: 300px;
+  box-sizing: border-box;
+}
+
+/* EXCEPTION: Scorecard inner content should NOT have min-height */
+.draggable-grid-container .react-grid-item[data-chart-type="scorecard"] > div {
+  min-height: unset;
+}
+
+/* Enhanced Grid Layout Responsiveness */
+@media (max-width: 1200px) {
+  .draggable-grid-container .react-grid-item {
+    min-width: 350px !important;
+    min-height: 280px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .draggable-grid-container .react-grid-item {
+    min-width: 300px !important;
+    min-height: 250px !important;
+  }
+}
+
+/* Fix for ResponsiveContainer in grid items */
+.draggable-grid-container .react-grid-item .recharts-responsive-container {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Scorecard specific sizing - FIXED SIZE, NO RESIZING
+   Grid config: w:2, h:1 with rowHeight:200px
+   2 cols = ~160px width (with margins), 1 row = 200px height
+   We don't set min-width/min-height here - let the grid control the size
+*/
+
+/* CRITICAL: Hide resize handle for scorecards - they are FIXED SIZE */
+.draggable-grid-container .react-grid-item[data-chart-type="scorecard"] > .react-resizable-handle {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+/* Ensure scorecards cannot be resized even if handle appears */
+.draggable-grid-container .react-grid-item[data-chart-type="scorecard"].react-resizable {
+  cursor: move !important;
+}
+
+.draggable-grid-container .react-grid-item[data-chart-type="scorecard"]:hover {
+  cursor: move !important;
+}
+
+/* Table specific sizing */
+.draggable-grid-container .react-grid-item[data-chart-type="table"] {
+  min-width: 600px !important;
+  min-height: 400px !important;
 }
 
 /* Accessibility utilities */
@@ -217,4 +321,32 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Blob animation for landing page */
+@keyframes blob {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+}
+
+.animate-blob {
+  animation: blob 7s infinite;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
 }

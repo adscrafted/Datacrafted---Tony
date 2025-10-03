@@ -14,6 +14,14 @@ interface LazyChartWrapperProps {
   description: string
   data: DataRow[]
   dataKey: string[]
+  dataMapping?: {
+    xAxis?: string
+    yAxis?: string
+    size?: string
+    color?: string
+    xAxisLabel?: string
+    yAxisLabel?: string
+  }
   threshold?: number
   rootMargin?: string
 }
@@ -29,6 +37,7 @@ export const LazyChartWrapper = memo<LazyChartWrapperProps>(function LazyChartWr
   description,
   data,
   dataKey,
+  dataMapping,
   threshold = 0.1,
   rootMargin = '50px'
 }) {
@@ -79,6 +88,7 @@ export const LazyChartWrapper = memo<LazyChartWrapperProps>(function LazyChartWr
           description={description}
           data={data}
           dataKey={dataKey}
+          dataMapping={dataMapping}
         />
       ) : (
         <Card className="h-full flex items-center justify-center">
@@ -100,6 +110,7 @@ export const LazyChartWrapper = memo<LazyChartWrapperProps>(function LazyChartWr
     prevProps.title === nextProps.title &&
     prevProps.description === nextProps.description &&
     prevProps.data === nextProps.data &&
-    JSON.stringify(prevProps.dataKey) === JSON.stringify(nextProps.dataKey)
+    JSON.stringify(prevProps.dataKey) === JSON.stringify(nextProps.dataKey) &&
+    JSON.stringify(prevProps.dataMapping) === JSON.stringify(nextProps.dataMapping)
   )
 })

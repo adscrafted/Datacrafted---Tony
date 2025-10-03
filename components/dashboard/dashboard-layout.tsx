@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils/cn'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { FixedGridLayout } from '@/components/ui/fixed-grid-layout'
-import { ChartWrapper } from './chart-wrapper'
+import { MinimalChartWrapper } from './minimal-chart-wrapper'
 import { useDataStore, DashboardLayout, AnalysisResult, DataRow } from '@/lib/store'
 import { filterValidCharts } from '@/lib/utils/chart-validator'
 
@@ -132,10 +132,22 @@ export const DashboardLayoutComponent = React.memo<DashboardLayoutComponentProps
   }, [analysis.chartConfig, chartCustomizations, currentLayout, isCustomizing])
 
   // Filter out invalid charts before rendering
-  const validCharts = React.useMemo(() => 
-    filterValidCharts(analysis.chartConfig, data),
-    [analysis.chartConfig, data]
-  )
+  const validCharts = React.useMemo(() => {
+    console.log('🔍 [DASHBOARD_LAYOUT] Filtering charts:', {
+      totalCharts: analysis.chartConfig?.length || 0,
+      dataRows: data.length,
+      chartTypes: analysis.chartConfig?.map(c => c.type).join(', ')
+    })
+
+    const filtered = filterValidCharts(analysis.chartConfig, data)
+
+    console.log('🔍 [DASHBOARD_LAYOUT] Charts after filtering:', {
+      validCharts: filtered.length,
+      filteredOut: (analysis.chartConfig?.length || 0) - filtered.length
+    })
+
+    return filtered
+  }, [analysis.chartConfig, data])
   
   // Update layout to only include valid charts
   React.useEffect(() => {
@@ -156,13 +168,14 @@ export const DashboardLayoutComponent = React.memo<DashboardLayoutComponentProps
     
     return (
       <div key={chartId} className="h-full">
-        <ChartWrapper
+        <MinimalChartWrapper
           id={chartId}
           type={config.type}
           title={config.title}
           description={config.description}
           data={data}
           dataKey={config.dataKey}
+          dataMapping={config.dataMapping}
         />
       </div>
     )
@@ -271,56 +284,45 @@ export const DashboardLayoutComponent = React.memo<DashboardLayoutComponentProps
     addCustomLayout(wideLayout)
   }
 
-  // Always use the draggable grid for consistency
-  // Just disable dragging when not in customize mode
-
+  // Clean Apple-style layout with generous whitespace
   return (
-    <div className={cn('space-y-4', className)}>
-      <div className="dashboard-container">
-        {validCharts.length === 0 ? (
-          <Card className="mx-auto max-w-2xl">
-            <CardContent className="py-12">
-              <div className="text-center space-y-4">
-                <div className="w-16 h-16 mx-auto bg-muted rounded-full flex items-center justify-center">
-                  <BarChart3 className="w-8 h-8 text-muted-foreground" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold">No meaningful visualizations available</h3>
-                  <p className="text-muted-foreground mt-2">
-                    The AI analysis couldn&apos;t generate relevant charts for this dataset. 
-                    This might happen when:
-                  </p>
-                  <ul className="text-sm text-muted-foreground mt-3 space-y-1 max-w-md mx-auto text-left">
-                    <li>• The data contains too many null or empty values</li>
-                    <li>• All values in numeric columns are identical</li>
-                    <li>• The data structure doesn&apos;t support meaningful visualizations</li>
-                    <li>• There are insufficient data points for analysis</li>
-                  </ul>
-                </div>
-                <div className="pt-4">
-                  <p className="text-sm text-muted-foreground">
-                    Try uploading a different dataset or check the data quality in the Schema tab.
-                  </p>
-                </div>
+    <div className={cn('space-y-12', className)}>
+      {validCharts.length === 0 ? (
+        <div className="flex items-center justify-center py-32">
+          <div className="text-center space-y-6 max-w-md">
+            <div className="w-20 h-20 mx-auto bg-gray-100 rounded-3xl flex items-center justify-center">
+              <BarChart3 className="w-10 h-10 text-gray-400" />
+            </div>
+            <div>
+              <h3 className="text-2xl font-semibold text-gray-900">No visualizations available</h3>
+              <p className="text-gray-500 mt-3 text-base leading-relaxed">
+                The data doesn't support meaningful chart creation. Try uploading a different dataset.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-12">
+          {validCharts.map((config, index) => {
+            const originalIndex = analysis.chartConfig.indexOf(config)
+            const chartId = config.id || `chart-${originalIndex}`
+
+            return (
+              <div key={chartId}>
+                <MinimalChartWrapper
+                  id={chartId}
+                  type={config.type}
+                  title={config.title}
+                  description={config.description}
+                  data={data}
+                  dataKey={config.dataKey}
+                  dataMapping={config.dataMapping}
+                />
               </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <FixedGridLayout
-            layout={layout}
-            onLayoutChange={handleLayoutChange}
-            isDraggable={isCustomizing}
-            isResizable={isCustomizing}
-            margin={[16, 16]}
-            containerPadding={[0, 0]}
-            rowHeight={60}
-            cols={12}
-            className=""
-          >
-            {chartElements}
-          </FixedGridLayout>
-        )}
-      </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 })

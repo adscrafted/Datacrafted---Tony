@@ -2,13 +2,12 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Upload, FileSpreadsheet, Loader2, X, CheckCircle, AlertTriangle } from 'lucide-react'
+import { Upload, Loader2, AlertTriangle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { useDataStore } from '@/lib/store'
 import { cn } from '@/lib/utils/cn'
 import { analyzeDataSchema } from '@/lib/utils/schema-analyzer'
+import { schemaCache } from '@/lib/utils/cache-manager'
 import { parseFileOptimized, cleanupFileParser, type ParseProgress } from '@/lib/utils/file-parser-optimized'
 import { EnhancedProgress, useProgressStages } from '@/components/ui/enhanced-progress'
 import { startTiming, endTiming, recordMetric, measureAsyncFunction } from '@/lib/utils/performance-monitor'
@@ -24,15 +23,25 @@ interface FileUploadCoreProps {
   disabled?: boolean
 }
 
-export function FileUploadCore({ 
-  onUploadStart, 
-  onUploadComplete, 
+export function FileUploadCore({
+  onUploadStart,
+  onUploadComplete,
   onUploadError,
   disabled = false
 }: FileUploadCoreProps) {
   const router = useRouter()
-  const { setFileName, setRawData, setDataSchema, setError, isAnalyzing, setIsAnalyzing, setAnalysis } = useDataStore()
-  
+  const {
+    setFileName,
+    setRawData,
+    setDataSchema,
+    setError,
+    isAnalyzing,
+    setIsAnalyzing,
+    setAnalysis,
+    setUploadProgress,
+    setUploadStage
+  } = useDataStore()
+
   // Enhanced progress tracking
   const {
     stages,
@@ -43,9 +52,8 @@ export function FileUploadCore({
     completeStage,
     errorStage
   } = useProgressStages()
-  
-  // Legacy progress tracking for compatibility
-  const [uploadProgress, setUploadProgress] = useState(0)
+
+  // Local progress tracking state (separate from store)
   const [progressStage, setProgressStage] = useState<string>('')
   const [parseDetails, setParseDetails] = useState<{
     rowsProcessed?: number
@@ -53,20 +61,21 @@ export function FileUploadCore({
     currentChunk?: number
     totalChunks?: number
   }>({})
-  
+
   // Performance monitoring
   const [performanceMetrics, setPerformanceMetrics] = useState<{
     fileSize?: number
     parseTime?: number
     throughput?: number
   }>({})
-  
+
   // Error handling
   const [uploadErrors, setUploadErrors] = useState<string[]>([])
-  
+
   // File selection state (new two-step process)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  
+  const [autoProcessing, setAutoProcessing] = useState(false)
+
   // Refs for cleanup
   const abortControllerRef = useRef<AbortController | null>(null)
   const startTimeRef = useRef<number>(0)
@@ -82,10 +91,19 @@ export function FileUploadCore({
   }, [])
 
   const handleProgress = useCallback((progress: ParseProgress) => {
-    // Update legacy progress for compatibility
+    // Update store upload progress
     setUploadProgress(progress.percentage)
+
+    // Map progress stage to upload stage
+    if (progress.stage === 'reading') {
+      setUploadStage('uploading')
+    } else if (progress.stage === 'parsing') {
+      setUploadStage('parsing')
+    }
+
+    // Update legacy progress for compatibility
     setProgressStage(progress.stage)
-    
+
     // Update detailed progress info
     setParseDetails({
       rowsProcessed: progress.rowsProcessed,
@@ -96,7 +114,7 @@ export function FileUploadCore({
 
     // Update enhanced progress stages
     const stageId = progress.stage
-    const stageDetails = progress.rowsProcessed 
+    const stageDetails = progress.rowsProcessed
       ? `${progress.rowsProcessed.toLocaleString()} rows processed`
       : undefined
 
@@ -113,7 +131,7 @@ export function FileUploadCore({
       const throughput = progress.rowsProcessed / elapsed
       setPerformanceMetrics(prev => ({ ...prev, throughput }))
     }
-  }, [updateStage])
+  }, [updateStage, setUploadProgress, setUploadStage])
 
   const validateFile = useCallback((file: File): string[] => {
     const errors: string[] = []
@@ -132,16 +150,254 @@ export function FileUploadCore({
     return errors
   }, [])
 
+  // Function to handle the actual file processing
+  const handleFileProcessing = useCallback(async (file: File) => {
+    console.log('🔵 [FILE-UPLOAD] Starting upload process for:', file.name)
+
+    // Initialize progress stages
+    initializeStages([
+      { id: 'reading', label: 'Reading file' },
+      { id: 'parsing', label: 'Parsing data' },
+      { id: 'analyzing', label: 'Analyzing structure' },
+      { id: 'complete', label: 'Processing complete' }
+    ])
+
+    // Start upload process
+    setIsAnalyzing(true)
+    startTimeRef.current = performance.now()
+    abortControllerRef.current = new AbortController()
+    console.log('🔵 [FILE-UPLOAD] Upload state initialized, isAnalyzing set to true')
+
+    // Start performance monitoring
+    startTiming('file_upload_total', {
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type
+    }, ['upload', 'performance'])
+
+    recordMetric('upload_started', {
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      timestamp: Date.now()
+    }, ['upload'])
+
+    onUploadStart?.()
+
+    try {
+      // Initialize progress stages
+      initializeStages([
+        { id: 'parsing', label: 'Parsing file', status: 'pending' },
+        { id: 'analyzing', label: 'Analyzing data', status: 'pending' },
+        { id: 'complete', label: 'Complete', status: 'pending' }
+      ])
+
+      // Set upload stage to uploading
+      setUploadStage('uploading')
+
+      // Store file info
+      console.log('🔵 [FILE-UPLOAD] Storing file name:', file.name)
+      setFileName(file.name)
+
+      // Parse file stage
+      console.log('🔵 [FILE-UPLOAD] Starting file parsing stage')
+      updateStage('parsing', { status: 'active', progress: 0 })
+      setProgressStage('Parsing file...')
+
+      console.log('🔵 [FILE-UPLOAD] Calling parseFileOptimized')
+      const result = await parseFileOptimized(file, {
+        onProgress: handleProgress,
+        signal: abortControllerRef.current.signal
+      })
+
+      console.log('🔵 [FILE-UPLOAD] File parsing completed:', {
+        rowCount: result.data.length,
+        columns: result.data[0] ? Object.keys(result.data[0]) : [],
+        sampleData: result.data.slice(0, 2)
+      })
+
+      if (result.data.length === 0) {
+        console.log('❌ [FILE-UPLOAD] No data found in parsed file')
+        throw new Error('No data found in file')
+      }
+
+      console.log('✅ [FILE-UPLOAD] File parsing stage completed successfully')
+      completeStage('parsing')
+
+      // Store the data
+      console.log('🔵 [FILE-UPLOAD] Storing raw data in store:', {
+        dataLength: result.data.length,
+        firstRowKeys: result.data[0] ? Object.keys(result.data[0]) : [],
+        sampleData: result.data.slice(0, 2),
+        timestamp: new Date().toISOString()
+      })
+      await setRawData(result.data)
+      console.log('✅ [FILE-UPLOAD] Raw data stored successfully, verifying store state...')
+
+      // Verify data was stored correctly
+      const storeState = useDataStore.getState()
+      console.log('🔍 [FILE-UPLOAD] Store state after setRawData:', {
+        hasRawData: !!storeState.rawData,
+        rawDataLength: storeState.rawData?.length,
+        fileName: storeState.fileName,
+        isAnalyzing: storeState.isAnalyzing,
+        hasAnalysis: !!storeState.analysis
+      })
+
+      // Analyze schema stage
+      console.log('🔵 [FILE-UPLOAD] Starting schema analysis')
+      setUploadStage('analyzing')
+      updateStage('analyzing', {
+        status: 'active',
+        progress: 0,
+        details: 'Analyzing data structure...'
+      })
+      setProgressStage('Analyzing data structure...')
+
+      const schema = await analyzeDataSchema(result.data, file.name, file)
+      console.log('🔵 [FILE-UPLOAD] Schema analysis completed:', {
+        fileName: schema.fileName,
+        rowCount: schema.rowCount,
+        columnCount: schema.columnCount,
+        columns: schema.columns.map(c => ({ name: c.name, type: c.type, description: c.description }))
+      })
+      console.log('🔍 [FILE-UPLOAD] Sample column details:', schema.columns.slice(0, 3))
+      setDataSchema(schema)
+      console.log('✅ [FILE-UPLOAD] Schema stored successfully')
+
+      // Verify schema in store
+      const schemaStoreState = useDataStore.getState()
+      console.log('🔍 [FILE-UPLOAD] Store schema after setting:', schemaStoreState.dataSchema?.columns?.slice(0, 3))
+
+      completeStage('analyzing')
+
+      // Complete stage
+      console.log('🔵 [FILE-UPLOAD] Completing upload process')
+      setUploadStage('saving')
+      completeStage('complete')
+      setProgressStage('Complete')
+
+      // Record completion metrics
+      const totalTime = performance.now() - startTimeRef.current
+      console.log('🔵 [FILE-UPLOAD] Upload completed in:', totalTime + 'ms')
+      recordMetric('upload_completed', {
+        fileName: file.name,
+        fileSize: file.size,
+        rowCount: result.data.length,
+        totalTime,
+        success: true
+      }, ['upload', 'success'])
+
+      console.log('🔵 [FILE-UPLOAD] Upload processing complete, will call onUploadComplete after data validation')
+
+      // Prefetch dashboard resources
+      if (shouldPrefetch()) {
+        console.log('🔵 [FILE-UPLOAD] Prefetching dashboard resources')
+        prefetchDashboardResources()
+      }
+
+      // Reset analyzing state since upload is complete
+      setIsAnalyzing(false)
+
+      // Small delay to show completion before navigation
+      console.log('🔵 [FILE-UPLOAD] Preparing navigation to dashboard in 500ms')
+      console.log('🔍 [FILE-UPLOAD] Final store state before navigation:', {
+        fileName: useDataStore.getState().fileName,
+        rawDataLength: useDataStore.getState().rawData?.length,
+        hasDataSchema: !!useDataStore.getState().dataSchema,
+        isAnalyzing: useDataStore.getState().isAnalyzing,
+        timestamp: new Date().toISOString()
+      })
+
+      setTimeout(() => {
+        const finalState = useDataStore.getState()
+        console.log('🔍 [FILE-UPLOAD] Store state at completion time:', {
+          fileName: finalState.fileName,
+          rawDataLength: finalState.rawData?.length,
+          hasDataSchema: !!finalState.dataSchema,
+          isAnalyzing: finalState.isAnalyzing,
+          hasAnalysis: !!finalState.analysis
+        })
+
+        // Verify we have the minimum required data before navigating
+        if (!finalState.rawData || finalState.rawData.length === 0) {
+          console.error('❌ [FILE-UPLOAD] Cannot complete - no raw data in store')
+          setError('Upload failed - no data available')
+          return
+        }
+
+        if (!finalState.fileName) {
+          console.error('❌ [FILE-UPLOAD] Cannot complete - no filename in store')
+          setError('Upload failed - filename not set')
+          return
+        }
+
+        console.log('✅ [FILE-UPLOAD] All data checks passed, calling onUploadComplete...')
+        // Reset analyzing state before navigation
+        setIsAnalyzing(false)
+        // Let the parent component handle navigation - don't navigate here
+        if (onUploadComplete) {
+          console.log('🔄 [FILE-UPLOAD] Calling onUploadComplete callback')
+          onUploadComplete(finalState.rawData)
+          // Do NOT navigate here - let the parent component handle it
+        } else {
+          // No callback provided - just log completion
+          console.log('✅ [FILE-UPLOAD] Upload complete, no callback provided')
+        }
+      }, 500)
+
+    } catch (error) {
+      console.error('❌ [FILE-UPLOAD] Error processing file:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process file'
+      console.log('❌ [FILE-UPLOAD] Error details:', {
+        errorMessage,
+        fileName: file.name,
+        fileSize: file.size,
+        currentStage: currentStage || 'unknown',
+        stack: error instanceof Error ? error.stack : 'No stack trace'
+      })
+
+      // Record error metrics
+      endTiming('file_upload_total', {
+        success: false,
+        error: errorMessage
+      })
+
+      recordMetric('upload_failed', {
+        fileName: file.name,
+        fileSize: file.size,
+        error: errorMessage,
+        stage: currentStage || 'unknown'
+      }, ['upload', 'error'])
+
+      // Mark current stage as error
+      if (currentStage) {
+        console.log('❌ [FILE-UPLOAD] Marking stage as error:', currentStage)
+        errorStage(currentStage, errorMessage)
+      }
+
+      console.log('❌ [FILE-UPLOAD] Setting error state and cleaning up')
+      setError(errorMessage)
+      setUploadErrors([errorMessage])
+      setIsAnalyzing(false)
+      setUploadProgress(0)
+      setProgressStage('')
+      onUploadError?.(errorMessage)
+    } finally {
+      setAutoProcessing(false)
+    }
+  }, [setFileName, setRawData, setDataSchema, setError, setIsAnalyzing, router, handleProgress, onUploadStart, onUploadComplete, onUploadError, initializeStages, updateStage, completeStage, errorStage, currentStage, setUploadStage])
+
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0]
-    console.log('🔵 [FILE-UPLOAD] onDrop triggered with files:', { 
-      fileCount: acceptedFiles.length, 
-      fileName: file?.name, 
-      fileSize: file?.size, 
+    console.log('🔵 [FILE-UPLOAD] onDrop triggered with files:', {
+      fileCount: acceptedFiles.length,
+      fileName: file?.name,
+      fileSize: file?.size,
       fileType: file?.type,
       timestamp: new Date().toISOString()
     })
-    
+
     if (!file) {
       console.log('❌ [FILE-UPLOAD] No file selected in onDrop')
       return
@@ -156,6 +412,8 @@ export function FileUploadCore({
     setPerformanceMetrics({ fileSize: file.size })
     // Clear previous analysis to ensure new analysis is triggered
     setAnalysis(null)
+    // CRITICAL: Clear schema cache to prevent stale data
+    schemaCache.clear()
 
     // Validate file
     console.log('🔵 [FILE-UPLOAD] Starting file validation')
@@ -169,246 +427,23 @@ export function FileUploadCore({
     }
     console.log('✅ [FILE-UPLOAD] File validation passed')
 
-    // Only set the selected file - don't start processing yet
+    // Set the selected file for UI display
     setSelectedFile(file)
-  }, [validateFile, setError, onUploadError, setAnalysis])
+    setAutoProcessing(true)
 
-  // New function to handle the actual upload processing
+    // Immediately start processing
+    console.log('🔵 [FILE-UPLOAD] Auto-processing file after validation')
+    await handleFileProcessing(file)
+  }, [validateFile, setError, onUploadError, setAnalysis, handleFileProcessing])
+
+  // New handleUploadFile function that uses the selectedFile state
   const handleUploadFile = useCallback(async () => {
     if (!selectedFile) {
       console.log('❌ [FILE-UPLOAD] No file selected for upload')
       return
     }
-
-    console.log('🔵 [FILE-UPLOAD] Starting upload process for:', selectedFile.name)
-    
-    // Initialize progress stages
-    initializeStages([
-      { id: 'reading', label: 'Reading file' },
-      { id: 'parsing', label: 'Parsing data' },
-      { id: 'analyzing', label: 'Analyzing structure' },
-      { id: 'complete', label: 'Processing complete' }
-    ])
-
-    // Start upload process
-    setIsAnalyzing(true)
-    startTimeRef.current = performance.now()
-    abortControllerRef.current = new AbortController()
-    console.log('🔵 [FILE-UPLOAD] Upload state initialized, isAnalyzing set to true')
-    
-    // Start performance monitoring
-    startTiming('file_upload_total', {
-      fileName: selectedFile.name,
-      fileSize: selectedFile.size,
-      fileType: selectedFile.type
-    }, ['upload', 'performance'])
-    
-    recordMetric('upload_started', {
-      fileName: selectedFile.name,
-      fileSize: selectedFile.size,
-      fileType: selectedFile.type,
-      timestamp: Date.now()
-    }, ['upload'])
-    
-    onUploadStart?.()
-
-    try {
-      // Initialize progress stages
-      initializeStages([
-        { id: 'parsing', label: 'Parsing file', status: 'pending' },
-        { id: 'analyzing', label: 'Analyzing data', status: 'pending' },
-        { id: 'complete', label: 'Complete', status: 'pending' }
-      ])
-      
-      // Store file info
-      console.log('🔵 [FILE-UPLOAD] Storing file name:', selectedFile.name)
-      setFileName(selectedFile.name)
-      
-      // Parse file stage
-      console.log('🔵 [FILE-UPLOAD] Starting file parsing stage')
-      updateStage('parsing', { status: 'active', progress: 0 })
-      setProgressStage('Parsing file...')
-      
-      console.log('🔵 [FILE-UPLOAD] Calling parseFileOptimized')
-      const result = await parseFileOptimized(selectedFile, {
-        onProgress: handleProgress,
-        signal: abortControllerRef.current.signal
-      })
-      
-      console.log('🔵 [FILE-UPLOAD] File parsing completed:', { 
-        rowCount: result.data.length, 
-        columns: result.data[0] ? Object.keys(result.data[0]) : [],
-        sampleData: result.data.slice(0, 2)
-      })
-      
-      if (result.data.length === 0) {
-        console.log('❌ [FILE-UPLOAD] No data found in parsed file')
-        throw new Error('No data found in file')
-      }
-      
-      console.log('✅ [FILE-UPLOAD] File parsing stage completed successfully')
-      completeStage('parsing')
-
-      // Store the data
-      console.log('🔵 [FILE-UPLOAD] Storing raw data in store:', {
-        dataLength: result.data.length,
-        firstRowKeys: result.data[0] ? Object.keys(result.data[0]) : [],
-        sampleData: result.data.slice(0, 2),
-        timestamp: new Date().toISOString()
-      })
-      await setRawData(result.data)
-      console.log('✅ [FILE-UPLOAD] Raw data stored successfully, verifying store state...')
-      
-      // Verify data was stored correctly
-      const storeState = useDataStore.getState()
-      console.log('🔍 [FILE-UPLOAD] Store state after setRawData:', {
-        hasRawData: !!storeState.rawData,
-        rawDataLength: storeState.rawData?.length,
-        fileName: storeState.fileName,
-        isAnalyzing: storeState.isAnalyzing,
-        hasAnalysis: !!storeState.analysis
-      })
-
-      // Analyze schema stage
-      console.log('🔵 [FILE-UPLOAD] Starting schema analysis')
-      updateStage('analyzing', { 
-        status: 'active', 
-        progress: 0,
-        details: 'Analyzing data structure...' 
-      })
-      setProgressStage('Analyzing data structure...')
-      
-      const schema = await analyzeDataSchema(result.data, selectedFile.name, selectedFile)
-      console.log('🔵 [FILE-UPLOAD] Schema analysis completed:', {
-        fileName: schema.fileName,
-        rowCount: schema.rowCount,
-        columnCount: schema.columnCount,
-        columns: schema.columns.map(c => ({ name: c.name, type: c.type, description: c.description }))
-      })
-      console.log('🔍 [FILE-UPLOAD] Sample column details:', schema.columns.slice(0, 3))
-      setDataSchema(schema)
-      console.log('✅ [FILE-UPLOAD] Schema stored successfully')
-      
-      // Verify schema in store
-      const schemaStoreState = useDataStore.getState()
-      console.log('🔍 [FILE-UPLOAD] Store schema after setting:', schemaStoreState.dataSchema?.columns?.slice(0, 3))
-      
-      completeStage('analyzing')
-      
-      // Complete stage
-      console.log('🔵 [FILE-UPLOAD] Completing upload process')
-      completeStage('complete')
-      setUploadProgress(100)
-      setProgressStage('Complete')
-      
-      // Record completion metrics
-      const totalTime = performance.now() - startTimeRef.current
-      console.log('🔵 [FILE-UPLOAD] Upload completed in:', totalTime + 'ms')
-      recordMetric('upload_completed', {
-        fileName: selectedFile.name,
-        fileSize: selectedFile.size,
-        rowCount: result.data.length,
-        totalTime,
-        success: true
-      }, ['upload', 'success'])
-      
-      console.log('🔵 [FILE-UPLOAD] Upload processing complete, will call onUploadComplete after data validation')
-      
-      // Prefetch dashboard resources
-      if (shouldPrefetch()) {
-        console.log('🔵 [FILE-UPLOAD] Prefetching dashboard resources')
-        prefetchDashboardResources()
-      }
-      
-      // Reset analyzing state since upload is complete
-      setIsAnalyzing(false)
-
-      // Small delay to show completion before navigation
-      console.log('🔵 [FILE-UPLOAD] Preparing navigation to dashboard in 500ms')
-      console.log('🔍 [FILE-UPLOAD] Final store state before navigation:', {
-        fileName: useDataStore.getState().fileName,
-        rawDataLength: useDataStore.getState().rawData?.length,
-        hasDataSchema: !!useDataStore.getState().dataSchema,
-        isAnalyzing: useDataStore.getState().isAnalyzing,
-        timestamp: new Date().toISOString()
-      })
-      
-      setTimeout(() => {
-        console.log('🚀 [FILE-UPLOAD] Executing navigation to /dashboard')
-        const finalState = useDataStore.getState()
-        console.log('🔍 [FILE-UPLOAD] Store state at navigation time:', {
-          fileName: finalState.fileName,
-          rawDataLength: finalState.rawData?.length,
-          hasDataSchema: !!finalState.dataSchema,
-          isAnalyzing: finalState.isAnalyzing,
-          hasAnalysis: !!finalState.analysis
-        })
-        
-        // Verify we have the minimum required data before navigating
-        if (!finalState.rawData || finalState.rawData.length === 0) {
-          console.error('❌ [FILE-UPLOAD] Cannot navigate - no raw data in store')
-          setError('Upload failed - no data available')
-          return
-        }
-        
-        if (!finalState.fileName) {
-          console.error('❌ [FILE-UPLOAD] Cannot navigate - no filename in store')
-          setError('Upload failed - filename not set')
-          return
-        }
-        
-        console.log('✅ [FILE-UPLOAD] All data checks passed, calling onUploadComplete...')
-        // Reset analyzing state before navigation
-        setIsAnalyzing(false)
-        // Let the parent component handle navigation
-        if (onUploadComplete) {
-          onUploadComplete(finalState.rawData)
-        } else {
-          // Default behavior: navigate to projects page
-          console.log('🚀 [FILE-UPLOAD] No onUploadComplete provided, navigating to projects page')
-          router.push('/projects')
-        }
-      }, 500)
-
-    } catch (error) {
-      console.error('❌ [FILE-UPLOAD] Error processing file:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Failed to process file'
-      console.log('❌ [FILE-UPLOAD] Error details:', {
-        errorMessage,
-        fileName: selectedFile.name,
-        fileSize: selectedFile.size,
-        currentStage: currentStage || 'unknown',
-        stack: error instanceof Error ? error.stack : 'No stack trace'
-      })
-      
-      // Record error metrics
-      endTiming('file_upload_total', {
-        success: false,
-        error: errorMessage
-      })
-      
-      recordMetric('upload_failed', {
-        fileName: selectedFile.name,
-        fileSize: selectedFile.size,
-        error: errorMessage,
-        stage: currentStage || 'unknown'
-      }, ['upload', 'error'])
-      
-      // Mark current stage as error
-      if (currentStage) {
-        console.log('❌ [FILE-UPLOAD] Marking stage as error:', currentStage)
-        errorStage(currentStage, errorMessage)
-      }
-      
-      console.log('❌ [FILE-UPLOAD] Setting error state and cleaning up')
-      setError(errorMessage)
-      setUploadErrors([errorMessage])
-      setIsAnalyzing(false)
-      setUploadProgress(0)
-      setProgressStage('')
-      onUploadError?.(errorMessage)
-    }
-  }, [selectedFile, setFileName, setRawData, setDataSchema, setError, setIsAnalyzing, router, handleProgress, onUploadStart, onUploadComplete, onUploadError, initializeStages, updateStage, completeStage, errorStage, currentStage])
+    await handleFileProcessing(selectedFile)
+  }, [selectedFile, handleFileProcessing])
 
   // Function to remove selected file
   const handleRemoveFile = useCallback(() => {
@@ -417,7 +452,7 @@ export function FileUploadCore({
     setUploadProgress(0)
     setProgressStage('')
     setParseDetails({})
-  }, [])
+  }, [setUploadProgress])
 
   const handleCancel = useCallback(() => {
     if (abortControllerRef.current) {
@@ -427,7 +462,7 @@ export function FileUploadCore({
     setUploadProgress(0)
     setProgressStage('')
     setParseDetails({})
-  }, [setIsAnalyzing])
+  }, [setIsAnalyzing, setUploadProgress])
 
   const { getRootProps, getInputProps, isDragActive, fileRejections } = useDropzone({
     onDrop,
@@ -469,64 +504,18 @@ export function FileUploadCore({
   }
 
   return (
-    <Card className="w-full max-w-2xl mx-auto bg-white/60 backdrop-blur-sm border-white/20 shadow-lg hover:shadow-xl transition-shadow">
-      <CardContent className="p-8">
+    <div className="w-full max-w-2xl mx-auto">
+      <div className="p-8">
         {/* Show upload progress */}
-        {isAnalyzing ? (
-          <div className="border-2 border-dashed rounded-xl p-12 text-center border-blue-400 bg-gradient-to-br from-blue-50 to-indigo-50">
+        {(isAnalyzing || autoProcessing) ? (
+          <div className="relative p-16 md:p-20 rounded-3xl bg-white/60 border-2 border-white/20 backdrop-blur-xl shadow-2xl">
             <div className="flex flex-col items-center space-y-4">
               <div className="relative">
-                <Loader2 className="h-12 w-12 text-primary animate-spin" />
+                <Loader2 className="h-16 w-16 text-blue-500 animate-spin" />
               </div>
-              
-              <p className="text-lg font-medium">
-                Uploading data...
+              <p className="text-2xl font-semibold text-gray-800">
+                Processing your file...
               </p>
-            </div>
-          </div>
-        ) : selectedFile ? (
-          /* Show file preview with upload button */
-          <div className="space-y-6">
-            <div className="border-2 border-green-200 rounded-xl p-6 bg-gradient-to-br from-green-50 to-emerald-50">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div className="p-3 bg-green-100 rounded-full">
-                    <CheckCircle className="h-6 w-6 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-lg font-medium text-gray-900">{selectedFile.name}</p>
-                    <p className="text-sm text-gray-600">
-                      {(selectedFile.size / 1024 / 1024).toFixed(2)} MB • {selectedFile.type || 'Unknown type'}
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleRemoveFile}
-                  className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-600"
-                  title="Remove file"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-            
-            <div className="flex justify-center space-x-3">
-              <Button
-                variant="outline"
-                onClick={handleRemoveFile}
-                className="px-6"
-              >
-                Choose Different File
-              </Button>
-              <Button
-                onClick={handleUploadFile}
-                className="px-8 bg-primary hover:bg-primary/90"
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                Upload File
-              </Button>
             </div>
           </div>
         ) : (
@@ -534,61 +523,55 @@ export function FileUploadCore({
           <div
             {...getRootProps()}
             className={cn(
-              "border-2 border-dashed rounded-xl p-12 text-center cursor-pointer",
-              !prefersReducedMotion() && "transition-all duration-200 ease-in-out",
-              isDragActive ? "border-blue-400 bg-gradient-to-br from-blue-50 to-indigo-50" : "border-gray-200 hover:border-blue-300 hover:bg-gradient-to-br hover:from-blue-50/50 hover:to-indigo-50/50",
-              isDragActive && !prefersReducedMotion() && "scale-105 shadow-lg",
-              !isDragActive && !prefersReducedMotion() && "hover:shadow-md"
+              "relative p-16 md:p-20 rounded-3xl cursor-pointer transition-all duration-300 transform hover:scale-[1.02]",
+              isDragActive
+                ? "bg-blue-50/80 border-2 border-blue-300 scale-[1.02]"
+                : "bg-white/60 border-2 border-white/20 hover:bg-white/70",
+              "backdrop-blur-xl shadow-2xl hover:shadow-3xl"
             )}
-            style={{
-              transform: isDragActive && !prefersReducedMotion() ? 'scale(1.02)' : 'scale(1)',
-              boxShadow: isDragActive && !prefersReducedMotion() 
-                ? '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)' 
-                : undefined
-            }}
           >
             <input {...getInputProps()} />
-            
-            <div className="flex flex-col items-center space-y-4">
-              <div className="p-4 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full shadow-sm">
-                {isDragActive ? (
-                  <Upload className="h-8 w-8 text-blue-600" />
-                ) : (
-                  <FileSpreadsheet className="h-8 w-8 text-blue-600" />
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                <p className="text-lg font-medium">
-                  {isDragActive ? "Drop your file here" : "Drag & drop your data file"}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  or click to browse • CSV, XLSX, XLS
-                </p>
-                <p className="text-xs text-muted-foreground font-medium">
-                  Maximum file size: 50MB
-                </p>
-              </div>
-              
-              <Button variant="outline" size="sm" className="mt-2 border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300">
-                Select File
-              </Button>
-            </div>
+            <Upload className={cn(
+              "w-16 h-16 mx-auto mb-6 transition-all duration-300",
+              isDragActive ? "text-blue-500 scale-110" : "text-gray-400"
+            )} />
+
+            <p className="text-2xl font-semibold text-gray-800 mb-2">
+              Drop your file here
+            </p>
+
+            <p className="text-lg text-gray-500">
+              or click to browse
+            </p>
+
+            {selectedFile && !uploadErrors.length && (
+              <p className="mt-4 text-sm text-gray-600">
+                Selected: {selectedFile.name}
+              </p>
+            )}
           </div>
         )}
-        
-        {/* Errors */}
+
+        {/* Error messages */}
         {uploadErrors.length > 0 && (
-          <div className="mt-4 space-y-2">
-            {uploadErrors.map((error, index) => (
-              <div key={index} className="flex items-start space-x-2 text-sm text-red-600 bg-red-50 p-2 rounded">
-                <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                <span>{error}</span>
-              </div>
-            ))}
+          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center text-red-700">
+            <AlertTriangle className="w-4 h-4 mr-2 flex-shrink-0" />
+            <p className="text-sm">{uploadErrors[0]}</p>
           </div>
         )}
-      </CardContent>
-    </Card>
+
+        {/* File types and size info */}
+        {!isAnalyzing && !autoProcessing && (
+          <div className="mt-12 text-center">
+            <p className="text-sm text-gray-400 tracking-wide">
+              CSV • Excel • Google Sheets
+            </p>
+            <p className="text-xs text-gray-400 mt-2">
+              Maximum file size: 50MB
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }

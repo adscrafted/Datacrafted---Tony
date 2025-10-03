@@ -23,10 +23,17 @@ export function aggregateDataByGranularity(
     const dateColumns = Object.keys(firstRow).filter(key => {
       const value = firstRow[key]
       if (!value) return false
+
+      // Reject pure numbers to avoid Date.parse false positives
+      const valueStr = String(value).trim()
+      const isPureNumber = /^-?\d+(\.\d+)?$/.test(valueStr)
+      const isYearLike = /^\d{4}$/.test(valueStr)
+      if (isPureNumber && !isYearLike) return false
+
       const datePattern = /\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}|\d{4}\/\d{2}\/\d{2}/
       if (typeof value === 'string' && datePattern.test(value)) return true
       if (value instanceof Date) return true
-      if (!isNaN(Date.parse(String(value)))) return true
+      if (!isNaN(Date.parse(valueStr))) return true
       return false
     })
     

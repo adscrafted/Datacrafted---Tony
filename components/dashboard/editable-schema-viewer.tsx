@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Edit2, Save, X, Database, Key, Type, Hash, Calendar, CheckCircle, FileText } from 'lucide-react'
+import { Edit2, Save, X, Database, Key, Type, Hash, Calendar, CheckCircle, FileText, Brain, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -15,6 +15,8 @@ interface SchemaField {
   description?: string
   isPrimary?: boolean
   isRequired?: boolean
+  confidence?: number
+  detectionReason?: string
 }
 
 interface EditingField {
@@ -30,22 +32,20 @@ const dataTypes = [
   { value: 'text', label: 'Text', icon: FileText },
 ]
 
-export function EditableSchemaViewer() {
-  const { rawData, dataSchema } = useDataStore()
+interface EditableSchemaViewerProps {
+  onAIUpdateComplete?: () => void
+}
+
+export function EditableSchemaViewer({ onAIUpdateComplete }: EditableSchemaViewerProps = {}) {
+  const { rawData, dataSchema, setDataSchema, setAnalysis, setIsAnalyzing, setError } = useDataStore()
   const [schema, setSchema] = useState<SchemaField[]>([])
   const [editingField, setEditingField] = useState<EditingField | null>(null)
   const [isAddingField, setIsAddingField] = useState(false)
   const [newField, setNewField] = useState<SchemaField>({ name: '', type: 'string' })
+  const [isPushingToAI, setIsPushingToAI] = useState(false)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
 
   useEffect(() => {
-    console.log('🔍 [SCHEMA_VIEWER] useEffect triggered:', {
-      hasDataSchema: !!dataSchema,
-      dataSchema,
-      hasColumns: !!dataSchema?.columns,
-      columnsLength: dataSchema?.columns?.length,
-      timestamp: new Date().toISOString()
-    })
-    
     // Initialize schema from dataSchema
     if (dataSchema?.columns) {
       const fields: SchemaField[] = dataSchema.columns.map((col) => ({
@@ -54,11 +54,11 @@ export function EditableSchemaViewer() {
         description: col.description || '',
         isPrimary: false,
         isRequired: col.nullPercentage === 0,
+        confidence: col.confidence,
+        detectionReason: col.detectionReason,
       }))
-      console.log('✅ [SCHEMA_VIEWER] Setting schema fields:', fields)
       setSchema(fields)
     } else if (rawData && rawData.length > 0) {
-      console.log('⚠️ [SCHEMA_VIEWER] No dataSchema found, generating from rawData')
       // Generate basic schema from rawData
       const columns = Object.keys(rawData[0] || {})
       const fields: SchemaField[] = columns.map((columnName) => ({
@@ -68,10 +68,8 @@ export function EditableSchemaViewer() {
         isPrimary: false,
         isRequired: false,
       }))
-      console.log('✅ [SCHEMA_VIEWER] Generated schema from rawData:', fields)
       setSchema(fields)
     } else {
-      console.log('⚠️ [SCHEMA_VIEWER] No dataSchema or rawData found, resetting schema')
       setSchema([])
     }
   }, [dataSchema, rawData])
@@ -89,6 +87,93 @@ export function EditableSchemaViewer() {
       updatedSchema[editingField.index] = editingField.field
       setSchema(updatedSchema)
       setEditingField(null)
+      setHasUnsavedChanges(true)
+    }
+  }
+
+  const handlePushToAI = async () => {
+    if (!rawData || rawData.length === 0) {
+      console.error('No data available to push to AI')
+      return
+    }
+
+    setIsPushingToAI(true)
+    // Set analyzing state to show the loading screen
+    setIsAnalyzing(true)
+
+    try {
+      // Prepare the corrected schema information
+      const correctedSchema = schema.map(field => ({
+        name: field.name,
+        type: field.type,
+        description: field.description,
+        userCorrected: true
+      }))
+
+      console.log('🔵 [PUSH-TO-AI] Sending corrected schema to AI:', {
+        totalRows: rawData.length,
+        sampleRows: Math.min(rawData.length, 100),
+        correctedColumns: correctedSchema.length,
+        fileName: dataSchema?.fileName
+      })
+
+      // Send sample data (same as initial upload) with corrected schema
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          data: rawData.slice(0, 100), // Send sample (first 100 rows) just like initial upload
+          schema: dataSchema, // Send current schema
+          correctedSchema: correctedSchema,
+          feedback: 'User has corrected column types and descriptions. Please re-analyze with this updated schema information.',
+          fileName: dataSchema?.fileName || 'data.csv'
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to push to AI')
+      }
+
+      const result = await response.json()
+      console.log('✅ [PUSH-TO-AI] Received AI analysis result:', {
+        hasChartConfig: !!result.chartConfig,
+        chartCount: result.chartConfig?.length || 0,
+        hasInsights: !!result.insights
+      })
+
+      // Update the analysis result in store
+      if (result) {
+        setAnalysis(result)
+        console.log('✅ [PUSH-TO-AI] Analysis updated in store')
+      }
+
+      // Update the dataSchema if AI provided additional insights
+      if (result.schema) {
+        setDataSchema({
+          ...dataSchema,
+          columns: result.schema.columns,
+          businessContext: result.businessContext,
+          relationships: result.relationships
+        })
+        console.log('✅ [PUSH-TO-AI] DataSchema updated with AI insights')
+      }
+
+      setHasUnsavedChanges(false)
+
+      // Call the callback to switch back to Dashboard tab
+      if (onAIUpdateComplete) {
+        console.log('🔄 [PUSH-TO-AI] Calling onAIUpdateComplete callback to switch to Dashboard')
+        onAIUpdateComplete()
+      }
+    } catch (error) {
+      console.error('❌ [PUSH-TO-AI] Error pushing to AI:', error)
+      setError(error instanceof Error ? error.message : 'Failed to push to AI')
+    } finally {
+      setIsPushingToAI(false)
+      setIsAnalyzing(false)
     }
   }
 
@@ -113,6 +198,18 @@ export function EditableSchemaViewer() {
     return dataType ? <dataType.icon className="h-3 w-3" /> : <Type className="h-3 w-3" />
   }
 
+  const getConfidenceIcon = (confidence?: number) => {
+    if (!confidence) return null
+
+    if (confidence >= 80) {
+      return <CheckCircle2 className="h-3 w-3 text-green-500" title={`${confidence}% confidence`} />
+    } else if (confidence >= 60) {
+      return <AlertCircle className="h-3 w-3 text-yellow-500" title={`${confidence}% confidence`} />
+    } else {
+      return <AlertCircle className="h-3 w-3 text-red-500" title={`${confidence}% confidence`} />
+    }
+  }
+
   return (
     <div className="p-6">
       <Card>
@@ -122,15 +219,29 @@ export function EditableSchemaViewer() {
               <Database className="h-4 w-4" />
               <span>Data Schema</span>
             </CardTitle>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsAddingField(true)}
-              disabled={isAddingField}
-            >
-              <Edit2 className="h-4 w-4 mr-2" />
-              Add Field
-            </Button>
+            <div className="flex items-center space-x-2">
+              {hasUnsavedChanges && (
+                <span className="text-xs text-yellow-600">Unsaved changes</span>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePushToAI}
+                disabled={isPushingToAI || !hasUnsavedChanges}
+              >
+                <Brain className="h-4 w-4 mr-2" />
+                {isPushingToAI ? 'Pushing...' : 'Push to AI'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsAddingField(true)}
+                disabled={isAddingField}
+              >
+                <Edit2 className="h-4 w-4 mr-2" />
+                Add Field
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -141,6 +252,7 @@ export function EditableSchemaViewer() {
                 <tr className="border-b">
                   <th className="px-4 py-3 text-left font-medium text-gray-700">Field Name</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-700">Type</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-700">Confidence</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-700">Description</th>
                   <th className="px-4 py-3 text-right font-medium text-gray-700">Actions</th>
                 </tr>
@@ -196,6 +308,14 @@ export function EditableSchemaViewer() {
                           </Select>
                         </td>
                         <td className="px-4 py-2">
+                          <div className="flex items-center space-x-1">
+                            {getConfidenceIcon(editingField.field.confidence)}
+                            <span className="text-xs text-gray-500">
+                              {editingField.field.confidence ? `${editingField.field.confidence}%` : '-'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2">
                           <Input
                             value={editingField.field.description || ''}
                             onChange={(e) => setEditingField({
@@ -240,6 +360,14 @@ export function EditableSchemaViewer() {
                           <div className="flex items-center space-x-1">
                             {getTypeIcon(field.type)}
                             <span className="text-sm text-gray-600">{field.type}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2">
+                          <div className="flex items-center space-x-1">
+                            {getConfidenceIcon(field.confidence)}
+                            <span className="text-xs text-gray-500" title={field.detectionReason}>
+                              {field.confidence ? `${field.confidence}%` : '-'}
+                            </span>
                           </div>
                         </td>
                         <td className="px-4 py-2">
@@ -301,6 +429,9 @@ export function EditableSchemaViewer() {
                           ))}
                         </SelectContent>
                       </Select>
+                    </td>
+                    <td className="px-4 py-2">
+                      <span className="text-xs text-gray-400">-</span>
                     </td>
                     <td className="px-4 py-2">
                       <Input
