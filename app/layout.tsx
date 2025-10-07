@@ -12,6 +12,13 @@ const interTight = Inter({
 const spaceGrotesk = Space_Grotesk({ subsets: ['latin'], variable: '--font-space-grotesk' })
 const montserrat = Montserrat({ subsets: ['latin'], variable: '--font-montserrat' })
 
+// Google Sans-like font (using Inter as fallback since Google Sans requires special access)
+const googleSans = Inter({
+  subsets: ['latin'],
+  variable: '--font-google-sans',
+  weight: ['400', '500', '600', '700']
+})
+
 export const metadata: Metadata = {
   title: 'DataCrafted - AI-Powered Data Analytics Dashboard',
   description: 'Transform your data into beautiful insights with AI-powered analytics',
@@ -23,8 +30,11 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${interTight.variable} ${spaceGrotesk.variable} ${montserrat.variable}`}>
+    <html lang="en" className={`${interTight.variable} ${spaceGrotesk.variable} ${montserrat.variable} ${googleSans.variable}`}>
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&family=Google+Sans+Text:wght@400;500&display=swap" rel="stylesheet" />
         <style>{`
           :root {
             --color-primary: #0088FE;
@@ -40,7 +50,7 @@ export default function RootLayout({
             --chart-color-5: #8884D8;
             --chart-color-6: #82CA9D;
           }
-          
+
           [data-theme="dark"] {
             --color-primary: #3b82f6;
             --color-secondary: #10b981;
@@ -55,7 +65,7 @@ export default function RootLayout({
             --chart-color-5: #8b5cf6;
             --chart-color-6: #06b6d4;
           }
-          
+
           * {
             transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
           }

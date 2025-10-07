@@ -100,37 +100,50 @@ export default function Home() {
   }, [router, user?.uid, createProject, saveProjectData, setUploadComplete, setUploadProjectId, setUploadProgress])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black">
-      {/* Subtle white glow */}
+    <div className="min-h-screen flex items-center justify-center bg-[#f8fafd]">
+      {/* Subtle blue gradient glow - NotebookLM style */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-white/10 rounded-full mix-blend-normal filter blur-3xl animate-blob" />
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-white/8 rounded-full mix-blend-normal filter blur-3xl animate-blob animation-delay-2000" />
-        <div className="absolute top-0 right-1/4 w-80 h-80 bg-white/5 rounded-full mix-blend-normal filter blur-3xl animate-blob animation-delay-4000" />
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-[rgb(11,40,212)]/10 rounded-full mix-blend-normal filter blur-3xl animate-blob" />
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-[rgb(11,40,212)]/8 rounded-full mix-blend-normal filter blur-3xl animate-blob animation-delay-2000" />
+        <div className="absolute top-0 right-1/4 w-80 h-80 bg-[rgb(11,40,212)]/5 rounded-full mix-blend-normal filter blur-3xl animate-blob animation-delay-4000" />
       </div>
 
       <div className="relative z-10 text-center px-4 w-full max-w-6xl mx-auto">
         {/* Logo */}
         <div className="mb-12">
-          <h1 className="text-2xl font-bold tracking-tight text-white font-[family-name:var(--font-inter-tight)]">
+          <h1 className="text-2xl font-semibold tracking-tight text-[#1f1f1f]" style={{ fontFamily: "'Google Sans', var(--font-google-sans), system-ui, -apple-system, sans-serif" }}>
             DataCrafted
           </h1>
         </div>
 
         {/* Hero text with typing animation */}
-        <h2 className="text-6xl md:text-7xl lg:text-8xl font-bold mb-8 min-h-[240px] flex flex-col items-center justify-center text-center tracking-tight font-[family-name:var(--font-inter-tight)] leading-[1.1]">
+        <h2 className="text-6xl md:text-7xl lg:text-8xl font-bold mb-8 min-h-[240px] flex flex-col items-center justify-center text-center tracking-tight leading-[1.1]" style={{ fontFamily: "'Google Sans', var(--font-google-sans), system-ui, -apple-system, sans-serif" }}>
           {typedText.split('\n').map((line, i) => (
-            <span key={i} className="text-white">
-              {line}
+            <span key={i}>
+              {i === 0 ? (
+                <span className="text-[#1f1f1f]">{line}</span>
+              ) : (
+                <span
+                  style={{
+                    background: 'linear-gradient(to right, #71b2ff 0%, #3cf152 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text'
+                  }}
+                >
+                  {line}
+                </span>
+              )}
               {/* Show blinking cursor after "decisions..." when typing completes */}
               {i === 1 && isTypingComplete && (
-                <span className="inline-block w-1 h-16 md:h-20 ml-2 bg-white animate-blink align-middle" />
+                <span className="inline-block w-1 h-16 md:h-20 ml-2 bg-[#71b2ff] animate-blink align-middle" />
               )}
             </span>
           ))}
         </h2>
 
         {/* Subtitle - appears after typing is complete */}
-        <p className={`text-sm md:text-base text-white/60 mb-16 max-w-2xl mx-auto font-[family-name:var(--font-inter-tight)] transition-opacity duration-1000 ${isTypingComplete ? 'opacity-100' : 'opacity-0'}`}>
+        <p className={`text-sm md:text-base text-[#5f6368] mb-16 max-w-2xl mx-auto transition-opacity duration-1000 ${isTypingComplete ? 'opacity-100' : 'opacity-0'}`} style={{ fontFamily: "'Google Sans Text', var(--font-google-sans), system-ui, -apple-system, sans-serif", lineHeight: '1.5' }}>
           Data transfer. Data storage. Business intelligence. Zero learning curve.
         </p>
 
