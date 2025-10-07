@@ -3,6 +3,7 @@
 import React from 'react'
 import { User, Bot } from 'lucide-react'
 import { ChatMessage } from '@/lib/store'
+import { stripChartSuggestions } from '@/lib/services/chat-service'
 
 interface ChatMessagesProps {
   messages: ChatMessage[]
@@ -88,7 +89,7 @@ export function ChatMessages({ messages, streamingMessage, isStreaming }: ChatMe
                 {message.role === 'user' ? (
                   <p>{message.content}</p>
                 ) : (
-                  <div>{formatMessageContent(message.content)}</div>
+                  <div>{formatMessageContent(stripChartSuggestions(message.content))}</div>
                 )}
               </div>
             </div>
@@ -115,7 +116,7 @@ export function ChatMessages({ messages, streamingMessage, isStreaming }: ChatMe
           <div className="flex-1 max-w-[80%]">
             <div className="rounded-lg p-3 bg-gray-100 text-gray-900">
               <div className="text-sm leading-relaxed">
-                <div>{formatMessageContent(streamingMessage)}</div>
+                <div>{formatMessageContent(stripChartSuggestions(streamingMessage))}</div>
                 <div className="inline-block w-2 h-4 bg-primary animate-pulse ml-1" />
               </div>
             </div>

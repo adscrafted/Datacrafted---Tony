@@ -64,8 +64,8 @@ function generateDataContext(data: DataRow[], schema: DataSchema | null, fileNam
       return info
     })
 
-    // Get a sample of the data for context
-    const sampleData = data.slice(0, 3)
+    // Get a larger sample of the data for better analysis (first 10 rows)
+    const sampleData = data.slice(0, Math.min(10, data.length))
 
     let context = `Dataset Context:
 File: ${fileName || schema.fileName || 'Uploaded data'}
@@ -83,7 +83,7 @@ Columns: ${schema.columnCount}
       context += `\nDetected Relationships:\n${schema.relationships.join('\n')}\n`
     }
 
-    context += `\nColumn Details:\n${columnInfo.join('\n')}\n\nSample Data (first 3 rows):\n${JSON.stringify(sampleData, null, 2)}`
+    context += `\nColumn Details:\n${columnInfo.join('\n')}\n\nActual Data Sample (first ${sampleData.length} rows - USE THIS TO CALCULATE REAL ANSWERS):\n${JSON.stringify(sampleData, null, 2)}\n\nIMPORTANT: You have ${data.length} total rows of data. Use the sample above to understand patterns and calculate answers based on the actual values.`
 
     return context
   }
@@ -123,8 +123,8 @@ Columns: ${schema.columnCount}
     return `${col} (${type}): ${uniqueValues.size} unique values${stats}${nullCount > 0 ? `, ${nullCount} missing` : ''}`
   })
 
-  // Get a sample of the data for context
-  const sampleData = data.slice(0, 3)
+  // Get a larger sample of the data for better analysis
+  const sampleData = data.slice(0, Math.min(10, data.length))
 
   return `Dataset Context:
 File: ${fileName || 'Uploaded data'}
@@ -134,7 +134,7 @@ Columns: ${columns.length}
 Column Details:
 ${columnInfo.join('\n')}
 
-Sample Data (first 3 rows):
+Actual Data Sample (first ${sampleData.length} rows - USE THIS TO CALCULATE REAL ANSWERS):
 ${JSON.stringify(sampleData, null, 2)}`
 }
 
@@ -193,12 +193,27 @@ When answering questions, focus on this specific chart unless the user asks abou
 ${preferredChartType && preferredChartType !== 'auto' ? `\nThe user wants to create a ${preferredChartType} chart. Help them identify the best columns and configuration for this chart type.` : ''}
 
 Your role is to:
-1. Answer questions about the data patterns, trends, and insights
-2. ALWAYS suggest appropriate visualizations that could help answer the user's question
-3. Provide actionable business recommendations
-4. Help identify data quality issues or anomalies
-5. Explain statistical concepts in plain language
-6. Proactively create chart suggestions for ANY data-related question
+1. ANALYZE THE ACTUAL DATA and provide specific answers with real numbers from the dataset
+2. DO NOT explain formulas or how to calculate - just give the answer
+3. ALWAYS suggest appropriate visualizations that could help answer the user's question
+4. Provide actionable business recommendations based on the actual data
+5. If you cannot answer due to missing data, ask clarifying questions
+6. Be concise and direct - users want answers, not tutorials
+
+CRITICAL: You have access to the actual data. Analyze it and provide specific answers.
+
+Examples of GOOD vs BAD responses:
+
+BAD: "To calculate ROI, use the formula: (Sales - Spent) / Spent × 100"
+GOOD: "Your overall ROI is 156%. Top campaigns: Google Search (245%), Facebook (189%), Instagram (134%)"
+
+BAD: "You can find trends by looking at your data over time"
+GOOD: "Sales are trending up 23% month-over-month. Peak performance was in March with $45K revenue"
+
+BAD: "Create a bar chart to compare campaigns"
+GOOD: "Your top 3 campaigns by revenue: Google Ads ($12.5K), Facebook ($8.3K), Email ($5.1K). [CHART_SUGGESTION with these values]"
+
+Always give SPECIFIC NUMBERS and NAMES from the actual data.
 
 CRITICAL INSTRUCTION: You MUST generate chart suggestions for ANY request that involves:
 - Creating graphs, charts, or visualizations
@@ -210,13 +225,18 @@ CRITICAL INSTRUCTION: You MUST generate chart suggestions for ANY request that i
 - Time-based analysis
 - Performance comparisons
 
-When suggesting new visualizations, use this EXACT format:
+When suggesting new visualizations, use this EXACT format (each field on ONE line, no extra blank lines):
 **CHART_SUGGESTION**
-Type: [chart_type]
-Title: [descriptive title]
-Columns: [column1, column2, ...]
-Description: [what this chart shows]
+Type: bar
+Title: Campaign Profitability - ROI
+Columns: Campaign, Sales, Spent
+Description: This bar chart shows the ROI percentage for each campaign.
 **END_SUGGESTION**
+
+IMPORTANT:
+- Put each field (Type, Title, Columns, Description) on a SINGLE line
+- Do NOT add blank lines between fields
+- Keep the format compact
 
 Available chart types: line, bar, pie, area, scatter, scorecard
 
@@ -261,10 +281,9 @@ Current conversation context: The user is asking about their uploaded dataset.`
     if (wantsStreaming) {
       // Streaming response
       const stream = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+        model: "gpt-4o-mini",
         messages,
-        temperature: 0.7,
-        max_tokens: 1500,
+        max_completion_tokens: 1500,
         stream: true
       })
 
@@ -298,10 +317,9 @@ Current conversation context: The user is asking about their uploaded dataset.`
     } else {
       // Non-streaming response (fallback)
       const completion = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+        model: "gpt-4o-mini",
         messages,
-        temperature: 0.7,
-        max_tokens: 1500,
+        max_completion_tokens: 1500,
         stream: false
       })
 

@@ -308,7 +308,18 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
       return []
     }
 
-    let processedData = data.slice(0, 1000) // Limit for performance
+    // CRITICAL FIX: For scorecards, we MUST use all data to ensure accurate aggregation
+    // The fullscreen view uses ALL filteredData for calculation details (see app/dashboard/page.tsx line 465-496)
+    // If we limit scorecard data here, the card value and calculation details will show different numbers
+    // For other chart types (line, bar, scatter, etc.), limit to 1000 rows for rendering performance
+    let processedData = type === 'scorecard' ? data : data.slice(0, 1000)
+
+    if (type === 'scorecard') {
+      console.log(`🔍 [SCORECARD_DATA_DEBUG] ${title} - Initial data:`, {
+        inputDataLength: data.length,
+        processedDataLength: processedData.length
+      })
+    }
 
     // Get effective data mapping
     const effectiveMapping = {
@@ -1143,53 +1154,31 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
           // Get aggregation type - check customization first, then dataMapping, default to 'sum'
           const aggregationType = customization?.aggregation || effectiveMapping?.aggregation || 'sum'
 
-          // Helper to parse currency and formatted numbers
-          const parseNumericValue = (val: any): number => {
-            if (typeof val === 'number') return val
-            if (typeof val !== 'string') return 0
-            // Remove currency symbols (€, $, £, ¥), commas, spaces, percentages
-            const cleaned = val.replace(/[€$£¥,\s%]/g, '')
-            const num = parseFloat(cleaned)
-            return isNaN(num) ? 0 : num
-          }
-
-          const values = chartData.map(row => {
-            const val = row[key]
-            return parseNumericValue(val)
-          }).filter(v => !isNaN(v) && v !== null)
-
-          // Calculate metric value based on aggregation type
           let metricValue = 0
-          if (values.length > 0) {
-            switch (aggregationType) {
-              case 'sum':
-                metricValue = values.reduce((a, b) => a + b, 0)
-                break
-              case 'avg':
-                metricValue = values.reduce((a, b) => a + b, 0) / values.length
-                break
-              case 'count':
-                metricValue = values.length
-                break
-              case 'min':
-                metricValue = Math.min(...values)
-                break
-              case 'max':
-                metricValue = Math.max(...values)
-                break
-              case 'distinct':
-                metricValue = new Set(values).size
-                break
-              case 'median':
-                const sorted = [...values].sort((a, b) => a - b)
-                const mid = Math.floor(sorted.length / 2)
-                metricValue = sorted.length % 2 === 0
-                  ? (sorted[mid - 1] + sorted[mid]) / 2
-                  : sorted[mid]
-                break
-              default:
-                metricValue = values.reduce((a, b) => a + b, 0)
-            }
+
+          // Check if this is formula-based scorecard that's already been processed
+          // Formula processing returns a single row with the calculated value
+          if (effectiveMapping.formula && effectiveMapping.formulaAlias && chartData.length === 1 && chartData[0]._calculationType === 'formula') {
+            // Data is already aggregated - use the value directly
+            const val = chartData[0][key]
+            metricValue = typeof val === 'number' ? val : 0
+          } else {
+            // For non-formula scorecards, use the shared calculation function
+            // This ensures consistency with the fullscreen calculation details
+            // CRITICAL: chartData now uses ALL data for scorecards (no 1000-row limit)
+            // This matches the fullscreen view which also uses ALL filteredData
+            const { calculateScorecardValue } = require('@/lib/utils/data-calculations')
+            const result = calculateScorecardValue(chartData, key, aggregationType as any)
+            metricValue = result || 0
+
+            // DEBUG: Log calculation details to identify discrepancies with fullscreen
+            console.log(`🔍 [CARD_CALC_DEBUG] ${title}:`, {
+              chartDataLength: chartData.length,
+              key,
+              aggregationType,
+              result: metricValue,
+              sampleValues: chartData.slice(0, 5).map(row => ({ [key]: row[key] }))
+            })
           }
 
           return (

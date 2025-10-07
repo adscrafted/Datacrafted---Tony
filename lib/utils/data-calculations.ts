@@ -100,6 +100,7 @@ export interface CalculationResult {
 
 /**
  * Parse numeric value from various formats (currency, percentages, etc.)
+ * Handles: $1,234.56, (€1,234.56), -$1,234.56, 50%, etc.
  */
 export function parseNumericValue(value: any): number | null {
   if (value === null || value === undefined) return null
@@ -110,8 +111,16 @@ export function parseNumericValue(value: any): number | null {
   }
   if (typeof value !== 'string') return null
 
+  let cleaned = String(value).trim()
+
+  // Handle parentheses for negative numbers (accounting format)
+  const isNegative = cleaned.startsWith('(') && cleaned.endsWith(')')
+  if (isNegative) {
+    cleaned = cleaned.slice(1, -1).trim() // Remove parentheses
+  }
+
   // Remove currency symbols, commas, spaces, percentages
-  const cleaned = String(value).replace(/[€$£¥,\s%]/g, '')
+  cleaned = cleaned.replace(/[€$£¥,\s%]/g, '')
   const num = parseFloat(cleaned)
 
   // Validate finite numbers only and add overflow protection
@@ -121,7 +130,7 @@ export function parseNumericValue(value: any): number | null {
   const MAX_SAFE_VALUE = 1e15
   if (Math.abs(num) > MAX_SAFE_VALUE) return null
 
-  return num
+  return isNegative ? -num : num
 }
 
 /**
@@ -874,5 +883,87 @@ export function calculateStatisticalSummary(
     median: DataCalculator.aggregate(data, { column, type: 'median' }) || 0,
     std: DataCalculator.aggregate(data, { column, type: 'std' }) || 0,
     variance: DataCalculator.aggregate(data, { column, type: 'variance' }) || 0
+  }
+}
+
+/**
+ * Calculate scorecard value with aggregation
+ * Shared function to ensure consistent calculations across dashboard and fullscreen views
+ * Handles dates, categorical data, and numeric values appropriately
+ */
+export function calculateScorecardValue(
+  data: DataRow[],
+  metric: string,
+  aggregationType: AggregationType = 'sum'
+): number | null {
+  if (!data || data.length === 0) return null
+  if (!metric) return null
+
+  // Get raw values (before parsing)
+  const rawValues = data.map(row => row[metric]).filter(v => v !== null && v !== undefined)
+  if (rawValues.length === 0) return null
+
+  // Check if this is a date column
+  const sampleValue = rawValues[0]
+  const isDateColumn = typeof sampleValue === 'string' && !isNaN(Date.parse(sampleValue))
+
+  // Handle date min/max specially
+  if (isDateColumn && (aggregationType === 'min' || aggregationType === 'max')) {
+    const dates = rawValues
+      .map(val => {
+        const dateVal = new Date(String(val))
+        return isNaN(dateVal.getTime()) ? null : dateVal.getTime()
+      })
+      .filter((v): v is number => v !== null)
+
+    if (dates.length === 0) return null
+    return aggregationType === 'min' ? Math.min(...dates) : Math.max(...dates)
+  }
+
+  // Handle distinct count - use raw values for categorical data
+  if (aggregationType === 'distinct') {
+    return new Set(rawValues).size
+  }
+
+  // For all other aggregations, parse as numeric
+  const values = rawValues
+    .map(v => parseNumericValue(v))
+    .filter((v): v is number => v !== null)
+
+  if (values.length === 0) return null
+
+  // Apply the aggregation type
+  switch (aggregationType) {
+    case 'sum':
+      return values.reduce((sum, v) => sum + v, 0)
+
+    case 'avg':
+      return values.reduce((sum, v) => sum + v, 0) / values.length
+
+    case 'count':
+      return values.length
+
+    case 'min':
+      return Math.min(...values)
+
+    case 'max':
+      return Math.max(...values)
+
+    case 'median': {
+      const sorted = [...values].sort((a, b) => a - b)
+      const mid = Math.floor(sorted.length / 2)
+      return sorted.length % 2 === 0
+        ? (sorted[mid - 1] + sorted[mid]) / 2
+        : sorted[mid]
+    }
+
+    case 'first':
+      return values[0]
+
+    case 'last':
+      return values[values.length - 1]
+
+    default:
+      return values.reduce((sum, v) => sum + v, 0) // Default to sum
   }
 }

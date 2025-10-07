@@ -145,6 +145,133 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     }
   }, [currentProjectId, loadDashboardConfig, updateChartCustomization])
 
+  // Auto-reset layout on initial load if charts don't have positions
+  const hasRunInitialLayout = useRef(false)
+  const lastAnalysisId = useRef<string | null>(null)
+
+  useEffect(() => {
+    // Reset the flag when analysis changes (new data upload)
+    const currentAnalysisId = analysis?.chartConfig?.map(c => c.id || c.title).join(',') || ''
+    if (currentAnalysisId !== lastAnalysisId.current) {
+      hasRunInitialLayout.current = false
+      lastAnalysisId.current = currentAnalysisId
+    }
+
+    // Only run once per analysis load
+    if (hasRunInitialLayout.current) return
+    if (!analysis?.chartConfig || analysis.chartConfig.length === 0) return
+
+    // Small delay to ensure component is fully mounted
+    const timer = setTimeout(() => {
+      // Check if any charts are missing positions
+      const chartsNeedPositions = analysis.chartConfig.some(config => {
+        const chartId = config.id || `chart-${analysis.chartConfig.indexOf(config)}`
+        const customization = chartCustomizations[chartId]
+        return !customization?.position
+      })
+
+      console.log('🔄 [AUTO_LAYOUT] Checking if layout reset needed:', {
+        chartsNeedPositions,
+        totalCharts: analysis.chartConfig.length,
+        customizationsCount: Object.keys(chartCustomizations).length
+      })
+
+      if (chartsNeedPositions) {
+        console.log('🔄 [AUTO_LAYOUT] Running initial layout reset for charts without positions')
+        hasRunInitialLayout.current = true
+
+      // Helper to get dimensions (inlined to avoid dependency issues)
+      const getDimensions = (config: any) => {
+        switch (config.type) {
+          case 'scorecard':
+            return { w: 2, h: 1 }
+          case 'table':
+            return { w: 12, h: 6 }
+          case 'pie':
+            return { w: 4, h: 4 }
+          case 'bar':
+          case 'line':
+          case 'area':
+          case 'scatter':
+          case 'combo':
+          case 'waterfall':
+          case 'funnel':
+            return { w: 6, h: 4 }
+          default:
+            return { w: 6, h: 4 }
+        }
+      }
+
+      // Run the same logic as the Reset Layout button
+      const scorecards: Array<{ config: any, chartId: string }> = []
+      const otherCharts: Array<{ config: any, chartId: string }> = []
+
+      analysis.chartConfig.forEach(config => {
+        const originalIndex = analysis.chartConfig.indexOf(config)
+        const chartId = config.id || `chart-${originalIndex}`
+
+        if (config.type === 'scorecard') {
+          scorecards.push({ config, chartId })
+        } else {
+          otherCharts.push({ config, chartId })
+        }
+      })
+
+      let currentX = 0
+      let currentY = 0
+      const SCORECARD_WIDTH = 2
+      const GRID_COLS = 12
+
+      // Place scorecards at top
+      scorecards.forEach(({ config, chartId }) => {
+        if (currentX + SCORECARD_WIDTH > GRID_COLS) {
+          currentX = 0
+          currentY += 1
+        }
+
+        updateChartCustomization(chartId, {
+          position: {
+            x: currentX,
+            y: currentY,
+            w: SCORECARD_WIDTH,
+            h: 1
+          }
+        })
+
+        currentX += SCORECARD_WIDTH
+      })
+
+      // Place other charts with 2-per-row layout
+      currentX = 0
+      currentY = scorecards.length > 0 ? Math.ceil(scorecards.length * SCORECARD_WIDTH / GRID_COLS) : 0
+
+      otherCharts.forEach(({ config, chartId }) => {
+        const dims = getDimensions(config)
+
+        if (currentX + dims.w > GRID_COLS) {
+          currentX = 0
+          currentY += dims.h
+        }
+
+        updateChartCustomization(chartId, {
+          position: {
+            x: currentX,
+            y: currentY,
+            w: dims.w,
+            h: dims.h
+          }
+        })
+
+        currentX += dims.w
+      })
+
+        setLayoutKey(prev => prev + 1)
+      }
+    }, 100) // Small delay to ensure everything is ready
+
+    return () => clearTimeout(timer)
+  }, [analysis?.chartConfig, chartCustomizations, updateChartCustomization])
+
   // Filter out invalid charts before rendering
   const validCharts = useMemo(() => {
     console.log('🔍 [FLEXIBLE_DASHBOARD] Filtering charts:', {

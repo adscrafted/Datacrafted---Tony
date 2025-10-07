@@ -109,27 +109,51 @@ export function parseStreamingResponse(
   readChunk()
 }
 
+// Utility function to remove chart suggestion blocks from message content
+export function stripChartSuggestions(message: string): string {
+  // Remove all **CHART_SUGGESTION** ... **END_SUGGESTION** blocks
+  return message.replace(/\*\*CHART_SUGGESTION\*\*[\s\S]*?\*\*END_SUGGESTION\*\*/gi, '').trim()
+}
+
 // Utility function to detect if a message contains chart suggestions
 export function extractChartSuggestions(message: string): ChartSuggestion[] {
   const suggestions: ChartSuggestion[] = []
 
-  // First, look for the new structured format
-  const structuredRegex = /\*\*CHART_SUGGESTION\*\*[\s\S]*?Type:\s*(\w+)[\s\S]*?Title:\s*(.+?)[\s\S]*?Columns:\s*(.+?)[\s\S]*?Description:\s*(.+?)[\s\S]*?\*\*END_SUGGESTION\*\*/g
-  
-  let match
-  while ((match = structuredRegex.exec(message)) !== null) {
-    const [_, type, title, columns, description] = match
-    const columnList = columns.split(',').map(c => c.trim()).filter(c => c.length > 0)
-    
-    // Validate the extracted data
-    if (type && title && title.trim().length > 1 && columnList.length > 0) {
-      suggestions.push({
-        type: type.toLowerCase() as any,
-        title: title.trim(),
-        dataKey: columnList,
-        description: description?.trim() || `${type} chart visualization`,
-        reason: 'AI suggested this visualization based on your request'
-      })
+  // First, look for the new structured format (handles various spacing and newlines)
+  // This regex is more flexible to handle different formatting from the AI
+  const chartSuggestionBlocks = message.match(/\*\*CHART_SUGGESTION\*\*[\s\S]*?\*\*END_SUGGESTION\*\*/gi)
+
+  if (chartSuggestionBlocks) {
+    for (const block of chartSuggestionBlocks) {
+      // Extract each field individually with flexible matching
+      const typeMatch = block.match(/Type:\s*(\w+)/i)
+      const titleMatch = block.match(/Title:\s*([^\n]+)/i)
+      const columnsMatch = block.match(/Columns:\s*([^\n]+)/i)
+      const descriptionMatch = block.match(/Description:\s*([^\n*]+(?:\n(?!\*\*END)[^\n*]+)*)/i)
+
+      if (typeMatch && titleMatch && columnsMatch) {
+        const type = typeMatch[1].toLowerCase().trim()
+        const title = titleMatch[1].trim()
+        const columnsText = columnsMatch[1].trim()
+        const description = descriptionMatch ? descriptionMatch[1].trim() : `${type} chart visualization`
+
+        // Parse column list (handle various formats)
+        const columnList = columnsText
+          .split(',')
+          .map(c => c.trim())
+          .filter(c => c.length > 0 && !c.toLowerCase().includes('roi')) // Skip calculated fields like ROI
+
+        // Validate the extracted data
+        if (type && title.length > 1 && columnList.length > 0) {
+          suggestions.push({
+            type: type as any,
+            title: title,
+            dataKey: columnList,
+            description: description,
+            reason: 'AI suggested this visualization based on your request'
+          })
+        }
+      }
     }
   }
   

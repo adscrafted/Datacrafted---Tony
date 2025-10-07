@@ -1,5 +1,6 @@
 import { ChartConfig } from '@/lib/types/chart-types'
 import { DataRow } from '@/lib/store'
+import { parseNumericValue } from './data-calculations'
 
 interface ChartValidationResult {
   isValid: boolean
@@ -103,19 +104,6 @@ export function validateChartConfig(config: ChartConfig): ChartValidationResult 
   return { isValid: true }
 }
 
-/**
- * Parses numeric values including currency-formatted strings
- * Handles: € 0, € 50.00, $1,234.56, £100, ¥1000, 50%, etc.
- */
-function parseNumericValue(value: any): number | null {
-  if (typeof value === 'number') return value
-  if (typeof value !== 'string') return null
-
-  // Remove currency symbols, commas, spaces, and percentages
-  const cleaned = value.replace(/[€$£¥,\s%]/g, '')
-  const num = parseFloat(cleaned)
-  return isNaN(num) ? null : num
-}
 
 /**
  * Validates if a chart has meaningful data to display

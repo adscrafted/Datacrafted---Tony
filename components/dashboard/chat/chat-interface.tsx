@@ -197,7 +197,9 @@ export const ChatInterface = React.memo(function ChatInterface() {
                       const parsed = JSON.parse(data)
                       if (parsed.content) {
                         accumulatedContent += parsed.content
-                        setStreamingMessage(accumulatedContent)
+                        // Strip chart suggestions from the displayed streaming message
+                        const strippedContent = stripChartSuggestions(accumulatedContent)
+                        setStreamingMessage(strippedContent)
                       }
                     } catch (e) {
                       // Ignore parsing errors for individual chunks

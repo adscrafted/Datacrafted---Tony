@@ -1647,6 +1647,13 @@ export const useDataStore = create<DataStore>()(
         const state = get()
         const { rawData, dashboardFilters, dateRange, granularity, selectedDateColumn } = state
 
+        console.log('🔍 [Store.getFilteredData] Starting with:', {
+          rawDataLength: rawData?.length || 0,
+          hasDateRange: !!(dateRange?.from || dateRange?.to),
+          granularity,
+          selectedDateColumn
+        })
+
         // Quick return for empty data
         if (!rawData || rawData.length === 0) return []
 
@@ -1764,7 +1771,15 @@ export const useDataStore = create<DataStore>()(
           })
         }
 
-        // Apply granularity aggregation if there are date columns
+        // CRITICAL FIX: Only apply granularity aggregation when a date range filter is active
+        // Rationale:
+        // 1. Granularity aggregation groups data by time periods (day/week/month/etc)
+        // 2. This reduces row count, which breaks scorecard calculations that need ALL data
+        // 3. When no date filter is active, users expect to see calculations on ALL raw data
+        // 4. Aggregation is only meaningful when viewing a specific time window
+        // 5. Example: 46 raw rows aggregated by month becomes 36 rows, causing scorecard miscalculations
+        const shouldApplyGranularityAggregation = dateRange?.from || dateRange?.to
+
         const dateColumns = filteredData.length > 0 ? Object.keys(filteredData[0]).filter(key => {
           const value = filteredData[0][key]
           if (!value) return false
@@ -1796,8 +1811,19 @@ export const useDataStore = create<DataStore>()(
           return false
         }) : []
 
-        if (dateColumns.length > 0) {
+        if (dateColumns.length > 0 && shouldApplyGranularityAggregation) {
+          console.log('📊 [Store.getFilteredData] Applying granularity aggregation:', {
+            granularity,
+            dateColumn: dateColumns[0],
+            beforeAggregation: filteredData.length
+          })
+
           filteredData = aggregateDataByGranularity(filteredData, granularity, dateColumns[0])
+
+          console.log('📊 [Store.getFilteredData] After granularity aggregation:', {
+            afterAggregation: filteredData.length,
+            rowsReduced: filteredData.length
+          })
 
           // Ensure data is always sorted chronologically by date (critical for time-series charts)
           filteredData = filteredData.sort((a, b) => {
@@ -1809,7 +1835,17 @@ export const useDataStore = create<DataStore>()(
 
             return dateA.getTime() - dateB.getTime()
           })
+        } else if (dateColumns.length > 0 && !shouldApplyGranularityAggregation) {
+          console.log('📊 [Store.getFilteredData] Skipping granularity aggregation (no date filter active):', {
+            dataLength: filteredData.length,
+            message: 'Using all raw data for accurate calculations'
+          })
         }
+
+        console.log('✅ [Store.getFilteredData] Returning filtered data:', {
+          finalLength: filteredData.length,
+          aggregationWasApplied: shouldApplyGranularityAggregation
+        })
 
         return filteredData
       },

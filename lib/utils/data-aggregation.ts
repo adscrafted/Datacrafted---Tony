@@ -1,12 +1,13 @@
 import { DataRow } from '@/lib/store'
-import { 
-  startOfDay, 
-  startOfWeek, 
-  startOfMonth, 
-  startOfQuarter, 
+import {
+  startOfDay,
+  startOfWeek,
+  startOfMonth,
+  startOfQuarter,
   startOfYear,
-  format 
+  format
 } from 'date-fns'
+import { parseNumericValue } from './data-calculations'
 
 export type Granularity = 'day' | 'week' | 'month' | 'quarter' | 'year'
 
@@ -137,20 +138,6 @@ export function aggregateDataByGranularity(
 }
 
 export type AggregationMethod = 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct'
-
-/**
- * Parses numeric values including currency-formatted strings
- * Handles: € 0, € 50.00, $1,234.56, £100, ¥1000, 50%, etc.
- */
-function parseNumericValue(value: any): number | null {
-  if (typeof value === 'number') return value
-  if (typeof value !== 'string') return null
-
-  // Remove currency symbols, commas, spaces, and percentages
-  const cleaned = value.replace(/[€$£¥,\s%]/g, '')
-  const num = parseFloat(cleaned)
-  return isNaN(num) ? null : num
-}
 
 /**
  * Aggregates chart data by grouping on X-axis and aggregating Y-axis values

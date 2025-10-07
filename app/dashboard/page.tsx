@@ -452,55 +452,73 @@ function DashboardContent() {
                 // Calculate the values used in the scorecard
                 const customization = (fullScreenChart as any).customization
                 const dataMapping = fullScreenChart.dataMapping
-                const aggregationType = (customization?.aggregation || dataMapping?.aggregation || 'sum') as AggregationType
-                const metric = dataMapping?.formulaAlias || dataMapping?.metric || fullScreenChart.dataKey?.[0] || 'value'
 
-                // Helper to parse currency and formatted numbers
-                const parseNumericValue = (val: any): number => {
-                  if (typeof val === 'number') return val
-                  if (typeof val !== 'string') return 0
-                  const cleaned = String(val).replace(/[€$£¥,\s%]/g, '')
-                  const num = parseFloat(cleaned)
-                  return isNaN(num) ? 0 : num
+                // Get effective data mapping (merge config and customization)
+                const effectiveMapping = {
+                  ...dataMapping,
+                  ...customization?.dataMapping
                 }
 
-                // Extract numeric values from the data
-                const values = filteredData
-                  .map(row => parseNumericValue(row[metric]))
-                  .filter(v => !isNaN(v) && v !== null && v !== undefined)
+                const aggregationType = (customization?.aggregation || effectiveMapping?.aggregation || 'sum') as AggregationType
 
-                // Calculate the result based on aggregation type
-                let result = 0
-                if (values.length > 0) {
-                  switch (aggregationType) {
-                    case 'sum':
-                      result = values.reduce((a, b) => a + b, 0)
-                      break
-                    case 'avg':
-                      result = values.reduce((a, b) => a + b, 0) / values.length
-                      break
-                    case 'count':
-                      result = values.length
-                      break
-                    case 'min':
-                      result = Math.min(...values)
-                      break
-                    case 'max':
-                      result = Math.max(...values)
-                      break
-                    case 'distinct':
-                      result = new Set(values).size
-                      break
-                    case 'median':
-                      const sorted = [...values].sort((a, b) => a - b)
-                      const mid = Math.floor(sorted.length / 2)
-                      result = sorted.length % 2 === 0
-                        ? (sorted[mid - 1] + sorted[mid]) / 2
-                        : sorted[mid]
-                      break
-                    default:
-                      result = values.reduce((a, b) => a + b, 0)
+                // Process formula-based scorecards using the chart data processor (same as dashboard view)
+                let processedData = filteredData
+                if (effectiveMapping.formula && effectiveMapping.formulaAlias) {
+                  try {
+                    const { processChartData } = require('@/lib/utils/chart-data-processor')
+                    const processed = processChartData(filteredData, 'scorecard', effectiveMapping)
+                    processedData = processed.data
+                    console.log(`📊 [FULLSCREEN_FORMULA_DEBUG] ${fullScreenChart.title}:`, {
+                      formula: effectiveMapping.formula,
+                      formulaAlias: effectiveMapping.formulaAlias,
+                      result: processedData[0],
+                      metadata: processed.metadata
+                    })
+                  } catch (error) {
+                    console.error(`❌ [FULLSCREEN_FORMULA_ERROR] ${fullScreenChart.title}:`, error)
                   }
+                }
+
+                const metric = effectiveMapping?.formulaAlias || effectiveMapping?.metric || fullScreenChart.dataKey?.[0] || 'value'
+
+                // Calculate the result - check if formula-based scorecard is already aggregated
+                let result = 0
+                let values: number[] = []
+
+                // Check if this is formula-based scorecard that's already been processed
+                // Formula processing returns a single row with the calculated value
+                if (effectiveMapping.formula && effectiveMapping.formulaAlias && processedData.length === 1 && (processedData[0] as any)._calculationType === 'formula') {
+                  // Data is already aggregated - use the value directly
+                  const val = processedData[0][metric]
+                  result = typeof val === 'number' ? val : 0
+                  values = [result] // For display purposes
+                } else {
+                  // For non-formula scorecards, use the shared calculation function
+                  // This ensures consistency with the card view
+                  const { calculateScorecardValue } = require('@/lib/utils/data-calculations')
+                  result = calculateScorecardValue(processedData, metric, aggregationType) || 0
+
+                  // DEBUG: Log calculation details to compare with card calculation
+                  console.log(`🔍 [FULLSCREEN_CALC_DEBUG] ${fullScreenChart.title}:`, {
+                    processedDataLength: processedData.length,
+                    metric,
+                    aggregationType,
+                    result,
+                    sampleValues: processedData.slice(0, 5).map(row => ({ [metric]: row[metric] }))
+                  })
+
+                  // Extract values for display in calculation details
+                  const parseNumericValue = (val: any): number => {
+                    if (typeof val === 'number') return val
+                    if (typeof val !== 'string') return 0
+                    const cleaned = String(val).replace(/[€$£¥,\s%]/g, '')
+                    const num = parseFloat(cleaned)
+                    return isNaN(num) ? 0 : num
+                  }
+
+                  values = processedData
+                    .map(row => parseNumericValue(row[metric]))
+                    .filter(v => !isNaN(v) && v !== null && v !== undefined)
                 }
 
                 return (

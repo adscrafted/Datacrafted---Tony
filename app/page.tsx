@@ -111,13 +111,13 @@ export default function Home() {
       <div className="relative z-10 text-center px-4 w-full max-w-6xl mx-auto">
         {/* Logo */}
         <div className="mb-12">
-          <h1 className="text-2xl font-semibold tracking-tight text-[#1f1f1f]" style={{ fontFamily: "'Google Sans', var(--font-google-sans), system-ui, -apple-system, sans-serif" }}>
+          <h1 className="text-2xl font-semibold tracking-tight text-[#1f1f1f]" style={{ fontFamily: "'Google Sans Text', Helvetica, Arial, sans-serif" }}>
             DataCrafted
           </h1>
         </div>
 
         {/* Hero text with typing animation */}
-        <h2 className="text-6xl md:text-7xl lg:text-8xl font-bold mb-8 min-h-[240px] flex flex-col items-center justify-center text-center tracking-tight leading-[1.1]" style={{ fontFamily: "'Google Sans', var(--font-google-sans), system-ui, -apple-system, sans-serif" }}>
+        <h2 className="text-6xl md:text-7xl lg:text-8xl font-bold mb-8 min-h-[240px] flex flex-col items-center justify-center text-center tracking-tight leading-[1.1]" style={{ fontFamily: "'Google Sans Text', Helvetica, Arial, sans-serif" }}>
           {typedText.split('\n').map((line, i) => (
             <span key={i}>
               {i === 0 ? (
@@ -143,7 +143,7 @@ export default function Home() {
         </h2>
 
         {/* Subtitle - appears after typing is complete */}
-        <p className={`text-sm md:text-base text-[#5f6368] mb-16 max-w-2xl mx-auto transition-opacity duration-1000 ${isTypingComplete ? 'opacity-100' : 'opacity-0'}`} style={{ fontFamily: "'Google Sans Text', var(--font-google-sans), system-ui, -apple-system, sans-serif", lineHeight: '1.5' }}>
+        <p className={`text-sm md:text-base text-[#5f6368] mb-16 max-w-2xl mx-auto transition-opacity duration-1000 ${isTypingComplete ? 'opacity-100' : 'opacity-0'}`} style={{ fontFamily: "Helvetica, Arial, sans-serif", lineHeight: '1.5' }}>
           Data transfer. Data storage. Business intelligence. Zero learning curve.
         </p>
 
