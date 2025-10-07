@@ -13,7 +13,7 @@ interface ScorecardProps {
   trendLabel?: string
   icon?: React.ReactNode
   className?: string
-  aggregationType?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct'
+  aggregationType?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct' | 'median' | 'mode' | 'std' | 'variance' | 'percentile'
 }
 
 export function Scorecard({
@@ -35,7 +35,12 @@ export function Scorecard({
       count: 'COUNT',
       min: 'MIN',
       max: 'MAX',
-      distinct: 'UNIQUE'
+      distinct: 'UNIQUE',
+      median: 'MEDIAN',
+      mode: 'MODE',
+      std: 'STD DEV',
+      variance: 'VARIANCE',
+      percentile: 'PERCENTILE'
     }
 
     return labels[aggregationType] || aggregationType.toUpperCase()
@@ -50,7 +55,12 @@ export function Scorecard({
       count: 'bg-green-100 text-green-700',
       min: 'bg-orange-100 text-orange-700',
       max: 'bg-red-100 text-red-700',
-      distinct: 'bg-teal-100 text-teal-700'
+      distinct: 'bg-teal-100 text-teal-700',
+      median: 'bg-indigo-100 text-indigo-700',
+      mode: 'bg-pink-100 text-pink-700',
+      std: 'bg-cyan-100 text-cyan-700',
+      variance: 'bg-amber-100 text-amber-700',
+      percentile: 'bg-lime-100 text-lime-700'
     }
 
     return colors[aggregationType] || 'bg-gray-100 text-gray-700'
@@ -58,40 +68,14 @@ export function Scorecard({
 
   const formatValue = (val: string | number) => {
     if (typeof val === 'number') {
-      // Count aggregation - always show whole numbers
-      if (aggregationType === 'count' || aggregationType === 'distinct') {
-        return Math.round(val).toLocaleString()
-      }
-
-      // Average aggregation - show more precision
-      if (aggregationType === 'avg') {
-        if (val >= 1000000) {
-          return `${(val / 1000000).toFixed(2)}M`
-        } else if (val >= 1000) {
-          return `${(val / 1000).toFixed(2)}K`
-        } else if (Math.abs(val) < 1) {
-          return val.toFixed(3)
-        }
-        return val.toFixed(2)
-      }
-
-      // For sum, min, max - standard formatting
+      // All values show 1 decimal place
       if (val >= 1000000) {
         return `${(val / 1000000).toFixed(1)}M`
-      } else if (val >= 10000) {
-        return `${(val / 1000).toFixed(1)}K`
       } else if (val >= 1000) {
-        return `${(val / 1000).toFixed(2)}K`
+        return `${(val / 1000).toFixed(1)}K`
       }
-      // Format decimals
-      if (val % 1 !== 0) {
-        // Check if it's a very small decimal
-        if (Math.abs(val) < 1) {
-          return val.toFixed(3)
-        }
-        return val.toFixed(1)
-      }
-      return val.toLocaleString()
+      // Always show 1 decimal place for values under 1000
+      return val.toFixed(1)
     }
     return val
   }
@@ -113,18 +97,6 @@ export function Scorecard({
       <div className="text-5xl font-bold text-gray-900 tabular-nums">
         {formatValue(value)}
       </div>
-
-      {/* Aggregation badge */}
-      {aggregationType && (
-        <div className="mt-4">
-          <span className={cn(
-            "text-xs font-semibold px-2 py-1 rounded-md",
-            getAggregationColor()
-          )}>
-            {getAggregationLabel()}
-          </span>
-        </div>
-      )}
     </div>
   )
 }

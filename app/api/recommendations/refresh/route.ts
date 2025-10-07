@@ -8,6 +8,7 @@ import {
   EnhancedAnalysisResult
 } from '@/lib/types/recommendation'
 import { analyzeDataSchema } from '@/lib/utils/schema-analyzer'
+import { parseJSONFromString } from '@/lib/utils/json-extractor'
 
 // Rate limiting (shared with analyze endpoint)
 const requestCounts = new Map<string, { count: number; resetTime: number }>()
@@ -483,9 +484,12 @@ export async function POST(request: NextRequest) {
       throw new Error('No response from OpenAI')
     }
 
-    // Parse OpenAI response
+    // Parse OpenAI response using robust JSON extraction
     console.log('🔵 [API-REFRESH] Parsing OpenAI response...')
-    const aiAnalysis = JSON.parse(response)
+    const aiAnalysis = parseJSONFromString<{
+      recommendations: ChartRecommendation[]
+      dataContext?: DataContext
+    }>(response)
 
     // Validate response structure
     if (!aiAnalysis.recommendations || !Array.isArray(aiAnalysis.recommendations)) {

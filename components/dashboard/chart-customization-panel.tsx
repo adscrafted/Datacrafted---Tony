@@ -764,7 +764,7 @@ export function ChartCustomizationPanel({
                                       dataMapping: {
                                         ...customization?.dataMapping,
                                         yAxis: newYAxis,
-                                        values: newYAxis  // Also set values for consistency with AI format
+                                        values: Array.isArray(newYAxis) ? newYAxis : [newYAxis]  // Ensure values is always an array
                                       }
                                     })
                                   }
@@ -807,7 +807,7 @@ export function ChartCustomizationPanel({
                                               dataMapping: {
                                                 ...customization?.dataMapping,
                                                 yAxis: newYAxis,
-                                                values: newYAxis
+                                                values: Array.isArray(newYAxis) ? newYAxis : (newYAxis ? [newYAxis] : undefined)
                                               }
                                             })
                                           }}

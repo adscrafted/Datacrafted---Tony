@@ -347,13 +347,41 @@ export const MinimalChartWrapper = React.memo<MinimalChartWrapperProps>(function
             return typeof val === 'number' ? val : parseFloat(String(val)) || 0
           }).filter(v => !isNaN(v))
 
-          const metricValue = values.length > 0 ? values.reduce((a, b) => a + b, 0) : 0
+          // Apply aggregation based on dataMapping
+          const aggregation = dataMapping?.aggregation || 'sum'
+          let metricValue = 0
+
+          if (values.length > 0) {
+            switch (aggregation) {
+              case 'sum':
+                metricValue = values.reduce((a, b) => a + b, 0)
+                break
+              case 'avg':
+                metricValue = values.reduce((a, b) => a + b, 0) / values.length
+                break
+              case 'count':
+                metricValue = values.length
+                break
+              case 'min':
+                metricValue = Math.min(...values)
+                break
+              case 'max':
+                metricValue = Math.max(...values)
+                break
+              case 'distinct':
+                metricValue = new Set(values).size
+                break
+              default:
+                metricValue = values.reduce((a, b) => a + b, 0)
+            }
+          }
 
           return (
             <Scorecard
               title={title}
               value={metricValue}
               unit=""
+              aggregationType={aggregation}
             />
           )
         }

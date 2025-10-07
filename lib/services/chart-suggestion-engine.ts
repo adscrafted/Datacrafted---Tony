@@ -295,7 +295,7 @@ export class ChartSuggestionEngine {
       aggregations.forEach(agg => {
         const values = groupData.map(row => Number(row[agg.column])).filter(v => !isNaN(v))
         const key = agg.alias || `${agg.function}_${agg.column}`
-        
+
         switch (agg.function) {
           case 'sum':
             result[key] = values.reduce((a, b) => a + b, 0)
@@ -314,6 +314,40 @@ export class ChartSuggestionEngine {
             break
           case 'count_distinct':
             result[key] = new Set(values).size
+            break
+          case 'median':
+            const sorted = [...values].sort((a, b) => a - b)
+            const mid = Math.floor(sorted.length / 2)
+            result[key] = sorted.length % 2 === 0
+              ? (sorted[mid - 1] + sorted[mid]) / 2
+              : sorted[mid]
+            break
+          case 'mode':
+            const freq = new Map<number, number>()
+            values.forEach(v => freq.set(v, (freq.get(v) || 0) + 1))
+            let maxFreq = 0, mode = values[0]
+            freq.forEach((f, v) => {
+              if (f > maxFreq) { maxFreq = f; mode = v }
+            })
+            result[key] = mode
+            break
+          case 'std':
+            const mean = values.reduce((a, b) => a + b, 0) / values.length
+            const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length
+            result[key] = Math.sqrt(variance)
+            break
+          case 'variance':
+            const avg = values.reduce((a, b) => a + b, 0) / values.length
+            result[key] = values.reduce((sum, v) => sum + Math.pow(v - avg, 2), 0) / values.length
+            break
+          case 'percentile':
+            const p = agg.percentile || 50
+            const sortedValues = [...values].sort((a, b) => a - b)
+            const index = (p / 100) * (sortedValues.length - 1)
+            const lower = Math.floor(index)
+            const upper = Math.ceil(index)
+            const weight = index % 1
+            result[key] = lower === upper ? sortedValues[lower] : sortedValues[lower] * (1 - weight) + sortedValues[upper] * weight
             break
         }
       })

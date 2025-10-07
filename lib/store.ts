@@ -68,7 +68,7 @@ export interface ChartCustomization {
   stacked?: boolean
   percentageStack?: boolean  // For 100% stacked mode
   dataColumns?: string[]
-  aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct'
+  aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct' | 'median' | 'mode' | 'std' | 'variance' | 'percentile'
   // Data mapping for custom column selection
   dataMapping?: {
     xAxis?: string
@@ -89,8 +89,20 @@ export interface ChartCustomization {
     sortBy?: string // For bar charts - sorting column
     sortOrder?: 'asc' | 'desc' // For bar charts - sorting order
     limit?: number // For bar charts - Top/Bottom X
-    aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct' // Aggregation method
+    aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct' | 'median' | 'mode' | 'std' | 'variance' | 'percentile' // Aggregation method
+    percentile?: number // For percentile aggregation (0-100)
     columns?: string[] // For table charts - columns to display
+    // Calculation options
+    groupBy?: string[] // Columns to group by for aggregation
+    derivedMetrics?: Array<{
+      type: 'ratio' | 'percentage' | 'difference' | 'growth_rate' | 'percent_change' | 'running_total' | 'moving_average' | 'period_over_period' | 'year_over_year'
+      alias: string
+      column?: string
+      numerator?: string
+      denominator?: string
+      window?: number
+      periods?: number
+    }>
     // New chart types
     stage?: string // For funnel charts
     xCategory?: string // For heatmap charts
@@ -206,6 +218,8 @@ export interface AnalysisResult {
     xAxis?: string | string[]
     yAxis?: string | string[]
     aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct'
+    // Customization settings
+    customization?: any
     // Quality metrics
     confidence?: number
     reasoning?: string
@@ -284,6 +298,7 @@ interface DataStore {
   usingAI: boolean
   dateRange: DateRange | undefined
   granularity: 'day' | 'week' | 'month' | 'quarter' | 'year'
+  selectedDateColumn: string | null // Which date column to filter by
   selectedChartId: string | null
   showChartSettings: boolean
 
@@ -367,6 +382,7 @@ interface DataStore {
   setUsingAI: (usingAI: boolean) => void
   setDateRange: (range: DateRange | undefined) => void
   setGranularity: (granularity: 'day' | 'week' | 'month' | 'quarter' | 'year') => void
+  setSelectedDateColumn: (column: string | null) => void
   setSelectedChartId: (chartId: string | null) => void
   setShowChartSettings: (show: boolean) => void
   
@@ -722,6 +738,7 @@ export const useDataStore = create<DataStore>()(
       usingAI: false,
       dateRange: undefined,
       granularity: 'day',
+      selectedDateColumn: null,
       selectedChartId: null,
       showChartSettings: false,
       
@@ -995,12 +1012,9 @@ export const useDataStore = create<DataStore>()(
         })
         console.log('📦 [STORE] ===== END STORING =====')
 
+        // Preserve chartCustomizations - don't clear user positions/settings
         set({
-          analysis,
-          // CRITICAL FIX: Clear chart customizations when analysis updates
-          // to force recalculation of positions and prevent misalignment
-          // when chart order changes (e.g., after "Push to AI")
-          chartCustomizations: {}
+          analysis
         })
         // Extract data context if available from enhanced analysis
         if (analysis && typeof analysis === 'object' && 'dataContext' in analysis && analysis.dataContext) {
@@ -1016,8 +1030,25 @@ export const useDataStore = create<DataStore>()(
       setError: (error) => set({ error }),
       setAnalysisProgress: (progress) => set({ analysisProgress: progress }),
       setUsingAI: (usingAI) => set({ usingAI }),
-      setDateRange: (range) => set({ dateRange: range }),
-      setGranularity: (granularity) => set({ granularity }),
+      setDateRange: (range) => {
+        console.log('📅 [Store.setDateRange] Setting date range:', {
+          from: range?.from,
+          to: range?.to,
+          fromTime: range?.from?.getTime(),
+          toTime: range?.to?.getTime(),
+          timestamp: new Date().toISOString()
+        })
+        set({ dateRange: range })
+        console.log('✅ [Store.setDateRange] Date range updated in store')
+      },
+      setGranularity: (granularity) => {
+        console.log('📊 [Store.setGranularity] Setting granularity:', granularity)
+        set({ granularity })
+      },
+      setSelectedDateColumn: (column) => {
+        console.log('📌 [Store.setSelectedDateColumn] Setting selected date column:', column)
+        set({ selectedDateColumn: column })
+      },
       setSelectedChartId: (chartId) => set({ selectedChartId: chartId }),
       setShowChartSettings: (show) => set({ showChartSettings: show }),
       
@@ -1597,7 +1628,7 @@ export const useDataStore = create<DataStore>()(
       // PERFORMANCE OPTIMIZATION: Memoized filtered data getter
       getFilteredData: () => {
         const state = get()
-        const { rawData, dashboardFilters, dateRange, granularity } = state
+        const { rawData, dashboardFilters, dateRange, granularity, selectedDateColumn } = state
 
         // Quick return for empty data
         if (!rawData || rawData.length === 0) return []
@@ -1606,27 +1637,83 @@ export const useDataStore = create<DataStore>()(
 
         // Apply date range filter if set
         if (dateRange?.from || dateRange?.to) {
-          // Find date columns
+          // Find date columns using STRICT detection (same logic as date-range-selector)
           const dateColumns = rawData.length > 0 ? Object.keys(rawData[0]).filter(key => {
             const value = rawData[0][key]
             if (!value) return false
-            const datePattern = /\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}|\d{4}\/\d{2}\/\d{2}/
-            if (typeof value === 'string' && datePattern.test(value)) return true
+
+            // Check if it's a Date object first (most reliable)
             if (value instanceof Date) return true
-            if (!isNaN(Date.parse(String(value)))) return true
+
+            // For strings, use strict date pattern matching
+            if (typeof value === 'string') {
+              // Strict patterns for common date formats
+              const strictDatePattern = /^\d{4}-\d{2}-\d{2}(T|\s|$)|^\d{2}\/\d{2}\/\d{4}$|^\d{4}\/\d{2}\/\d{2}$/
+              if (strictDatePattern.test(value.trim())) return true
+
+              // Also check if Date.parse works AND the parsed date is reasonable (year 1900-2100)
+              const parsed = Date.parse(value)
+              if (!isNaN(parsed)) {
+                const date = new Date(parsed)
+                const year = date.getFullYear()
+                // Only accept dates between 1900-2100 to filter out numeric IDs
+                if (year >= 1900 && year <= 2100) {
+                  // Additional check: must contain date separators (-, /) or time indicators
+                  if (/[-\/T:]/.test(value)) {
+                    return true
+                  }
+                }
+              }
+            }
+
             return false
           }) : []
 
-          if (dateColumns.length > 0) {
+          // Determine which date column to use for filtering
+          let dateColumnToUse = selectedDateColumn
+
+          // If no column is selected, try to auto-select the first one
+          if (!dateColumnToUse && dateColumns.length > 0) {
+            dateColumnToUse = dateColumns[0]
+            // Auto-select this column for future use
+            set({ selectedDateColumn: dateColumnToUse })
+          }
+
+          console.log('🔍 [Store.getFilteredData] Date filtering:', {
+            dateRange,
+            allDateColumns: dateColumns,
+            selectedDateColumn: dateColumnToUse,
+            rawDataCount: rawData.length
+          })
+
+          if (dateColumnToUse && dateColumns.includes(dateColumnToUse)) {
+            const beforeFilterCount = filteredData.length
             filteredData = filteredData.filter(row => {
-              const dateCol = row[dateColumns[0]]
+              const dateCol = row[dateColumnToUse]
               if (dateCol === null || dateCol === undefined) return true
               const dateValue = new Date(dateCol as string | number | Date)
               if (isNaN(dateValue.getTime())) return true
 
-              if (dateRange.from && dateValue < dateRange.from) return false
-              if (dateRange.to && dateValue > dateRange.to) return false
+              // CRITICAL FIX: Use <= and >= to include boundary dates (from and to are inclusive)
+              // Reset time to start/end of day for fair comparison
+              const dateOnly = new Date(dateValue.getFullYear(), dateValue.getMonth(), dateValue.getDate())
+
+              if (dateRange.from) {
+                const fromDate = new Date(dateRange.from.getFullYear(), dateRange.from.getMonth(), dateRange.from.getDate())
+                if (dateOnly < fromDate) return false
+              }
+
+              if (dateRange.to) {
+                const toDate = new Date(dateRange.to.getFullYear(), dateRange.to.getMonth(), dateRange.to.getDate())
+                if (dateOnly > toDate) return false
+              }
+
               return true
+            })
+            console.log('🔍 [Store.getFilteredData] After date filter:', {
+              beforeCount: beforeFilterCount,
+              afterCount: filteredData.length,
+              filteredOut: beforeFilterCount - filteredData.length
             })
           }
         }
@@ -1664,10 +1751,31 @@ export const useDataStore = create<DataStore>()(
         const dateColumns = filteredData.length > 0 ? Object.keys(filteredData[0]).filter(key => {
           const value = filteredData[0][key]
           if (!value) return false
-          const datePattern = /\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}|\d{4}\/\d{2}\/\d{2}/
-          if (typeof value === 'string' && datePattern.test(value)) return true
+
+          // Check if it's a Date object first (most reliable)
           if (value instanceof Date) return true
-          if (!isNaN(Date.parse(String(value)))) return true
+
+          // For strings, use strict date pattern matching
+          if (typeof value === 'string') {
+            // Strict patterns for common date formats
+            const strictDatePattern = /^\d{4}-\d{2}-\d{2}(T|\s|$)|^\d{2}\/\d{2}\/\d{4}$|^\d{4}\/\d{2}\/\d{2}$/
+            if (strictDatePattern.test(value.trim())) return true
+
+            // Also check if Date.parse works AND the parsed date is reasonable (year 1900-2100)
+            const parsed = Date.parse(value)
+            if (!isNaN(parsed)) {
+              const date = new Date(parsed)
+              const year = date.getFullYear()
+              // Only accept dates between 1900-2100 to filter out numeric IDs
+              if (year >= 1900 && year <= 2100) {
+                // Additional check: must contain date separators (-, /) or time indicators
+                if (/[-\/T:]/.test(value)) {
+                  return true
+                }
+              }
+            }
+          }
+
           return false
         }) : []
 
@@ -2018,6 +2126,7 @@ export const useDataStore = create<DataStore>()(
         currentTheme: state.currentTheme,
         availableThemes: state.availableThemes,
         availableLayouts: state.availableLayouts,
+        chartCustomizations: state.chartCustomizations, // Persist chart customizations
         // Store only essential metadata, not the full data
         fileName: state.fileName,
         dataId: state.dataId, // Store reference to IndexedDB data

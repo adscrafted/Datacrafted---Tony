@@ -17,36 +17,69 @@ interface DateRangeSelectorProps {
 }
 
 export function DateRangeSelector({ className }: DateRangeSelectorProps) {
-  const { rawData, dateRange, setDateRange, granularity, setGranularity } = useDataStore()
+  const { rawData, dateRange, setDateRange, granularity, setGranularity, selectedDateColumn, setSelectedDateColumn } = useDataStore()
   const [date, setDate] = useState<DateRange | undefined>(dateRange || undefined)
   const [isOpen, setIsOpen] = useState(false)
   const [isGranularityOpen, setIsGranularityOpen] = useState(false)
+  const [isDateColumnOpen, setIsDateColumnOpen] = useState(false)
   const [hasDateColumn, setHasDateColumn] = useState(false)
+  const [dateColumns, setDateColumns] = useState<string[]>([])
   const [availableGranularities, setAvailableGranularities] = useState<Granularity[]>(['day', 'week', 'month', 'quarter', 'year'])
 
+  // Detect date columns and set defaults
   useEffect(() => {
+    console.log('🔍 [DateRangeSelector] Checking for date columns:', {
+      hasRawData: !!rawData,
+      rawDataLength: rawData?.length || 0
+    })
     if (rawData && rawData.length > 0) {
       // Check if data has date columns
       const firstRow = rawData[0]
-      const dateColumns = Object.keys(firstRow).filter(key => {
+      const foundDateColumns = Object.keys(firstRow).filter(key => {
         const value = firstRow[key]
         if (!value) return false
-        
-        // Check if it's a date string or Date object
-        const datePattern = /\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}|\d{4}\/\d{2}\/\d{2}/
-        if (typeof value === 'string' && datePattern.test(value)) return true
+
+        // Check if it's a Date object first (most reliable)
         if (value instanceof Date) return true
-        if (!isNaN(Date.parse(String(value)))) return true
-        
+
+        // For strings, use strict date pattern matching
+        if (typeof value === 'string') {
+          // Strict patterns for common date formats
+          const strictDatePattern = /^\d{4}-\d{2}-\d{2}(T|\s|$)|^\d{2}\/\d{2}\/\d{4}$|^\d{4}\/\d{2}\/\d{2}$/
+          if (strictDatePattern.test(value.trim())) return true
+
+          // Also check if Date.parse works AND the parsed date is reasonable (year 1900-2100)
+          const parsed = Date.parse(value)
+          if (!isNaN(parsed)) {
+            const date = new Date(parsed)
+            const year = date.getFullYear()
+            // Only accept dates between 1900-2100 to filter out numeric IDs
+            if (year >= 1900 && year <= 2100) {
+              // Additional check: must contain date separators (-, /) or time indicators
+              if (/[-\/T:]/.test(value)) {
+                return true
+              }
+            }
+          }
+        }
+
         return false
       })
 
-      setHasDateColumn(dateColumns.length > 0)
+      console.log('✅ [DateRangeSelector] Found date columns:', foundDateColumns)
+      setDateColumns(foundDateColumns)
+      setHasDateColumn(foundDateColumns.length > 0)
+
+      // Auto-select the first date column if none is selected
+      if (foundDateColumns.length > 0 && !selectedDateColumn) {
+        console.log('📌 [DateRangeSelector] Auto-selecting first date column:', foundDateColumns[0])
+        setSelectedDateColumn(foundDateColumns[0])
+      }
 
       // Determine available granularities based on date range in data
-      if (dateColumns.length > 0) {
+      if (foundDateColumns.length > 0) {
         const dates = rawData.map(row => {
-          const dateCol = dateColumns[0]
+          const dateCol = foundDateColumns[0]
           const val = row[dateCol]
           // Handle null/undefined values safely
           if (val === null || val === undefined) return null
@@ -65,15 +98,15 @@ export function DateRangeSelector({ className }: DateRangeSelectorProps) {
           if (daysDiff >= 365) granularities.push('year')
 
           setAvailableGranularities(granularities)
-          
-          // Set default granularity to 'week' if available
+
+          // Set default granularity to 'week' if available and not yet set
           if (granularities.includes('week') && granularity === 'day') {
             setGranularity('week')
           }
         }
       }
     }
-  }, [rawData, granularity, setGranularity])
+  }, [rawData, selectedDateColumn, granularity])
 
   if (!hasDateColumn || !rawData || rawData.length === 0) {
     return null
@@ -88,6 +121,12 @@ export function DateRangeSelector({ className }: DateRangeSelectorProps) {
   }
 
   const handlePresetClick = (preset: { from: Date; to: Date }) => {
+    console.log('🔍 [DateRangeSelector] Setting date range:', {
+      from: preset.from,
+      to: preset.to,
+      fromFormatted: format(preset.from, 'yyyy-MM-dd'),
+      toFormatted: format(preset.to, 'yyyy-MM-dd')
+    })
     setDate(preset)
     setDateRange(preset)
     setIsOpen(false)
@@ -100,6 +139,40 @@ export function DateRangeSelector({ className }: DateRangeSelectorProps) {
 
   return (
     <div className={cn("flex items-center justify-end space-x-2", className)}>
+      {/* Date Column Selector (only show if multiple date columns) */}
+      {dateColumns.length > 1 && (
+        <Popover open={isDateColumnOpen} onOpenChange={setIsDateColumnOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 px-3 font-medium"
+            >
+              <span className="mr-1 text-muted-foreground">Date:</span>
+              {selectedDateColumn || 'Select column'}
+              <ChevronDown className="ml-2 h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-48 p-1" align="start">
+            {dateColumns.map((col) => (
+              <button
+                key={col}
+                onClick={() => {
+                  setSelectedDateColumn(col)
+                  setIsDateColumnOpen(false)
+                }}
+                className={cn(
+                  "w-full text-left px-3 py-1.5 text-xs rounded hover:bg-gray-100",
+                  selectedDateColumn === col && "bg-gray-100 font-medium"
+                )}
+              >
+                {col}
+              </button>
+            ))}
+          </PopoverContent>
+        </Popover>
+      )}
+
       {/* Granularity Dropdown */}
       <Popover open={isGranularityOpen} onOpenChange={setIsGranularityOpen}>
         <PopoverTrigger asChild>

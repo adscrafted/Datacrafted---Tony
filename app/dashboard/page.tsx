@@ -12,6 +12,7 @@ import dynamic from 'next/dynamic'
 
 // Use regular imports for now - the benefits of the optimizations are already implemented
 import { MinimalChartWrapper } from '@/components/dashboard/minimal-chart-wrapper'
+import { EnhancedChartWrapper } from '@/components/dashboard/enhanced-chart-wrapper'
 import { ResizableChatInterface } from '@/components/dashboard/chat/resizable-chat-interface'
 import { AutoSaveIndicator } from '@/components/session/auto-save-indicator'
 import { FlexibleDashboardLayout } from '@/components/dashboard/flexible-dashboard-layout'
@@ -21,6 +22,10 @@ import { ShareDialog } from '@/components/dashboard/share-dialog'
 import { useProjectStore } from '@/lib/stores/project-store'
 // Removed auth imports - no longer needed for simplified flow
 import { filterValidCharts } from '@/lib/utils/chart-validator'
+import { FullscreenDataTable } from '@/components/dashboard/fullscreen-data-table'
+import { ScorecardCalculationDetails } from '@/components/dashboard/scorecard-calculation-details'
+import { DataCalculator, AggregationType } from '@/lib/utils/data-calculations'
+import { DateRangeSelector } from '@/components/dashboard/date-range-selector'
 
 function DashboardContent() {
   const router = useRouter()
@@ -49,6 +54,7 @@ function DashboardContent() {
   const [showFullScreenChart, setShowFullScreenChart] = useState<string | null>(null)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [showShareDialog, setShowShareDialog] = useState(false)
+  const [highlightedRow, setHighlightedRow] = useState<any>(null)
 
   // Toggle sidebar function
   const toggleSidebar = React.useCallback(() => {
@@ -65,13 +71,13 @@ function DashboardContent() {
   // Track if analysis has been initiated to prevent multiple calls
   const analysisInitiatedRef = React.useRef(false)
   
-  const { 
-    fileName, 
-    rawData, 
+  const {
+    fileName,
+    rawData,
     dataId,
-    analysis, 
-    setAnalysis, 
-    isAnalyzing, 
+    analysis,
+    setAnalysis,
+    isAnalyzing,
     setIsAnalyzing,
     analysisProgress,
     setAnalysisProgress,
@@ -267,6 +273,17 @@ function DashboardContent() {
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0)
   const [lastProgressTrigger, setLastProgressTrigger] = useState(0)
 
+  // Get filtered data for fullscreen display (must be before any conditional returns)
+  const filteredData = useMemo(() => {
+    const data = getFilteredData()
+    console.log('📊 [Dashboard] Filtered data for fullscreen:', {
+      dataLength: data?.length || 0,
+      hasData: !!data && data.length > 0,
+      sampleRow: data?.[0]
+    })
+    return data
+  }, [getFilteredData])
+
   // Update message only when progress increases by 10% or more
   useEffect(() => {
     if (usingAI && isAnalyzing) {
@@ -375,7 +392,8 @@ function DashboardContent() {
       {showFullScreen && fullScreenChart && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center p-8">
           <div className="bg-white w-full h-full rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between px-8 py-6 border-b border-gray-100">
+            {/* Header - Fixed height */}
+            <div className="flex items-center justify-between px-8 py-6 border-b border-gray-100 flex-shrink-0">
               <div>
                 <h1 className="text-2xl font-semibold text-gray-900">{fullScreenChart.title}</h1>
                 {fullScreenChart.description && (
@@ -391,17 +409,137 @@ function DashboardContent() {
                 <X className="h-5 w-5" />
               </Button>
             </div>
-            <div className="flex-1 p-8 min-h-0">
-              <div className="h-full">
-                <MinimalChartWrapper
-                  id={showFullScreen}
-                  type={fullScreenChart.type}
-                  title={fullScreenChart.title}
-                  description={fullScreenChart.description}
-                  data={rawData}
-                  dataKey={fullScreenChart.dataKey || []}
-                  dataMapping={fullScreenChart.dataMapping}
-                />
+
+            {/* Content Area - Flexible layout with proper scrolling */}
+            <div className="flex-1 flex flex-col p-8 gap-4 min-h-0 overflow-auto">
+              {/* Chart Section - 65% height for regular charts, hidden for scorecards */}
+              {fullScreenChart.type !== 'scorecard' && (
+                <div className="flex-shrink-0 overflow-hidden" style={{ height: '65%' }}>
+                  <EnhancedChartWrapper
+                    id={showFullScreen}
+                    type={fullScreenChart.type}
+                    title={fullScreenChart.title}
+                    description={fullScreenChart.description}
+                    data={filteredData}
+                    dataKey={fullScreenChart.dataKey || []}
+                    configDataMapping={fullScreenChart.dataMapping}
+                    customization={(fullScreenChart as any).customization}
+                    isDragging={false}
+                    isSelected={false}
+                    onDataPointClick={(dataPoint) => {
+                      console.log('🔵 [DASHBOARD] Data point clicked:', dataPoint)
+                      console.log('🔵 [DASHBOARD] Chart type:', fullScreenChart.type)
+
+                      // For aggregated charts, we need to pass the category/x-axis key
+                      // so the table can scroll to the first matching row
+                      const effectiveMapping = {
+                        ...fullScreenChart.dataMapping,
+                        ...(fullScreenChart as any).customization?.dataMapping
+                      }
+                      const xKey = effectiveMapping?.xAxis || effectiveMapping?.category
+
+                      console.log('🔵 [DASHBOARD] Category key:', xKey)
+                      console.log('🔵 [DASHBOARD] Setting highlightedRow:', { ...dataPoint, __categoryKey: xKey })
+
+                      setHighlightedRow({ ...dataPoint, __categoryKey: xKey })
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Scorecard Calculation Details - Only shown for scorecards, compact design */}
+              {fullScreenChart.type === 'scorecard' && (() => {
+                // Calculate the values used in the scorecard
+                const customization = (fullScreenChart as any).customization
+                const dataMapping = fullScreenChart.dataMapping
+                const aggregationType = (customization?.aggregation || dataMapping?.aggregation || 'sum') as AggregationType
+                const metric = dataMapping?.formulaAlias || dataMapping?.metric || fullScreenChart.dataKey?.[0] || 'value'
+
+                // Helper to parse currency and formatted numbers
+                const parseNumericValue = (val: any): number => {
+                  if (typeof val === 'number') return val
+                  if (typeof val !== 'string') return 0
+                  const cleaned = String(val).replace(/[€$£¥,\s%]/g, '')
+                  const num = parseFloat(cleaned)
+                  return isNaN(num) ? 0 : num
+                }
+
+                // Extract numeric values from the data
+                const values = filteredData
+                  .map(row => parseNumericValue(row[metric]))
+                  .filter(v => !isNaN(v) && v !== null && v !== undefined)
+
+                // Calculate the result based on aggregation type
+                let result = 0
+                if (values.length > 0) {
+                  switch (aggregationType) {
+                    case 'sum':
+                      result = values.reduce((a, b) => a + b, 0)
+                      break
+                    case 'avg':
+                      result = values.reduce((a, b) => a + b, 0) / values.length
+                      break
+                    case 'count':
+                      result = values.length
+                      break
+                    case 'min':
+                      result = Math.min(...values)
+                      break
+                    case 'max':
+                      result = Math.max(...values)
+                      break
+                    case 'distinct':
+                      result = new Set(values).size
+                      break
+                    case 'median':
+                      const sorted = [...values].sort((a, b) => a - b)
+                      const mid = Math.floor(sorted.length / 2)
+                      result = sorted.length % 2 === 0
+                        ? (sorted[mid - 1] + sorted[mid]) / 2
+                        : sorted[mid]
+                      break
+                    default:
+                      result = values.reduce((a, b) => a + b, 0)
+                  }
+                }
+
+                return (
+                  <div className="flex-shrink-0 mb-2">
+                    <ScorecardCalculationDetails
+                      aggregationType={aggregationType}
+                      metric={metric}
+                      values={values}
+                      result={result}
+                    />
+                  </div>
+                )
+              })()}
+
+              {/* Data Table Section - Takes remaining space with scrolling */}
+              <div className={cn(
+                "flex flex-col min-h-0 flex-1",
+                fullScreenChart.type !== 'scorecard' && "border-t pt-4"
+              )}>
+                <div className="mb-3 flex-shrink-0">
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    {fullScreenChart.type === 'scorecard' ? 'Underlying Data' : 'Underlying Data'}
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {fullScreenChart.type === 'scorecard'
+                      ? 'Complete dataset used to calculate this metric'
+                      : 'Data used to generate this chart'}
+                  </p>
+                </div>
+                <div className="border rounded-lg overflow-hidden bg-white flex-1 min-h-0">
+                  <FullscreenDataTable
+                    chartType={fullScreenChart.type}
+                    data={filteredData}
+                    dataMapping={fullScreenChart.dataMapping}
+                    dataKey={fullScreenChart.dataKey}
+                    highlightedRow={highlightedRow}
+                    onHighlightComplete={() => setHighlightedRow(null)}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -447,6 +585,9 @@ function DashboardContent() {
             </div>
 
             <div className="flex items-center space-x-2">
+              {/* Date Range Selector - only shows if date columns detected */}
+              <DateRangeSelector />
+
               <Button
                 variant="ghost"
                 size="sm"

@@ -4,7 +4,7 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { Responsive, WidthProvider, Layout as GridLayout } from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
-import { Plus, Grid3x3, Layout, Save, Download, Upload, RotateCcw, Eye, EyeOff } from 'lucide-react'
+import { Plus, Grid3x3, Layout, Save, Download, Upload, RotateCcw, Eye, EyeOff, Calendar, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -27,6 +27,7 @@ import {
 import { EnhancedChartWrapper } from './enhanced-chart-wrapper'
 import { ChartTemplateGallery } from './chart-template-gallery'
 import { ChartCustomizationPanel } from './chart-customization-panel'
+import { DateRangeSelector } from './date-range-selector'
 import { useDataStore, AnalysisResult, DataRow } from '@/lib/store'
 import { useProjectStore } from '@/lib/stores/project-store'
 import { filterValidCharts } from '@/lib/utils/chart-validator'
@@ -34,6 +35,7 @@ import { cn } from '@/lib/utils/cn'
 import { AverageQualityIndicator } from './quality-indicator'
 import type { ChartRecommendation, EnhancedAnalysisResult } from '@/lib/types/recommendation'
 import { isEnhancedAnalysisResult } from '@/lib/types/recommendation'
+import { format } from 'date-fns'
 
 // Make responsive grid layout
 const ResponsiveGridLayout = WidthProvider(Responsive)
@@ -88,10 +90,35 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     setIsDragging,
     currentTheme,
     dashboardFilters,
-    draftChart
+    draftChart,
+    dateRange,
+    granularity,
+    setDateRange,
+    selectedDateColumn,
+    getFilteredData
   } = useDataStore()
 
   const { currentProjectId, saveDashboardConfig, loadDashboardConfig } = useProjectStore()
+
+  // Wrap filtered data in useMemo with proper dependencies
+  const filteredData = useMemo(() => {
+    const result = getFilteredData()
+    console.log('🔄 [FlexibleDashboardLayout] Recomputing filtered data:', {
+      dateRangeFrom: dateRange?.from?.toISOString() || 'none',
+      dateRangeTo: dateRange?.to?.toISOString() || 'none',
+      granularity,
+      selectedDateColumn,
+      filteredDataLength: result.length,
+      rawDataLength: data.length
+    })
+    // IMPORTANT: If store returns empty but we have data prop, use data prop
+    // This handles the case where store isn't initialized yet
+    if (result.length === 0 && data.length > 0) {
+      console.log('⚠️ [FlexibleDashboardLayout] Store returned empty, using data prop instead')
+      return data
+    }
+    return result
+  }, [getFilteredData, dateRange, granularity, selectedDateColumn, data.length, data])
 
   // Update available columns when data changes
   useEffect(() => {
@@ -155,13 +182,87 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     })
 
     // CRITICAL: Filter out the draft chart - it shouldn't be visible on the dashboard yet
+    // Also filter out unconfigured scorecards (missing metric or formula)
     const chartsToDisplay = validCharts.filter(chart => {
       const chartId = chart.id || `chart-${analysis.chartConfig.indexOf(chart)}`
       const isDraft = draftChart?.id === chartId
       if (isDraft) {
         console.log('🚫 [FLEXIBLE_DASHBOARD] Filtering out draft chart:', chart.title)
+        return false
       }
-      return !isDraft
+
+      // DEFENSIVE: Filter out unconfigured scorecards
+      // CRITICAL FIX: Must check EFFECTIVE chart type (considering customization override)
+      // The chart might be configured as 'scorecard' in analysis.chartConfig
+      // but have customization.chartType = 'area', which changes how it renders
+      const configDM = (chart as any).dataMapping
+      const customizationDM = chartCustomizations[chartId]?.dataMapping
+      const customizationChartType = chartCustomizations[chartId]?.chartType
+
+      // Determine the EFFECTIVE chart type (same logic as EnhancedChartWrapper line 234)
+      const effectiveChartType = customizationChartType || chart.type
+
+      // Merge both sources (same logic as EnhancedChartWrapper's effectiveMapping)
+      const effectiveDM = {
+        ...configDM,
+        ...customizationDM
+      }
+
+      // Only apply scorecard filter if the EFFECTIVE type is scorecard
+      // This prevents filtering out charts that were changed to other types
+      if (effectiveChartType === 'scorecard') {
+        const isConfigured = effectiveDM && (effectiveDM.metric || effectiveDM.formula)
+
+        if (!isConfigured) {
+          console.log('🚫 [FLEXIBLE_DASHBOARD] Filtering out unconfigured scorecard:', chart.title)
+          return false
+        }
+      }
+
+      // ADDITIONAL VALIDATION: Check for type/dataMapping mismatches
+      // If chart type was changed via customization, ensure dataMapping matches the new type
+      if (customizationChartType && customizationChartType !== chart.type) {
+        console.log('⚠️ [FLEXIBLE_DASHBOARD] Chart type override detected:', chart.title, {
+          originalType: chart.type,
+          customizedType: customizationChartType,
+          hasDataMapping: !!effectiveDM && Object.keys(effectiveDM).length > 0
+        })
+
+        // Validate that the chart has appropriate dataMapping for its new type
+        const hasValidMapping = (() => {
+          if (!effectiveDM || Object.keys(effectiveDM).length === 0) return false
+
+          switch (customizationChartType) {
+            case 'line':
+            case 'bar':
+              return !!(effectiveDM.xAxis || effectiveDM.category)
+            case 'area':
+              return !!(effectiveDM.xAxis || effectiveDM.category) &&
+                     !!(effectiveDM.yAxis || effectiveDM.yAxis1 || effectiveDM.values)
+            case 'scatter':
+              return !!(effectiveDM.xAxis || effectiveDM.category) &&
+                     !!(effectiveDM.yAxis || effectiveDM.yAxis1 || effectiveDM.values)
+            case 'pie':
+              return !!effectiveDM.category
+            case 'scorecard':
+              return !!(effectiveDM.metric || effectiveDM.formula)
+            case 'table':
+              return !!(effectiveDM.columns && effectiveDM.columns.length > 0) || !!effectiveDM.yAxis
+            default:
+              return true // Unknown types pass through
+          }
+        })()
+
+        if (!hasValidMapping) {
+          console.log('🚫 [FLEXIBLE_DASHBOARD] Filtering out chart with invalid type/dataMapping mismatch:', chart.title, {
+            effectiveChartType: customizationChartType,
+            effectiveDataMapping: effectiveDM
+          })
+          return false
+        }
+      }
+
+      return true
     })
 
     console.log('📊 [FLEXIBLE_DASHBOARD] Charts after draft filter:', {
@@ -326,13 +427,22 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
    * - Simpler code that leverages built-in RGL optimization
    */
 
-  // Global position tracker - maintains ALL chart positions across renders
+  // Global position tracker - ONLY maintains positions for VISIBLE charts (sortedCharts)
+  // This prevents gaps from filtered-out charts
   const globalPlacedItems = useMemo(() => {
     const allPositions: Array<{x: number, y: number, w: number, h: number, chartId: string}> = []
 
-    // Add all existing customized positions first
+    // Create a Set of visible chart IDs for fast lookup
+    const visibleChartIds = new Set(
+      sortedCharts.map(config => {
+        const originalIndex = analysis.chartConfig.indexOf(config)
+        return config.id || `chart-${originalIndex}`
+      })
+    )
+
+    // Only add positions for charts that are actually visible
     Object.entries(chartCustomizations).forEach(([chartId, customization]) => {
-      if (customization.position) {
+      if (customization.position && visibleChartIds.has(chartId)) {
         allPositions.push({
           x: customization.position.x,
           y: customization.position.y,
@@ -344,9 +454,9 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     })
 
     return allPositions
-  }, [chartCustomizations])
+  }, [chartCustomizations, sortedCharts, analysis.chartConfig])
 
-  // Generate layout items with bulletproof placement
+  // Generate layout items with bulletproof placement and gap elimination
   const layoutItems = useMemo(() => {
     const items: Array<{i: string, x: number, y: number, w: number, h: number, minW: number, minH: number, maxW: number, maxH: number, isResizable?: boolean, static?: boolean}> = []
 
@@ -354,33 +464,220 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     const workingPlacedItems: Array<{x: number, y: number, w: number, h: number}> =
       globalPlacedItems.map(item => ({ x: item.x, y: item.y, w: item.w, h: item.h }))
 
-    sortedCharts.forEach((config, index) => {
+    console.log('🔍 [LAYOUT_ITEMS] Starting layout generation:', {
+      sortedChartsCount: sortedCharts.length,
+      globalPlacedItemsCount: globalPlacedItems.length,
+      workingPlacedItemsCount: workingPlacedItems.length
+    })
+
+    // Separate scorecards and other charts for gap detection
+    const scorecardItems: Array<{chartId: string, config: any, customization: any}> = []
+    const otherItems: Array<{chartId: string, config: any, customization: any}> = []
+
+    sortedCharts.forEach((config) => {
       const originalIndex = analysis.chartConfig.indexOf(config)
       const chartId = config.id || `chart-${originalIndex}`
       const customization = chartCustomizations[chartId]
 
-      // Check if this is a scorecard (needed early for dimension correction)
-      const isScorecard = config.type === 'scorecard'
+      // Skip invisible charts
+      const isVisible = customization?.isVisible !== false
+      if (!isVisible && !isLayoutMode) {
+        console.log(`🚫 [LAYOUT] Skipping invisible chart from layout: "${config.title}"`)
+        return
+      }
 
-      // Get dimensions for this chart type
+      if (config.type === 'scorecard') {
+        scorecardItems.push({ chartId, config, customization })
+      } else {
+        otherItems.push({ chartId, config, customization })
+      }
+    })
+
+    // CRITICAL FIX: Detect and fix gaps in scorecard positions
+    // Check if scorecards have saved positions with gaps
+    let hasGaps = false
+    if (scorecardItems.length > 0) {
+      const scorecardPositions = scorecardItems
+        .map((item, idx) => ({
+          index: idx,
+          chartId: item.chartId,
+          title: item.config.title,
+          position: item.customization?.position
+        }))
+        .filter(item => item.position !== undefined)
+        .sort((a, b) => {
+          if (a.position.y !== b.position.y) return a.position.y - b.position.y
+          return a.position.x - b.position.x
+        })
+
+      if (scorecardPositions.length === scorecardItems.length && scorecardPositions.length > 0) {
+        // Check for gaps in scorecard row
+        let expectedX = 0
+        let currentY = scorecardPositions[0]?.position?.y ?? 0
+
+        for (const item of scorecardPositions) {
+          const pos = item.position
+
+          // If we moved to a new row, reset expectedX
+          if (pos.y !== currentY) {
+            currentY = pos.y
+            expectedX = 0
+          }
+
+          // If there's a gap (position doesn't match expected)
+          if (pos.x !== expectedX) {
+            hasGaps = true
+            console.log('⚠️ [LAYOUT_ITEMS] Gap detected in scorecard positions:', {
+              title: item.title,
+              expected: expectedX,
+              actual: pos.x,
+              gap: pos.x - expectedX,
+              y: pos.y
+            })
+            break
+          }
+
+          expectedX += 2 // Scorecards are 2 columns wide
+          if (expectedX >= 12) {
+            expectedX = 0
+            currentY += 1
+          }
+        }
+      } else if (scorecardPositions.length !== scorecardItems.length) {
+        // Some scorecards don't have positions - this will be handled by the normal flow
+        console.log('ℹ️ [LAYOUT_ITEMS] Some scorecards missing positions:', {
+          totalScorecards: scorecardItems.length,
+          withPositions: scorecardPositions.length
+        })
+      }
+    }
+
+    // If gaps detected, reposition ALL scorecards tightly
+    if (hasGaps) {
+      console.log('🔧 [LAYOUT_ITEMS] Fixing scorecard gaps - repositioning all scorecards')
+      let currentX = 0
+      let currentY = 0
+
+      scorecardItems.forEach(({ chartId, config, customization }) => {
+        if (currentX + 2 > 12) {
+          currentX = 0
+          currentY += 1
+        }
+
+        const position = {
+          x: currentX,
+          y: currentY,
+          w: 2,
+          h: 1
+        }
+
+        console.log(`📍 [LAYOUT_ITEMS] Fixed scorecard position for "${config.title}": (${position.x}, ${position.y})`)
+
+        items.push({
+          i: chartId,
+          x: position.x,
+          y: position.y,
+          w: position.w,
+          h: position.h,
+          minW: 2,
+          minH: 1,
+          maxW: 2,
+          maxH: 1,
+          isResizable: false,
+          static: false
+        })
+
+        workingPlacedItems.push({
+          x: position.x,
+          y: position.y,
+          w: position.w,
+          h: position.h
+        })
+
+        currentX += 2
+      })
+
+      // Update positions in store (will be done in next effect)
+      // For now, just update the layout items
+    } else {
+      // No gaps - use existing positions
+      scorecardItems.forEach(({ chartId, config, customization }) => {
+        const isScorecard = config.type === 'scorecard'
+        const defaultDimensions = getFixedDimensions(config)
+
+        let position
+        if (customization?.position) {
+          position = customization.position
+
+          // FORCE UPDATE: If this is a scorecard with old dimensions (3x2), update to new dimensions (2x1)
+          if (isScorecard && (position.w !== 2 || position.h !== 1)) {
+            console.log(`🔧 [LAYOUT] Auto-correcting scorecard "${config.title}" from ${position.w}×${position.h} to 2×1`)
+            position = {
+              ...position,
+              w: 2,
+              h: 1
+            }
+          }
+
+          console.log(`📍 [LAYOUT_ITEMS] Using saved position for "${config.title}":`, {
+            chartId,
+            type: config.type,
+            position: `(${position.x}, ${position.y}) ${position.w}×${position.h}`
+          })
+        } else {
+          const availablePos = findAvailablePosition(defaultDimensions.w, defaultDimensions.h, workingPlacedItems)
+          position = {
+            x: availablePos.x,
+            y: availablePos.y,
+            w: defaultDimensions.w,
+            h: defaultDimensions.h
+          }
+
+          console.log(`📍 [LAYOUT_ITEMS] Calculated new position for "${config.title}":`, {
+            chartId,
+            type: config.type,
+            position: `(${position.x}, ${position.y}) ${position.w}×${position.h}`,
+            workingPlacedItemsCount: workingPlacedItems.length
+          })
+
+          workingPlacedItems.push({
+            x: position.x,
+            y: position.y,
+            w: position.w,
+            h: position.h
+          })
+        }
+
+        items.push({
+          i: chartId,
+          x: position.x,
+          y: position.y,
+          w: position.w,
+          h: position.h,
+          minW: isScorecard ? 2 : config.type === 'table' ? 8 : 4,
+          minH: isScorecard ? 1 : 2,
+          maxW: isScorecard ? 2 : config.type === 'table' ? 12 : 12,
+          maxH: isScorecard ? 1 : 10,
+          isResizable: !isScorecard,
+          static: false
+        })
+      })
+    }
+
+    // Process other charts
+    otherItems.forEach(({ chartId, config, customization }) => {
       const defaultDimensions = getFixedDimensions(config)
 
       let position
       if (customization?.position) {
-        // Use saved position if available (already in globalPlacedItems)
         position = customization.position
 
-        // FORCE UPDATE: If this is a scorecard with old dimensions (3x2), update to new dimensions (2x1)
-        if (isScorecard && (position.w !== 2 || position.h !== 1)) {
-          console.log(`🔧 [LAYOUT] Auto-correcting scorecard "${config.title}" from ${position.w}×${position.h} to 2×1`)
-          position = {
-            ...position,
-            w: 2,
-            h: 1
-          }
-        }
+        console.log(`📍 [LAYOUT_ITEMS] Using saved position for "${config.title}":`, {
+          chartId,
+          type: config.type,
+          position: `(${position.x}, ${position.y}) ${position.w}×${position.h}`
+        })
       } else {
-        // Find available position that doesn't overlap with ANY existing charts
         const availablePos = findAvailablePosition(defaultDimensions.w, defaultDimensions.h, workingPlacedItems)
         position = {
           x: availablePos.x,
@@ -389,7 +686,13 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
           h: defaultDimensions.h
         }
 
-        // IMMEDIATELY add this position to working placed items to prevent next chart from overlapping
+        console.log(`📍 [LAYOUT_ITEMS] Calculated new position for "${config.title}":`, {
+          chartId,
+          type: config.type,
+          position: `(${position.x}, ${position.y}) ${position.w}×${position.h}`,
+          workingPlacedItemsCount: workingPlacedItems.length
+        })
+
         workingPlacedItems.push({
           x: position.x,
           y: position.y,
@@ -398,24 +701,28 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         })
       }
 
-      // SCORECARDS ARE FIXED SIZE - NO RESIZING ALLOWED
       items.push({
         i: chartId,
         x: position.x,
         y: position.y,
         w: position.w,
         h: position.h,
-        minW: isScorecard ? 2 : config.type === 'table' ? 8 : 4,
-        minH: isScorecard ? 1 : 2,
-        maxW: isScorecard ? 2 : config.type === 'table' ? 12 : 12,
-        maxH: isScorecard ? 1 : 10,
-        isResizable: !isScorecard, // Scorecards cannot be resized
-        static: false // Allow dragging but not resizing for scorecards
+        minW: config.type === 'table' ? 8 : 4,
+        minH: 2,
+        maxW: config.type === 'table' ? 12 : 12,
+        maxH: 10,
+        isResizable: true,
+        static: false
       })
     })
 
+    console.log('🔍 [LAYOUT_ITEMS] Final layout items:', items.map(item => ({
+      id: item.i,
+      position: `(${item.x}, ${item.y}) ${item.w}×${item.h}`
+    })))
+
     return items
-  }, [sortedCharts, chartCustomizations, getFixedDimensions, analysis.chartConfig, findAvailablePosition, globalPlacedItems])
+  }, [sortedCharts, chartCustomizations, getFixedDimensions, analysis.chartConfig, findAvailablePosition, globalPlacedItems, isLayoutMode])
 
   // Force layout refresh when chart count changes
   useEffect(() => {
@@ -426,7 +733,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     setLayouts({})
   }, [sortedCharts.length])
 
-  // Save calculated positions immediately for charts without positions
+  // Save calculated positions immediately for charts without positions OR when positions were auto-fixed
   useEffect(() => {
     let hasUpdates = false
     const updates: Array<{chartId: string, position: {x: number, y: number, w: number, h: number}}> = []
@@ -435,18 +742,36 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       const originalIndex = analysis.chartConfig.indexOf(config)
       const chartId = config.id || `chart-${originalIndex}`
       const customization = chartCustomizations[chartId]
+      const layoutItem = layoutItems.find(item => item.i === chartId)
 
-      // Only save position if it doesn't exist yet (for newly calculated positions)
+      if (!layoutItem) return
+
+      const newPosition = {
+        x: layoutItem.x,
+        y: layoutItem.y,
+        w: layoutItem.w,
+        h: layoutItem.h
+      }
+
+      // Save position if:
+      // 1. It doesn't exist yet (newly calculated)
+      // 2. OR it has changed (auto-fixed for gaps)
       if (!customization?.position) {
-        const layoutItem = layoutItems.find(item => item.i === chartId)
-        if (layoutItem) {
-          const position = {
-            x: layoutItem.x,
-            y: layoutItem.y,
-            w: layoutItem.w,
-            h: layoutItem.h
-          }
-          updates.push({ chartId, position })
+        updates.push({ chartId, position: newPosition })
+        hasUpdates = true
+      } else {
+        const existingPos = customization.position
+        if (
+          existingPos.x !== newPosition.x ||
+          existingPos.y !== newPosition.y ||
+          existingPos.w !== newPosition.w ||
+          existingPos.h !== newPosition.h
+        ) {
+          console.log(`🔄 [LAYOUT_SAVE] Position changed for "${config.title}":`, {
+            old: `(${existingPos.x}, ${existingPos.y}) ${existingPos.w}×${existingPos.h}`,
+            new: `(${newPosition.x}, ${newPosition.y}) ${newPosition.w}×${newPosition.h}`
+          })
+          updates.push({ chartId, position: newPosition })
           hasUpdates = true
         }
       }
@@ -454,11 +779,12 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
 
     // Batch all position updates to avoid multiple re-renders
     if (hasUpdates) {
+      console.log(`💾 [LAYOUT_SAVE] Saving ${updates.length} position updates`)
       updates.forEach(({ chartId, position }) => {
         updateChartCustomization(chartId, { position })
       })
     }
-  }, [layoutItems, sortedCharts, analysis.chartConfig, updateChartCustomization])
+  }, [layoutItems, sortedCharts, analysis.chartConfig, chartCustomizations, updateChartCustomization])
 
   // Layout validation - ensure bounds are respected
   const validateLayout = useCallback((layout: GridLayout[]) => {
@@ -585,6 +911,10 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
           <h2 className="text-lg font-semibold text-gray-900">
             Dashboard Layout
           </h2>
+
+          {/* Date Range Selector */}
+          <DateRangeSelector className="" />
+
           <div className="flex items-center space-x-2">
             <Switch
               id="layout-mode"
@@ -640,22 +970,11 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
               /**
                * OPTIMIZED COMPACT LAYOUT RESET ALGORITHM WITH QUALITY SORTING
                *
-               * This algorithm leverages React Grid Layout's vertical compaction to minimize white space:
-               * 1. Scorecards are placed at the top in rows (2 columns wide each)
-               * 2. Other charts are SORTED BY QUALITY SCORE (highest first)
-               * 3. Charts placed in 2-per-row layout (6 columns each)
-               * 4. React Grid Layout's vertical compaction automatically fills gaps
-               *
-               * Grid System:
-               * - Total columns: 12
-               * - Row height: 200px
-               * - Scorecard size: 2 columns × 1 row (400px × 200px)
-               * - Standard charts: 6 columns × 4 rows (1200px × 800px)
-               * - Pie charts: 4 columns × 4 rows (800px × 800px)
-               * - Tables: 12 columns × 6 rows (full width × 1200px)
+               * This algorithm only positions VISIBLE charts (sortedCharts),
+               * completely ignoring filtered-out charts to prevent gaps.
                */
 
-              // Use sortedCharts which are already sorted by quality score
+              // Use ONLY sortedCharts (which excludes filtered charts)
               const scorecards: Array<{ config: any, chartId: string }> = []
               const otherCharts: Array<{ config: any, chartId: string }> = []
 
@@ -695,7 +1014,6 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
               })
 
               // Reset for other charts - place them with 2-per-row layout
-              // Charts are already sorted by quality score in sortedCharts
               currentX = 0
               currentY = scorecards.length > 0 ? Math.ceil(scorecards.length * SCORECARD_WIDTH / GRID_COLS) : 0
 
@@ -720,7 +1038,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
                 currentX += dims.w
               })
 
-              // Force re-render - compaction will automatically minimize gaps
+              // Force re-render
               setLayouts({})
               setLayoutKey(prev => prev + 1)
             }}
@@ -796,6 +1114,32 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         </div>
       )}
 
+      {/* Active Date Filter Indicator */}
+      {dateRange && (dateRange.from || dateRange.to) && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <Calendar className="h-4 w-4 text-blue-600" />
+            <span className="text-sm font-medium text-blue-900">
+              Date Filter Active:
+              {dateRange.from && ` ${format(dateRange.from, 'MMM d, yyyy')}`}
+              {dateRange.to && dateRange.from !== dateRange.to && ` - ${format(dateRange.to, 'MMM d, yyyy')}`}
+            </span>
+            <span className="text-xs text-blue-700 bg-blue-100 px-2 py-1 rounded">
+              {granularity.charAt(0).toUpperCase() + granularity.slice(1)} view
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setDateRange(undefined)}
+            className="text-blue-600 hover:text-blue-800 hover:bg-blue-100"
+          >
+            <X className="h-4 w-4 mr-1" />
+            Clear Filter
+          </Button>
+        </div>
+      )}
+
       {/* Dashboard Content */}
       <div className={cn(
         "dashboard-container draggable-grid-container relative",
@@ -851,8 +1195,8 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
             allowOverlap={false} // Never allow overlaps
             useCSSTransforms={true} // PERFORMANCE: Use CSS transforms for smooth animations
             transformScale={1} // PERFORMANCE: Optimize transform calculations
-            margin={[16, 16]}
-            containerPadding={[0, 0]}
+            margin={[24, 24]} // Increased from 16 to 24 for better spacing
+            containerPadding={[16, 16]} // Added padding to prevent charts from touching edges
             autoSize={true}
             isDroppable={false} // Disable external dropping to prevent conflicts
             // PERFORMANCE OPTIMIZATIONS:
@@ -909,7 +1253,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
                     type={config.type}
                     title={chartTitle}
                     description={chartDescription}
-                    data={data}
+                    data={filteredData}
                     dataKey={dataKey}
                     configDataMapping={configDataMapping}
                     isDragging={isDragging}
@@ -1025,7 +1369,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
               title={draftChart.title}
               description={draftChart.description}
               chartType={draftChart.type as any}
-              customization={chartCustomizations[draftChart.id]}
+              customization={chartCustomizations[draftChart.id] || {}}
               onCustomizationChange={updateChartCustomization}
               initialTab="data"
               autoOpen={true}

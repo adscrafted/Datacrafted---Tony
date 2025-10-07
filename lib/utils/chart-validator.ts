@@ -1,4 +1,5 @@
-import { ChartConfig, DataRow } from '@/lib/store'
+import { ChartConfig } from '@/lib/types/chart-types'
+import { DataRow } from '@/lib/store'
 
 interface ChartValidationResult {
   isValid: boolean

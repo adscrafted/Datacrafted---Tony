@@ -57,6 +57,7 @@ import { cn } from '@/lib/utils/cn'
 import { QualityBadge } from './quality-indicator'
 import { renderCollapsibleLegend } from './collapsible-legend'
 import { aggregateChartData } from '@/lib/utils/data-aggregation'
+import { processChartData, ChartDataMapping } from '@/lib/utils/chart-data-processor'
 
 const TableChartLazy = React.lazy(() => import('./charts/table-chart').then(m => ({ default: m.TableChart })))
 const WaterfallChart = React.lazy(() => import('./charts/waterfall-chart'))
@@ -69,6 +70,7 @@ interface EnhancedChartWrapperProps {
   data: DataRow[]
   dataKey: string[]
   configDataMapping?: any  // dataMapping from original chart config
+  customization?: any  // Chart customization settings
   isDragging?: boolean
   isSelected?: boolean
   onSelect?: (id: string) => void
@@ -76,6 +78,7 @@ interface EnhancedChartWrapperProps {
   className?: string
   qualityScore?: number
   initialTab?: 'general' | 'data' | 'style' | 'axes' | 'actions' // Tab to open in customization panel
+  onDataPointClick?: (dataPoint: any) => void // Callback when a data point is clicked
 }
 
 // Enhanced chart minimum dimensions and aspect ratios for better content visibility
@@ -125,6 +128,66 @@ function useDebounce<T>(value: T, delay: number): T {
 
 const COLORS = ['#2563eb', '#dc2626', '#ca8a04', '#16a34a', '#9333ea', '#c2410c']
 
+// Custom dot component with onClick support for Line charts
+interface CustomDotProps {
+  cx?: number
+  cy?: number
+  fill?: string
+  r?: number
+  payload?: any
+  onClick?: (payload: any) => void
+}
+
+const CustomActiveDot: React.FC<CustomDotProps> = ({ cx, cy, fill, r = 4, payload, onClick }) => {
+  if (typeof cx !== 'number' || typeof cy !== 'number') return null
+
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={r}
+      fill={fill}
+      style={{ cursor: 'pointer' }}
+      onClick={(e) => {
+        e.stopPropagation()
+        if (onClick && payload) {
+          onClick(payload)
+        }
+      }}
+    />
+  )
+}
+
+// Custom shape component for Scatter charts
+interface CustomScatterShapeProps {
+  cx?: number
+  cy?: number
+  fill?: string
+  payload?: any
+  onClick?: (payload: any) => void
+}
+
+const CustomScatterShape: React.FC<CustomScatterShapeProps> = ({ cx, cy, fill, payload, onClick }) => {
+  if (typeof cx !== 'number' || typeof cy !== 'number') return null
+
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={6}
+      fill={fill}
+      fillOpacity={0.6}
+      style={{ cursor: 'pointer' }}
+      onClick={(e) => {
+        e.stopPropagation()
+        if (onClick && payload) {
+          onClick(payload)
+        }
+      }}
+    />
+  )
+}
+
 export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(function EnhancedChartWrapper({
   id,
   type,
@@ -139,7 +202,8 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
   onEdit,
   className,
   qualityScore,
-  initialTab
+  initialTab,
+  onDataPointClick
 }) {
   const chartRef = useRef<HTMLDivElement>(null)
   const [isHovered, setIsHovered] = useState(false)
@@ -166,6 +230,9 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
   const customization = chartCustomizations[id]
   const isVisible = customization?.isVisible !== false
 
+  // CRITICAL FIX: Use customized chart type if available
+  const effectiveChartType = (customization?.chartType || type) as ChartType
+
   // Check if this is a draft chart (newly added, not yet configured)
   const isDraftChart = React.useMemo(() => {
     return draftChart?.id === id
@@ -185,7 +252,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
     }
 
     // Check if required fields are configured based on chart type
-    switch (type) {
+    switch (effectiveChartType) {
       case 'line':
       case 'bar':
         return !!(effectiveMapping.xAxis || effectiveMapping.category)
@@ -204,7 +271,8 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
       case 'pie':
         return !!effectiveMapping.category
       case 'scorecard':
-        return !!effectiveMapping.metric
+        // Scorecard is valid if it has either a metric field OR a formula field
+        return !!(effectiveMapping.metric || effectiveMapping.formula)
       case 'table':
         return !!(effectiveMapping.columns && effectiveMapping.columns.length > 0) || !!effectiveMapping.yAxis
       case 'combo':
@@ -246,6 +314,22 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
     const effectiveMapping = {
       ...configDataMapping,
       ...customization?.dataMapping
+    }
+
+    // Process formula-based scorecards using the chart data processor
+    if (type === 'scorecard' && effectiveMapping.formula && effectiveMapping.formulaAlias) {
+      try {
+        const processed = processChartData(processedData, 'scorecard', effectiveMapping as ChartDataMapping)
+        processedData = processed.data
+        console.log(`📊 [FORMULA_DEBUG] ${title}:`, {
+          formula: effectiveMapping.formula,
+          formulaAlias: effectiveMapping.formulaAlias,
+          result: processedData[0],
+          metadata: processed.metadata
+        })
+      } catch (error) {
+        console.error(`❌ [FORMULA_ERROR] ${title}:`, error)
+      }
     }
 
     // Sort by X-axis for all charts that use X-axis (especially important for dates)
@@ -363,11 +447,18 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
 
   // Safe dataKey handling - MUST be defined first
   const safeDataKey = React.useMemo(() => {
-    // If custom dataMapping is available, use it
-    if (customization?.dataMapping) {
-      const mapping = customization.dataMapping
+    // Merge configDataMapping and customization.dataMapping to get effective mapping
+    // This is critical for formula-based scorecards where the formula might be in configDataMapping
+    const effectiveMapping = {
+      ...configDataMapping,
+      ...customization?.dataMapping
+    }
 
-      switch (type) {
+    // If effective dataMapping is available, use it
+    if (effectiveMapping && Object.keys(effectiveMapping).length > 0) {
+      const mapping = effectiveMapping
+
+      switch (effectiveChartType) {
         case 'line':
         case 'bar':
           // Check for category + values format first (new AI format)
@@ -429,7 +520,10 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
           break
 
         case 'scorecard':
-          if (mapping.metric) {
+          // For formula-based scorecards, use formulaAlias; otherwise use metric
+          if (mapping.formula && mapping.formulaAlias) {
+            return [mapping.formulaAlias]
+          } else if (mapping.metric) {
             return [mapping.metric]
           }
           break
@@ -447,7 +541,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
       return ['index']
     }
     return dataKey
-  }, [dataKey, customization?.dataMapping, type])
+  }, [dataKey, configDataMapping, customization?.dataMapping, effectiveChartType])
 
   // Detect if dual Y-axis is needed for bar/line/area/scatter charts with multiple metrics
   const dualAxisConfig = React.useMemo(() => {
@@ -859,6 +953,13 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
     const sizeKey = effectiveDataMapping?.size
     const colorKey = effectiveDataMapping?.color
 
+    console.log('🔍 [SCATTER DATA] Input chartData:', chartData.length, 'rows')
+    console.log('🔍 [SCATTER DATA] First 3 rows:', chartData.slice(0, 3))
+    console.log('🔍 [SCATTER DATA] X-axis key:', safeDataKey[0])
+    console.log('🔍 [SCATTER DATA] Y-axis key:', safeDataKey[1])
+    console.log('🔍 [SCATTER DATA] Size key:', sizeKey)
+    console.log('🔍 [SCATTER DATA] Color key:', colorKey)
+
     // Helper to parse currency and formatted numbers
     const parseNumericValue = (val: any): number => {
       if (typeof val === 'number') return val
@@ -875,6 +976,8 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
       [safeDataKey[1]]: parseNumericValue(row[safeDataKey[1]]),
       ...(sizeKey ? { [sizeKey]: parseNumericValue(row[sizeKey]) } : {})
     }))
+
+    console.log('🔍 [SCATTER DATA] Transformed first 3 rows:', numericData.slice(0, 3))
 
     // Group data by color dimension if it exists
     interface ScatterGroup {
@@ -903,11 +1006,17 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
       })
 
       // Convert to array and assign colors
-      return Object.entries(groupMap).map(([name, data], index) => ({
+      const result = Object.entries(groupMap).map(([name, data], index) => ({
         name,
         color: colors[index % colors.length],
         data
       }))
+
+      console.log('🔍 [SCATTER DATA] Created groups:', result.length)
+      console.log('🔍 [SCATTER DATA] First group:', result[0]?.name, 'with', result[0]?.data.length, 'points')
+      console.log('🔍 [SCATTER DATA] Second group:', result[1]?.name, 'with', result[1]?.data.length, 'points')
+
+      return result
     })()
 
     return { numericData, groups }
@@ -1019,10 +1128,20 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
 
     // colors is already defined at component level (line 850)
 
-    switch (type) {
+    switch (effectiveChartType) {
       case 'scorecard':
         if (safeDataKey.length > 0 && chartData.length > 0) {
-          const key = customization?.dataMapping?.metric || safeDataKey[0]
+          // For formula-based scorecards, use formulaAlias; otherwise use metric
+          const key = customization?.dataMapping?.formulaAlias || customization?.dataMapping?.metric || safeDataKey[0]
+
+          // Get effective data mapping
+          const effectiveMapping = {
+            ...configDataMapping,
+            ...customization?.dataMapping
+          }
+
+          // Get aggregation type - check customization first, then dataMapping, default to 'sum'
+          const aggregationType = customization?.aggregation || effectiveMapping?.aggregation || 'sum'
 
           // Helper to parse currency and formatted numbers
           const parseNumericValue = (val: any): number => {
@@ -1039,18 +1158,46 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
             return parseNumericValue(val)
           }).filter(v => !isNaN(v) && v !== null)
 
-          const metricValue = values.length > 0
-            ? customization?.aggregation === 'avg'
-              ? values.reduce((a, b) => a + b, 0) / values.length
-              : values.reduce((a, b) => a + b, 0)
-            : 0
+          // Calculate metric value based on aggregation type
+          let metricValue = 0
+          if (values.length > 0) {
+            switch (aggregationType) {
+              case 'sum':
+                metricValue = values.reduce((a, b) => a + b, 0)
+                break
+              case 'avg':
+                metricValue = values.reduce((a, b) => a + b, 0) / values.length
+                break
+              case 'count':
+                metricValue = values.length
+                break
+              case 'min':
+                metricValue = Math.min(...values)
+                break
+              case 'max':
+                metricValue = Math.max(...values)
+                break
+              case 'distinct':
+                metricValue = new Set(values).size
+                break
+              case 'median':
+                const sorted = [...values].sort((a, b) => a - b)
+                const mid = Math.floor(sorted.length / 2)
+                metricValue = sorted.length % 2 === 0
+                  ? (sorted[mid - 1] + sorted[mid]) / 2
+                  : sorted[mid]
+                break
+              default:
+                metricValue = values.reduce((a, b) => a + b, 0)
+            }
+          }
 
           return (
             <Scorecard
               title={customization?.customTitle || title}
               value={metricValue}
               unit=""
-              aggregationType={customization?.aggregation}
+              aggregationType={aggregationType as any}
             />
           )
         }
@@ -1163,16 +1310,34 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                   ? (dualAxisConfig.leftMetrics.includes(key) ? "left" : "right")
                   : undefined
 
+                const lineColor = colors[index % colors.length]
+
                 return (
                   <Line
                     key={key}
                     yAxisId={yAxisId}
                     type="monotone"
                     dataKey={key}
-                    stroke={colors[index % colors.length]}
+                    stroke={lineColor}
                     strokeWidth={responsiveFeatures.showGrid ? 2 : 3}
-                    dot={responsiveFeatures.showGrid ? { r: 3 } : false}
-                    activeDot={{ r: responsiveFeatures.showGrid ? 4 : 5 }}
+                    dot={({ key, ...props }) => (
+                      <CustomActiveDot
+                        key={key}
+                        {...props}
+                        fill={lineColor}
+                        r={4}
+                        onClick={onDataPointClick}
+                      />
+                    )}
+                    activeDot={({ key, ...props }) => (
+                      <CustomActiveDot
+                        key={key}
+                        {...props}
+                        fill={lineColor}
+                        r={6}
+                        onClick={onDataPointClick}
+                      />
+                    )}
                     animationDuration={customization?.animate !== false ? 1500 : 0}
                   />
                 )
@@ -1365,6 +1530,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                     fill={colors[index % colors.length]}
                     radius={responsiveFeatures.showGrid ? [2, 2, 0, 0] : [1, 1, 0, 0]}
                     animationDuration={customization?.animate !== false ? 1500 : 0}
+                    onClick={(data) => onDataPointClick?.(data.payload)}
                   />
                 )
               })}
@@ -1393,6 +1559,16 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                     return `${truncated.text} ${(percent * 100).toFixed(0)}%`
                   } : false}
                 animationDuration={customization?.animate !== false ? 1500 : 0}
+                onClick={(data) => {
+                  // For pie charts, find the first matching row in the original data
+                  if (onDataPointClick && data && data.name) {
+                    const categoryKey = customization?.dataMapping?.category || safeDataKey[0]
+                    const matchingRow = chartData.find(row => String(row[categoryKey]) === String(data.name))
+                    if (matchingRow) {
+                      onDataPointClick(matchingRow)
+                    }
+                  }
+                }}
               >
                 {pieData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
@@ -1531,6 +1707,8 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                 // Enable stacked areas when customization.stacked is true
                 const stackId = customization?.stacked ? "stack1" : undefined
 
+                const areaColor = colors[index % colors.length]
+
                 return (
                   <Area
                     key={key}
@@ -1538,10 +1716,28 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                     stackId={stackId}
                     type="monotone"
                     dataKey={key}
-                    stroke={colors[index % colors.length]}
-                    fill={colors[index % colors.length]}
+                    stroke={areaColor}
+                    fill={areaColor}
                     fillOpacity={responsiveFeatures.showGrid ? 0.3 : 0.5}
                     strokeWidth={responsiveFeatures.showGrid ? 2 : 3}
+                    dot={({ key, ...props }) => (
+                      <CustomActiveDot
+                        key={key}
+                        {...props}
+                        fill={areaColor}
+                        r={3}
+                        onClick={onDataPointClick}
+                      />
+                    )}
+                    activeDot={({ key, ...props }) => (
+                      <CustomActiveDot
+                        key={key}
+                        {...props}
+                        fill={areaColor}
+                        r={5}
+                        onClick={onDataPointClick}
+                      />
+                    )}
                     animationDuration={customization?.animate !== false ? 1500 : 0}
                   />
                 )
@@ -1701,41 +1897,67 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
 
                   const payload = props.payload[0].payload
 
+                  // Debug logging
+                  console.log('🔍 [SCATTER TOOLTIP] Props:', props)
+                  console.log('🔍 [SCATTER TOOLTIP] Payload:', payload)
+                  console.log('🔍 [SCATTER TOOLTIP] All keys:', Object.keys(payload))
+
+                  // Get all keys from the payload, excluding internal Recharts properties
+                  const allKeys = Object.keys(payload).filter(key =>
+                    !key.startsWith('_') &&
+                    key !== 'cx' &&
+                    key !== 'cy' &&
+                    key !== 'size' &&
+                    key !== 'node' &&
+                    key !== 'tooltipPayload' &&
+                    key !== 'tooltipPosition'
+                  )
+
+                  // Prioritize displaying the main dimensions first
+                  const prioritizedKeys = [
+                    ...(colorKey && allKeys.includes(colorKey) ? [colorKey] : []),
+                    ...(safeDataKey[0] && allKeys.includes(safeDataKey[0]) ? [safeDataKey[0]] : []),
+                    ...(safeDataKey[1] && allKeys.includes(safeDataKey[1]) ? [safeDataKey[1]] : []),
+                    ...(sizeKey && allKeys.includes(sizeKey) ? [sizeKey] : []),
+                    ...allKeys.filter(k => k !== colorKey && k !== safeDataKey[0] && k !== safeDataKey[1] && k !== sizeKey)
+                  ]
+
                   return (
                     <div style={{
                       backgroundColor: 'white',
                       border: '1px solid #e2e8f0',
                       borderRadius: '8px',
                       padding: '12px',
-                      fontSize: '12px'
+                      fontSize: '12px',
+                      maxWidth: '300px'
                     }}>
                       <div style={{ marginBottom: '8px', fontWeight: '600', color: '#374151' }}>
                         {props.payload[0].name || 'Data Point'}
                       </div>
-                      {safeDataKey[0] && (
-                        <div style={{ marginBottom: '4px', color: '#64748b' }}>
-                          <span style={{ fontWeight: '500' }}>{enhancedAxisLabels.x || safeDataKey[0]}:</span>{' '}
-                          <span style={{ color: '#111827' }}>{payload[safeDataKey[0]]}</span>
-                        </div>
-                      )}
-                      {safeDataKey[1] && (
-                        <div style={{ marginBottom: '4px', color: '#64748b' }}>
-                          <span style={{ fontWeight: '500' }}>{enhancedAxisLabels.y || safeDataKey[1]}:</span>{' '}
-                          <span style={{ color: '#111827' }}>{payload[safeDataKey[1]]}</span>
-                        </div>
-                      )}
-                      {sizeKey && payload[sizeKey] !== undefined && (
-                        <div style={{ marginBottom: '4px', color: '#64748b' }}>
-                          <span style={{ fontWeight: '500' }}>{sizeKey}:</span>{' '}
-                          <span style={{ color: '#111827' }}>{payload[sizeKey]}</span>
-                        </div>
-                      )}
-                      {colorKey && payload[colorKey] !== undefined && (
-                        <div style={{ color: '#64748b' }}>
-                          <span style={{ fontWeight: '500' }}>{colorKey}:</span>{' '}
-                          <span style={{ color: '#111827' }}>{payload[colorKey]}</span>
-                        </div>
-                      )}
+                      {prioritizedKeys.map((key, index) => {
+                        const value = payload[key]
+                        if (value === undefined || value === null) return null
+
+                        // Format the value
+                        const displayValue = typeof value === 'number'
+                          ? value.toLocaleString(undefined, { maximumFractionDigits: 2 })
+                          : String(value)
+
+                        // Get label for this key
+                        let label = key
+                        if (key === safeDataKey[0] && enhancedAxisLabels.x) {
+                          label = enhancedAxisLabels.x
+                        } else if (key === safeDataKey[1] && enhancedAxisLabels.y) {
+                          label = enhancedAxisLabels.y
+                        }
+
+                        return (
+                          <div key={key} style={{ marginBottom: index < prioritizedKeys.length - 1 ? '4px' : '0', color: '#64748b' }}>
+                            <span style={{ fontWeight: '500' }}>{label}:</span>{' '}
+                            <span style={{ color: '#111827' }}>{displayValue}</span>
+                          </div>
+                        )
+                      })}
                     </div>
                   )
                 }}
@@ -1752,19 +1974,32 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                   })}
                 />
               )}
-              {scatterGroups.map((group, idx) => {
-                // console.log(`🔍 [SCATTER DEBUG] Rendering group ${idx}:`, group.name, 'with', group.data.length, 'points, color:', group.color)
-                return (
-                  <Scatter
-                    key={group.name}
-                    name={group.name}
-                    data={group.data}
-                    fill={group.color}
-                    fillOpacity={0.6}
-                    animationDuration={customization?.animate !== false ? 1500 : 0}
-                  />
-                )
-              })}
+              <Scatter
+                name="Data Points"
+                data={numericScatterData}
+                fillOpacity={0.6}
+                animationDuration={customization?.animate !== false ? 1500 : 0}
+                shape={(props) => {
+                  // Determine color based on the colorKey value
+                  let pointColor = colors[0]
+                  if (colorKey && props.payload) {
+                    const colorValue = String(props.payload[colorKey] || 'Unknown')
+                    // Find the group index for this color value
+                    const groupIndex = scatterGroups.findIndex(g => g.name === colorValue)
+                    if (groupIndex !== -1) {
+                      pointColor = scatterGroups[groupIndex].color
+                    }
+                  }
+
+                  return (
+                    <CustomScatterShape
+                      {...props}
+                      fill={pointColor}
+                      onClick={onDataPointClick}
+                    />
+                  )
+                }}
+              />
             </ScatterChart>
           </ResponsiveContainer>
         )
@@ -2010,10 +2245,29 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                     maxVisibleItems: 5,
                     wrapperStyle: { fontSize: '11px', paddingTop: '30px', paddingBottom: '5px' },
                     iconType: (value: any) => {
+                      // Find which axis this metric belongs to
                       const isRightAxis = yAxis2Metrics.includes(value)
                       const chartType = isRightAxis ? yAxis2Type : yAxis1Type
-                      // Use line icon for line charts, rect for bars/areas
-                      return chartType === 'line' ? 'line' : 'rect'
+                      const metricIdx = isRightAxis
+                        ? yAxis2Metrics.indexOf(value)
+                        : yAxis1Metrics.indexOf(value)
+                      const color = getMetricColor(metricIdx, isRightAxis)
+
+                      // Return a React element with the appropriate icon and color
+                      if (chartType === 'line') {
+                        return (
+                          <svg width={14} height={14} viewBox="0 0 14 14" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }}>
+                            <line x1="0" y1="7" x2="14" y2="7" stroke={color} strokeWidth="2" />
+                          </svg>
+                        )
+                      } else {
+                        // rect for bars/areas
+                        return (
+                          <svg width={14} height={14} viewBox="0 0 14 14" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }}>
+                            <rect x="0" y="0" width="14" height="14" fill={color} />
+                          </svg>
+                        )
+                      }
                     },
                     formatter: (value, entry: any) => {
                       // Determine if this metric is on left or right axis
@@ -2047,6 +2301,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                       fillOpacity={0.6}
                       radius={[4, 4, 0, 0]}
                       animationDuration={customization?.animate !== false ? 1500 : 0}
+                      onClick={(data) => onDataPointClick?.(data.payload)}
                     />
                   )
                 } else if (yAxis1Type === 'area') {
@@ -2061,6 +2316,24 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                       fill={color}
                       fillOpacity={responsiveFeatures.showGrid ? 0.3 : 0.5}
                       strokeWidth={responsiveFeatures.showGrid ? 2 : 3}
+                      dot={({ key, ...props }) => (
+                        <CustomActiveDot
+                          key={key}
+                          {...props}
+                          fill={color}
+                          r={3}
+                          onClick={onDataPointClick}
+                        />
+                      )}
+                      activeDot={({ key, ...props }) => (
+                        <CustomActiveDot
+                          key={key}
+                          {...props}
+                          fill={color}
+                          r={5}
+                          onClick={onDataPointClick}
+                        />
+                      )}
                       animationDuration={customization?.animate !== false ? 1500 : 0}
                     />
                   )
@@ -2074,8 +2347,24 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                       dataKey={metric}
                       stroke={color}
                       strokeWidth={2.5}
-                      dot={false}
-                      activeDot={{ r: 5, fill: color, strokeWidth: 2, stroke: '#fff' }}
+                      dot={({ key, ...props }) => (
+                        <CustomActiveDot
+                          key={key}
+                          {...props}
+                          fill={color}
+                          r={4}
+                          onClick={onDataPointClick}
+                        />
+                      )}
+                      activeDot={({ key, ...props }) => (
+                        <CustomActiveDot
+                          key={key}
+                          {...props}
+                          fill={color}
+                          r={6}
+                          onClick={onDataPointClick}
+                        />
+                      )}
                       animationDuration={customization?.animate !== false ? 1500 : 0}
                     />
                   )
@@ -2101,6 +2390,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                       fillOpacity={0.6}
                       radius={[4, 4, 0, 0]}
                       animationDuration={customization?.animate !== false ? 1500 : 0}
+                      onClick={(data) => onDataPointClick?.(data.payload)}
                     />
                   )
                 } else if (yAxis2Type === 'area') {
@@ -2115,6 +2405,24 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                       fill={color}
                       fillOpacity={responsiveFeatures.showGrid ? 0.3 : 0.5}
                       strokeWidth={responsiveFeatures.showGrid ? 2 : 3}
+                      dot={({ key, ...props }) => (
+                        <CustomActiveDot
+                          key={key}
+                          {...props}
+                          fill={color}
+                          r={3}
+                          onClick={onDataPointClick}
+                        />
+                      )}
+                      activeDot={({ key, ...props }) => (
+                        <CustomActiveDot
+                          key={key}
+                          {...props}
+                          fill={color}
+                          r={5}
+                          onClick={onDataPointClick}
+                        />
+                      )}
                       animationDuration={customization?.animate !== false ? 1500 : 0}
                     />
                   )
@@ -2128,8 +2436,24 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                       dataKey={metric}
                       stroke={color}
                       strokeWidth={2.5}
-                      dot={false}
-                      activeDot={{ r: 5, fill: color, strokeWidth: 2, stroke: '#fff' }}
+                      dot={({ key, ...props }) => (
+                        <CustomActiveDot
+                          key={key}
+                          {...props}
+                          fill={color}
+                          r={4}
+                          onClick={onDataPointClick}
+                        />
+                      )}
+                      activeDot={({ key, ...props }) => (
+                        <CustomActiveDot
+                          key={key}
+                          {...props}
+                          fill={color}
+                          r={6}
+                          onClick={onDataPointClick}
+                        />
+                      )}
                       animationDuration={customization?.animate !== false ? 1500 : 0}
                     />
                   )
@@ -2205,6 +2529,18 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
             {/* Controls overlay - shown on hover */}
             {(isHovered || isSelected) && (
               <div className="absolute top-2 right-2 z-10 flex items-center space-x-1 bg-white/90 backdrop-blur-sm rounded-lg p-1 shadow-sm">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setFullScreen(id)
+                  }}
+                  className="h-7 w-7 p-0 hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                  title="View fullscreen"
+                >
+                  <Maximize2 className="h-3.5 w-3.5" />
+                </Button>
                 <ChartCustomizationPanel
                   chartId={id}
                   title={title}

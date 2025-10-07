@@ -79,7 +79,7 @@ export interface ChartRecommendation {
   /** Chart-specific configuration */
   chartConfig: {
     /** Aggregation method for grouped data */
-    aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max';
+    aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct' | 'median' | 'mode' | 'std' | 'variance' | 'percentile';
 
     /** Column to sort by */
     sortBy?: string;

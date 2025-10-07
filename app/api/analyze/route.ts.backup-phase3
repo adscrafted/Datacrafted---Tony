@@ -542,18 +542,8 @@ ${domain === 'advertising' ? 'Efficiency scatter (Spend vs Revenue) | Combo char
 }
 
 /**
- * PHASE 3 OPTIMIZED: Build XML-structured AI prompt
- * Deployed: 2025-10-06
- * Token Savings: ~5,625 tokens (58% reduction from ~9,625 to ~4,000)
- * Changes:
- * - XML structure for better GPT-5 compliance (+35% adherence)
- * - Removed redundancy (chart count 7x → 1x, column validation 5x → 1x)
- * - Removed emoji spam (27 ⚠️ → 0)
- * - Removed verification checklist (400 tokens saved)
- * - Consolidated examples (3 → 1, 350 tokens saved)
- * - Simplified domain guidance (1,495 → 300 tokens, 80% reduction)
- * - Optimized chart type docs (800 → 250 tokens, 69% reduction)
- * - Structured for prompt caching (static vs dynamic sections)
+ * Build enhanced AI prompt with chain-of-thought reasoning and calculated fields
+ * Based on research: multi-stage analysis produces higher quality insights than single-shot prompts
  */
 function buildEnhancedPrompt(
   dataStructure: any,
@@ -561,230 +551,366 @@ function buildEnhancedPrompt(
   correctedSchema?: Array<{ name: string; type: string; description: string; userCorrected: boolean }>,
   feedback?: string
 ): string {
+  // Detect business domain
   const domain = detectBusinessDomain(dataStructure.columns.map((c: any) => c.name))
+  const domainGuidance = getDataDrivenGuidance(domain)
 
-  // Domain-specific concise guidance
-  const domainHints: Record<string, string> = {
-    advertising: `Common metrics: impressions, clicks, spend, ROAS, CTR, conversions
-Analysis patterns: Efficiency (spend vs revenue), performance trends, channel comparison, Top/Bottom campaigns`,
-    ecommerce: `Common metrics: orders, revenue, products, customers, AOV, cart value
-Analysis patterns: Product rankings, customer segments, conversion funnels, seasonal trends`,
-    sales: `Common metrics: deals, pipeline, quota, commission, leads, win rate
-Analysis patterns: Pipeline distribution, rep performance, funnel stages, deal velocity`,
-    operations: `Common metrics: shipments, fulfillment, delivery, inventory, logistics
-Analysis patterns: Operations efficiency, supply chain metrics, throughput analysis`,
-    general: 'General business data - identify key metrics and relationships'
-  }
+  let prompt = `# DATA ANALYSIS TASK
 
-  const domainGuidance = domainHints[domain] || domainHints.general
+⚠️⚠️⚠️ ABSOLUTE REQUIREMENT - COUNT YOUR CHARTS BEFORE RESPONDING ⚠️⚠️⚠️
 
-  let prompt = `<TASK>
-Analyze the dataset and generate chart configuration recommendations for a business dashboard.
-</TASK>
+YOU MUST GENERATE AT LEAST 18 CHARTS (18 OR MORE IS ACCEPTABLE). The system will select the best 16 after validation.
 
-<CRITICAL_REQUIREMENTS>
-Generate minimum 18 charts (system selects best 16 after validation):
-- 8-10 scorecards using diverse aggregations (sum, avg, count, min, max, distinct)
-- 2 MANDATORY ranking bar charts:
-  * Top 10 chart: {type: "bar", dataMapping: {category: "...", values: ["..."], aggregation: "sum", sortBy: "...", sortOrder: "desc", limit: 10}}
-  * Bottom 10 chart: {type: "bar", dataMapping: {category: "...", values: ["..."], aggregation: "sum", sortBy: "...", sortOrder: "asc", limit: 10}}
-- 8-10 analytical charts (scatter, combo, line, area, bar, table based on data patterns)
+MANDATORY MINIMUM BREAKDOWN - YOU MUST GENERATE AT LEAST THESE CHARTS:
 
-IMPORTANT: Use ONLY column names that exist in the AVAILABLE COLUMNS list below. Charts with non-existent columns will fail validation.
-</CRITICAL_REQUIREMENTS>
+SCORECARDS (AT LEAST 8 - USE DIVERSE AGGREGATIONS):
+1. Scorecard with aggregation="sum"
+2. Scorecard with aggregation="avg"
+3. Scorecard with aggregation="count"
+4. Scorecard with aggregation="max"
+5. Scorecard with aggregation="min"
+6. Scorecard with aggregation="distinct"
+7. Scorecard with aggregation="sum" (different metric than #1)
+8. Scorecard with aggregation="avg" (different metric than #2)
 
-<DOMAIN_CONTEXT>
-Dataset type: ${domain.toUpperCase()}
-Row count: ${dataStructure.rowCount}
-Column count: ${dataStructure.columnCount}
+ANALYTICAL CHARTS (AT LEAST 16):
+9. Top 10 bar chart (type="bar", sortOrder="desc", limit=10)
+10. Bottom 10 bar chart (type="bar", sortOrder="asc", limit=10)
+11. Scatter plot (type="scatter")
+12. Combo chart (type="combo")
+13. Line chart (type="line")
+14. Area chart (type="area")
+15. Bar chart (type="bar")
+16. Another scatter or combo chart
+17. Another line, area, or bar chart
+18-24. Additional high-value analytical charts (scatter, combo, line, area, bar, table)
+
+CRITICAL: chartConfig array MUST have AT LEAST 18 items. More than 24 is fine if you have valuable insights.
+Generate 24+ charts so the system can select the best 16 after validation.
+
+MINIMUM VERIFICATION: Aim for 6+ scorecards + 12+ analytical charts = 18 total (or more)
+DO NOT PROCEED until you have counted and verified AT LEAST 18 charts in your chartConfig array.
+⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️
+
+## SUPPORTED CHART TYPES AND CONFIGURATIONS
+
+### CHART TYPES YOU CAN USE:
+1. **scorecard** - Single metric KPI card
+   - Supported aggregations: sum, avg, count, min, max, distinct
+   - Simple Example: { type: "scorecard", dataMapping: { metric: "Sales", aggregation: "sum" } }
+   - Formula Example: { type: "scorecard", dataMapping: { formula: "SUM(Sales) / SUM(Spent)", formulaAlias: "ROAS", formulaOptions: { round: 2 } } }
+
+2. **bar** - Horizontal or vertical bar chart
+   - Required: category, values (array), aggregation
+   - Optional: sortBy, sortOrder ("asc"/"desc"), limit (for Top/Bottom N)
+   - Example: { type: "bar", dataMapping: { category: "Product", values: ["Sales"], aggregation: "sum", sortOrder: "desc", limit: 10 } }
+
+3. **line** - Line chart for trends over time
+   - Required: xAxis, yAxis (array), aggregation
+   - Example: { type: "line", dataMapping: { xAxis: "Date", yAxis: ["Revenue"], aggregation: "sum" } }
+
+4. **area** - Area chart for trends with filled area
+   - Required: xAxis, yAxis (array), aggregation
+   - Example: { type: "area", dataMapping: { xAxis: "Month", yAxis: ["Sales"], aggregation: "sum" } }
+
+5. **scatter** - Scatter plot for correlation analysis
+   - Required: xAxis, yAxis
+   - Optional: size, color
+   - Example: { type: "scatter", dataMapping: { xAxis: "Spend", yAxis: "Revenue", size: "Orders", color: "Campaign" } }
+
+6. **combo** - Combination chart (bars + lines)
+   - Required: xAxis, yAxis (array for bars), yAxis2 (array for lines), yAxis1Type, yAxis2Type, aggregation
+   - Example: { type: "combo", dataMapping: { xAxis: "Date", yAxis: ["Impressions"], yAxis2: ["Clicks"], yAxis1Type: "bar", yAxis2Type: "line", aggregation: "sum" } }
+
+7. **pie** - Pie chart for proportions
+   - Required: category, value, aggregation
+   - Example: { type: "pie", dataMapping: { category: "Product", value: "Sales", aggregation: "sum" } }
+
+8. **table** - Data table with sortable columns
+   - Required: columns (array of column names)
+   - Optional: sortBy, sortOrder, limit
+   - Example: { type: "table", dataMapping: { columns: ["Product", "Sales", "Orders"], sortBy: "Sales", sortOrder: "desc", limit: 100 } }
+
+### SUPPORTED AGGREGATIONS (USE ONLY THESE):
+✅ sum, avg, count, min, max, distinct
+❌ DO NOT USE: median, mode, percentile, stddev, variance (NOT SUPPORTED)
+
+### FORMULAS (Create Calculated Metrics):
+**Syntax**: (Col1 - Col2) / Col3 * 100 | Functions: SUM(), AVG(), COUNT(), MIN(), MAX() | Spaces: [Total Sales]
+
+**Examples**: "formula": "SUM(Revenue) / SUM(Ad_Spend)", "formulaAlias": "ROAS", "formulaOptions": {"round": 2}
+- Profit Margin: (Revenue - Cost) / Revenue * 100
+- ROAS: SUM(Revenue) / SUM(Ad_Spend)
+- AOV: SUM(Revenue) / SUM(Orders)
+- CAC: SUM(Marketing_Spend) / SUM(New_Customers)
+
+**Common**: Profitability (Revenue-Cost)/Revenue*100 | Efficiency SUM(Output)/SUM(Input) | E-commerce SUM(Revenue)/SUM(Orders)
+**Rules**: Use AVAILABLE COLUMNS names, wrap spaces in brackets, avoid divide-by-zero, multiply by 100 for percentages
+
+---
+
+You are analyzing ${domain.toUpperCase()} DATA.
+You have ${dataStructure.rowCount} rows and ${dataStructure.columnCount} columns to analyze.
 
 ${domainGuidance}
 
-Chart recommendations:
-- 8-10 scorecards: Create scorecards for high-value metrics using diverse aggregations
-- 2 rankings: Identify top and bottom performers on a key metric
-- Efficiency analysis: Use scatter plots (input vs output with size/color dimensions)
-- Time trends: Use line/area charts if date columns exist
-- Multi-scale comparisons: Use combo charts when scales differ by >10x
-- Detailed tables: Include 1-2 tables for drill-down capability
-</DOMAIN_CONTEXT>
+## AVAILABLE COLUMNS (USE ONLY THESE):
+`
 
-<AVAILABLE_COLUMNS>`
-
-  // Add column information
+  // Show all columns with their statistics
   dataStructure.columns.forEach((col: any) => {
     prompt += `\n### "${col.name}" (${col.type})`
     if (col.stats && Object.keys(col.stats).length > 0) {
       if (col.type === 'number') {
         prompt += `\n  Range: ${col.stats.min} to ${col.stats.max} | Avg: ${col.stats.avg} | Sum: ${col.stats.sum}`
         if (col.stats.nonZeroCount < dataStructure.rowCount * 0.5) {
-          prompt += ` | WARNING: ${Math.round((1 - col.stats.nonZeroCount / dataStructure.rowCount) * 100)}% zeros`
+          prompt += ` | ⚠️ ${Math.round((1 - col.stats.nonZeroCount / dataStructure.rowCount) * 100)}% zeros`
         }
       } else if (col.type === 'categorical' && col.stats.distribution) {
-        prompt += `\n  Top: ${col.stats.distribution.slice(0, 3).map((d: any) => `${d.value} (${d.percentage}%)`).join(', ')} | ${col.stats.categoryCount} unique`
+        prompt += `\n  Top categories: ${col.stats.distribution.slice(0, 3).map((d: any) => `${d.value} (${d.percentage}%)`).join(', ')}`
+        prompt += ` | ${col.stats.categoryCount} unique values`
       } else if (col.type === 'date' && col.stats.earliest) {
-        prompt += `\n  Range: ${col.stats.earliest} to ${col.stats.latest} (${col.stats.spanDays} days)`
+        prompt += `\n  Date range: ${col.stats.earliest} to ${col.stats.latest} (${col.stats.spanDays} days)`
       }
     }
     if (col.nullPercentage > 0) {
-      prompt += `\n  WARNING: ${col.nullPercentage}% missing values`
+      prompt += `\n  ⚠️ ${col.nullPercentage}% missing values`
     }
   })
 
-  prompt += `\n</AVAILABLE_COLUMNS>`
-
-  // Add user corrections if present
   if (correctedSchema && correctedSchema.length > 0) {
-    prompt += `\n\n<USER_CORRECTIONS>`
-    prompt += `\nThe user has corrected these column interpretations (HIGHEST PRIORITY):`
+    prompt += `\n\n## ⚠️ USER CORRECTIONS (HIGHEST PRIORITY):\n`
     correctedSchema.forEach(col => {
-      prompt += `\n- ${col.name}: ${col.type} - "${col.description}"`
+      prompt += `- ${col.name}: ${col.type} - "${col.description}"\n`
     })
-    if (feedback) prompt += `\n\nUser Feedback: ${feedback}`
-    prompt += `\n</USER_CORRECTIONS>`
+    if (feedback) prompt += `\nUser Feedback: ${feedback}\n`
   }
 
-  // Chart types and analysis process
-  prompt += `
+  prompt += `\n\n## YOUR ANALYSIS PROCESS (FOLLOW THESE STEPS):
 
-<CHART_TYPES>
-Core types: scorecard, bar, line, area, scatter, combo, pie, table
-Advanced: waterfall, funnel, heatmap, gauge, cohort, bullet, treemap, sankey, sparkline
+### STEP 1: DOMAIN & CONTEXT ANALYSIS
+Think through these questions in your "reasoning" section:
+- What business domain does this data represent? (advertising, e-commerce, operations, etc.)
+- What are the key entities? (campaigns, products, customers, time periods)
+- What business process is being tracked? (sales funnel, ad performance, customer journey)
+- What decisions would stakeholders make with this data?
 
-dataMapping patterns:
-- scorecard: {metric, aggregation} OR {formula, formulaAlias, formulaOptions}
-- bar/pie: {category, values[], aggregation, sortBy?, sortOrder?, limit?}
-- line/area: {xAxis, yAxis[], aggregation}
-- scatter: {xAxis, yAxis, size?, color?}
-- combo: {xAxis, yAxis[], yAxis2[], yAxis1Type, yAxis2Type, aggregation}
-- table: {columns[], sortBy?, sortOrder?, limit?}
+### STEP 2: KEY BUSINESS QUESTIONS
+Identify 3-5 critical questions that stakeholders would want answered:
+- What are they trying to optimize? (ROI, efficiency, growth, cost reduction)
+- What comparisons matter? (time periods, segments, channels, products)
+- What patterns or anomalies would be actionable? (trends, outliers, correlations)
+- Include these questions in your "businessQuestions" array
 
-Aggregations: sum, avg, count, min, max, distinct
-Formula syntax: (Col1 - Col2) / Col3 * 100 | Functions: SUM(), AVG(), COUNT(), MIN(), MAX()
+### STEP 3: IDENTIFY KEY METRICS AND RELATIONSHIPS
+Analyze which existing columns contain the most valuable information:
+- Which metrics indicate performance or outcomes? (orders, sales, clicks, revenue)
+- Which metrics indicate investment or cost? (spend, budget, impressions)
+- What relationships between columns would reveal insights? (clicks vs impressions, orders vs spend)
+- Which dimensions allow for meaningful segmentation? (campaign, date, category, location)
 
-Examples:
-- Simple scorecard: {metric: "Revenue", aggregation: "sum"}
-- Formula scorecard: {formula: "SUM(Revenue) / SUM(Spend)", formulaAlias: "ROAS", formulaOptions: {round: 2}}
-- Top 10 bar: {category: "Product", values: ["Sales"], aggregation: "sum", sortBy: "Sales", sortOrder: "desc", limit: 10}
-- Multi-dim scatter: {xAxis: "Spend", yAxis: "Revenue", size: "Orders", color: "Campaign"}
-- Combo chart: {xAxis: "Date", yAxis: ["Impressions"], yAxis2: ["Clicks"], yAxis1Type: "bar", yAxis2Type: "line", aggregation: "sum"}
-</CHART_TYPES>
+⚠️ IMPORTANT: Work ONLY with existing columns. Do NOT create or imagine new calculated fields.
 
-<ANALYSIS_PROCESS>
-Step 1 - Domain Analysis:
-- Identify business domain (advertising, e-commerce, operations, etc.)
-- Identify key entities (campaigns, products, customers, time periods)
-- Understand business process being tracked
+### STEP 4: VISUALIZATION STRATEGY
+🚨 CRITICAL REQUIREMENT: Generate AT LEAST 18 visualizations (24 or more is acceptable):
+- AT LEAST 8 scorecards (with diverse aggregations: sum, avg, count, max, min, distinct)
+- AT LEAST 16 analytical charts including:
+  • MANDATORY: 1 Top 10 ranking chart (sortBy + sortOrder="desc" + limit=10)
+  • MANDATORY: 1 Bottom 10 ranking chart (sortBy + sortOrder="asc" + limit=10)
+  • 14+ other high-value analytical charts (any mix of scatter, combo, line, area, bar based on data)
 
-Step 2 - Business Questions:
-- Formulate 3-5 critical questions stakeholders want answered
-- Focus on optimization opportunities, comparisons, trends, anomalies
-- Include these in your "businessQuestions" array
+⚠️ MANDATORY: Your response MUST contain AT LEAST 18 items in the chartConfig array. More is fine. Count them before responding.
 
-Step 3 - Metric Identification:
-- Identify performance/outcome metrics (orders, sales, clicks, revenue)
-- Identify investment/cost metrics (spend, budget, impressions)
-- Identify relationships between columns (clicks vs impressions, orders vs spend)
-- Identify segmentation dimensions (campaign, date, category, location)
+Now recommend these 24+ comprehensive visualizations that:
+1. Answer the business questions from Step 2
+2. ⚠️ ONLY use columns that ALREADY EXIST in the "AVAILABLE COLUMNS" list at the top of this prompt
+3. ⚠️ To show efficiency or relationships, use TWO columns in a scatter plot or multi-series chart (e.g., "Clicks" vs "Impressions")
+4. ⚠️ Before adding ANY column to dataMapping, verify it exists in AVAILABLE COLUMNS
+5. Prioritize actionable insights over basic aggregations
+6. Follow visual best practices for readability
+7. ⚠️ REQUIRE DATA MANIPULATIONS - Each visualization should demonstrate data transformation:
+   - Calculated metrics (sum, average, count, min, max, distinct)
+   - Derived metrics beyond what's already in the data (e.g., if ROAS exists, calculate "Efficiency Score" as ROAS * Conversion %)
+   - Aggregated data with operations (group by with sum/avg/count/min/max/distinct)
+   - Time-based calculations (running totals, period-over-period growth, time-based comparisons)
+   - Multi-column calculations (e.g., "Revenue per Click" = Sales / Clicks, even if CPC exists)
+   - Multi-column calculations (e.g., "Revenue per Click" = Sales / Clicks, even if CPC exists)
+8. ⚠️ EVEN IF calculated metrics already exist in the data (like ROAS, CTR, CPC), create ADDITIONAL beneficial calculations:
+   - Efficiency indices (combine multiple metrics)
+   - Comparative metrics (above/below average indicators, ranking by performance)
+   - Comparative metrics (above/below average indicators)
+   - Aggregate statistics (avg ROAS by portfolio, max spend by category)
+   - Trend indicators (is this campaign improving or declining?)
 
-Step 4 - Visualization Strategy:
-Generate 18+ charts across these categories:
+🚨 COLUMN NAME VALIDATION REQUIRED:
+- Double-check EVERY column name against the AVAILABLE COLUMNS list
+- Use exact spelling, capitalization, and spacing from AVAILABLE COLUMNS
+- If a column doesn't exist, DO NOT USE IT
 
-SCORECARDS (8-10): One for each aggregation type applied to high-value metrics
-- sum: "Total Revenue", "Total Ad Spend", "Total Orders"
-- avg: "Average Order Value", "Average Campaign ROAS", "Average Conversion Rate"
-- count: "Total Campaigns", "Number of Products", "Active Customers"
-- max: "Peak Daily Sales", "Highest ROAS Campaign", "Latest Date"
-- min: "Lowest Inventory Level", "Minimum Spend", "Earliest Date"
-- distinct: "Unique Product Categories", "Markets Covered", "Customer Segments"
+## COMBO CHARTS (Dual Y-Axis):
+**When to use**: Different scales/units (Revenue $ vs Rate %, Count vs Percentage)
+**Scale Rule**: ratio = max(Metric1) / max(Metric2) → If >10x use combo (>3x recommended, <3x single-axis OK)
+**Common examples**: Impressions vs Clicks (20-100x) | Impressions vs Sales (50-1000x) | Any volume vs rate
 
-RANKINGS (2): ABSOLUTELY MANDATORY - MUST INCLUDE BOTH
-- Top 10 bar chart: Best performers (type="bar", sortOrder="desc", limit=10) - shows top performers to invest in
-- Bottom 10 bar chart: Worst performers (type="bar", sortOrder="asc", limit=10) - shows underperformers needing attention
+## CHART GENERATION:
+**Scorecards** (8-12): Diverse aggregations (sum for totals, avg for benchmarks, count for volume, min/max for extremes, distinct for variety)
+**Comparison**: Every chart compares time/categories/segments; use color, size, multiple series
+**Insight Levels**: HIGH (patterns/anomalies) | MEDIUM (context) | LOW (basic agg) - Need 4+ HIGH insights
+**Avoid**: Duplicate scorecards | Same chart different granularities | Non-existent column names
 
-IMPORTANT: These 2 ranking charts are REQUIRED in every analysis. Choose the most important metric for rankings.
+## QUALITY STANDARDS:
+**Chart Titles**: Use business context ("Campaign Efficiency" not "Spend vs Sales")
+**Descriptions**: Explain what to look for ("upper-left quadrant = most efficient")
+**Business Questions**: Each chart answers a specific question ("Which campaigns deliver best ROI?")
+**Multi-Dimensional**: Scatter plots use size AND color dimensions
+**Actionable**: Provide clear next steps ("Focus budget on these winners")
 
-ANALYTICAL (8-10): Based on data characteristics
-- Scatter plots: Efficiency analysis with size/color dimensions
-- Combo charts: Multi-scale time series (volume vs rate)
-- Line/Area: Trends over time
-- Bar charts: Category comparisons
-- Tables: Detailed drill-down data
-- Advanced charts: If patterns match (funnel, heatmap, etc.)
+### CORE CHART TYPES (Use actual column names from AVAILABLE COLUMNS):
 
-Step 5 - Validation:
-- Verify EVERY column name exists in AVAILABLE COLUMNS (exact match: spelling, capitalization, spacing)
-- Count charts: Ensure minimum 18 total
-- Check diversity: Multiple chart types, all aggregations used
-- Confirm business value: Each chart answers a specific question
-</ANALYSIS_PROCESS>
+**scorecard**: {"metric": "Column", "aggregation": "sum|avg|count|min|max|distinct"}
+**bar**: {"category": "Cat", "values": ["Metric"], "aggregation": "sum", "sortBy": "Metric", "sortOrder": "desc|asc", "limit": 10}
+**line/area**: {"xAxis": "Date", "yAxis": ["Metric1", "Metric2"], "aggregation": "sum"}
+**pie**: {"category": "Cat", "value": "Metric", "aggregation": "sum"}
+**scatter**: {"xAxis": "Metric1", "yAxis": "Metric2", "size": "Metric3", "color": "Category"}
+**combo**: {"xAxis": "Date", "yAxis": ["Metric1"], "yAxis2": ["Metric2"], "yAxis1Type": "bar", "yAxis2Type": "line", "aggregation": "sum"}
+**table**: {"columns": ["Col1", "Col2", "Col3"], "sortBy": "Col1", "limit": 100}
 
-<OUTPUT_FORMAT>
+### ADVANCED CHARTS (When patterns match):
+**waterfall**: {"category": "LineItem", "value": "Amount", "isTotal": "IsTotalCol"} - P&L, variance, cost breakdown
+**funnel**: {"stage": "StageCol", "value": "Count", "aggregation": "sum"} - conversions, drop-off analysis
+**heatmap**: {"xAxis": "Dimension1", "yAxis": "Dimension2", "value": "Metric", "aggregation": "sum"} - 2D patterns
+**gauge**: {"metric": "Actual", "target": "Target", "aggregation": "sum", "thresholds": [{"value": 0.8, "color": "red"}]}
+**cohort**: {"cohort": "SignupMonth", "period": "MonthsActive", "retention": "RetentionRate", "aggregation": "avg"}
+**bullet**: {"metric": "Actual", "target": "Target", "aggregation": "sum", "ranges": [{"label": "Poor", "value": 0.7}]}
+**treemap**: {"category": "Category", "parent": "Subcategory", "value": "Revenue", "aggregation": "sum"}
+**sankey**: {"source": "From", "target": "To", "flow": "Volume", "aggregation": "sum"}
+**sparkline**: {"xAxis": "Date", "yAxis": "Metric", "aggregation": "sum"} - compact trends
+
+## RESPONSE FORMAT:
 {
   "reasoning": {
     "domain": "What business domain is this?",
-    "keyEntities": ["List", "of", "entities"],
-    "businessProcess": "What process is being tracked?"
+    "keyEntities": ["List", "Of", "Entities"],
+    "businessProcess": "What process is tracked?"
   },
   "businessQuestions": [
     "Question 1 that stakeholders want answered",
-    "Question 2 about optimization opportunities",
-    "Question 3 about comparisons or trends"
+    "Question 2...",
+    "Question 3..."
   ],
   "insights": [
-    "Key insight 1 from initial data analysis",
-    "Key insight 2 about patterns or anomalies"
+    "Key insight 1 from data analysis",
+    "Key insight 2..."
   ],
   "chartConfig": [
     {
       "type": "scorecard",
       "title": "Total Ad Spend",
-      "description": "Total investment across campaigns - tracks budget utilization and spending pace",
+      "description": "Total investment across all campaigns - use to track budget utilization and spending pace",
       "insight_level": "high",
-      "answers_question": "How much have we invested in advertising?",
+      "answers_question": "How much total budget have we invested in advertising?",
       "dataMapping": {"metric": "Spend", "aggregation": "sum"},
       "confidence": 95,
-      "reasoning": "Critical KPI for budget tracking and executive reporting"
+      "reasoning": "Critical executive KPI showing total advertising investment - helps track budget burn rate"
     },
     {
       "type": "scatter",
-      "title": "Campaign Efficiency: Spend vs Sales",
-      "description": "Bubble size = Impressions (reach), Color = Campaign. Upper-left quadrant (high sales, low spend) = most efficient. Outliers indicate optimization opportunities.",
+      "title": "Campaign Advertising Efficiency: Spend vs Sales",
+      "description": "Bubble size = Impressions (reach), Color = Campaign Name. Campaigns in upper-left quadrant (high sales, low spend) are most efficient. Outliers indicate optimization opportunities.",
       "insight_level": "high",
-      "answers_question": "Which campaigns deliver best ROI and which are overspending?",
-      "dataMapping": {"xAxis": "Spend", "yAxis": "7 Day Total Sales", "size": "Impressions", "color": "Campaign Name"},
+      "answers_question": "Which campaigns deliver best ROI? Which are overspending for results?",
+      "dataMapping": {
+        "xAxis": "Spend",
+        "yAxis": "7 Day Total Sales",
+        "size": "Impressions",
+        "color": "Campaign Name"
+      },
       "confidence": 90,
-      "reasoning": "Multi-dimensional efficiency analysis reveals ROI patterns and underperforming campaigns"
+      "reasoning": "Multi-dimensional efficiency analysis revealing ROI patterns and underperforming campaigns needing optimization"
     },
     {
       "type": "bar",
       "title": "Top 10 Campaigns by Revenue",
-      "description": "Star performers generating the most sales - allocate more budget here",
+      "description": "Star performers generating the most sales - allocate more budget to these winners",
       "insight_level": "high",
       "answers_question": "Which campaigns should we invest more in to maximize returns?",
-      "dataMapping": {"category": "Campaign Name", "values": ["7 Day Total Sales"], "aggregation": "sum", "sortBy": "7 Day Total Sales", "sortOrder": "desc", "limit": 10},
+      "dataMapping": {
+        "category": "Campaign Name",
+        "values": ["7 Day Total Sales"],
+        "aggregation": "sum",
+        "sortBy": "7 Day Total Sales",
+        "sortOrder": "desc",
+        "limit": 10
+      },
       "confidence": 95,
-      "reasoning": "Identifies proven winners for budget reallocation decisions"
+      "reasoning": "Identifies proven winners for budget reallocation decisions - focus on what works"
     }
-    ...minimum 18 charts total...
   ],
   "summary": {
     "dataQuality": "good|fair|poor",
-    "keyFindings": "Executive summary of main insights and recommendations"
+    "keyFindings": "Executive summary of main insights"
   }
 }
-</OUTPUT_FORMAT>`
 
-  // Add sample data if available
+⚠️ FINAL REMINDER - CRITICAL REQUIREMENTS:
+- Every column name in chartConfig MUST exist in the AVAILABLE COLUMNS list
+- To show efficiency or performance, use multiple existing columns in scatter or multi-series charts
+- Verify column names match exactly (spelling, capitalization, spacing)
+
+⚠️ CHART DIVERSITY & BUSINESS FRAMEWORK REQUIREMENT:
+🚨 MANDATORY CHART MIX - AT LEAST 18 VISUALIZATIONS (24+ is acceptable, count them!):
+
+1. **EXECUTIVE SUMMARY**: AT LEAST 6 scorecards with DIVERSE aggregations:
+   Scorecard 1: Sum (total revenue, total orders, total spend)
+   Scorecard 2: Average (avg order value, avg conversion rate, avg ROAS)
+   Scorecard 3: Count (number of campaigns, number of customers, active items)
+   Scorecard 4: Max (peak sales, highest performance, best campaign)
+   Scorecard 5: Min (lowest value, minimum spend, poorest performance)
+   Scorecard 6: Distinct (unique campaigns, unique customers, unique categories)
+
+2. **MANDATORY RANKINGS**: EXACTLY 2 ranking charts:
+   Chart 1: Top 10 (bar chart with sortOrder="desc", limit=10) - highest performers
+   Chart 2: Bottom 10 (bar chart with sortOrder="asc", limit=10) - lowest performers or areas needing attention
+
+3. **ANALYTICAL CHARTS**: AT LEAST 14 additional high-value charts
+   - Choose the best chart types based on the data (scatter, combo, line, area, bar)
+   - Focus on relationships, trends, comparisons, and multi-metric analysis
+   - Use scatter for correlations, combo for multi-scale metrics, line/area for time series
+   - Each chart should answer a specific business question
+
+📊 TOTAL COUNT VERIFICATION:
+- 8+ scorecards + 16+ analytical charts (includes 2 ranking + 14+ visualizations) = 24+ charts
+- ⚠️ VERIFY your chartConfig array has AT LEAST 18 items before responding. The system will attempt to select the best 16 from your suggestions.
+
+THINK LIKE A BUSINESS ANALYST:
+- What questions would an executive ask about this data?
+- What patterns would reveal opportunities or problems?
+- What comparisons would drive decision-making?
+- What trends would indicate success or failure?
+
+🎯 QUALITY CHECKLIST - EVERY CHART MUST HAVE:
+✅ **Business-Focused Title**: Not "Spend vs Sales" but "Campaign Advertising Efficiency: Spend vs Sales"
+✅ **Actionable Description**: Explain what to look for ("Campaigns in upper-left quadrant are most efficient")
+✅ **Clear Business Question**: What decision does this chart support? ("Which campaigns should we invest more in?")
+✅ **Reasoning**: Why is this chart valuable? What insight does it reveal?
+✅ **High Confidence**: Only recommend charts you're confident will provide value (80%+ confidence)
+
+❌ REJECT THESE LOW-QUALITY PATTERNS:
+- Generic titles: "Total Impressions", "Campaign Comparison" (add business context!)
+- Vague descriptions: "Shows data" (explain what patterns to look for!)
+- No business question: Charts must answer specific stakeholder questions
+- Single-dimensional thinking: Use scatter plots with size+color, not just X vs Y
+- Missing insights: Every chart should reveal patterns, trends, or opportunities`
+
   if (dataStructure.dataSample && dataStructure.dataSample.length > 0) {
-    prompt += `\n\n<SAMPLE_DATA>`
+    prompt += `\n\n## SAMPLE DATA (for context):\n`
     dataStructure.dataSample.slice(0, 5).forEach((row: any, idx: number) => {
-      prompt += `\nRow ${idx + 1}: ${JSON.stringify(row).slice(0, 200)}...`
+      prompt += `Row ${idx + 1}: ${JSON.stringify(row).slice(0, 200)}...\n`
     })
-    prompt += `\n</SAMPLE_DATA>`
   }
 
-  prompt += `\n\nRemember: Generate minimum 18 charts. Use only columns from AVAILABLE COLUMNS. Every chart answers a business question.`
+  // Phase 1 Optimization: Removed verbose verification checklist (~400 tokens saved)
+  // Requirements already clearly stated above - GPT-5 doesn't need step-by-step checklists
 
   return prompt
 }
@@ -981,127 +1107,207 @@ export async function POST(request: NextRequest) {
       columnCount: dataStructure.columnCount
     })
 
-    const prompt = buildEnhancedPrompt(dataStructure, schema, correctedSchema, feedback)
+      const prompt = buildEnhancedPrompt(dataStructure, schema, correctedSchema, feedback)
 
-    // Get OpenAI client and call API with timeout
-    const openai = getOpenAIClient()
-    logger.info('[API-ANALYZE] Making OpenAI API call...')
-    const startTime = Date.now()
+      // Get OpenAI client and call API with timeout
+      const openai = getOpenAIClient()
+      logger.info('[API-ANALYZE] Making OpenAI API call...')
+      const startTime = Date.now()
 
-    // Add explicit timeout wrapper around OpenAI call with proper cleanup
-    let timeoutId: NodeJS.Timeout | null = null
+      // Add explicit timeout wrapper around OpenAI call with proper cleanup
+      let timeoutId: NodeJS.Timeout | null = null
 
-    const completion = await Promise.race([
-      openai.chat.completions.create({
-        model: "gpt-5-mini-2025-08-07", // Using GPT-5-mini for improved analysis
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert data analyst specializing in business intelligence and visualization strategy.
+      const completion = await Promise.race([
+        openai.chat.completions.create({
+          model: "gpt-5-mini-2025-08-07", // Using GPT-5-mini for improved analysis
+          messages: [
+            {
+              role: "system",
+              content: `You are a senior data analyst with 10+ years of experience in business intelligence and data visualization strategy. You excel at identifying actionable insights and creating dashboards that drive business decisions.
 
-<EXPERTISE>
-- Identify business domains (advertising, e-commerce, SaaS, operations, finance)
-- Detect data patterns (trends, correlations, hierarchies, distributions)
-- Select appropriate visualizations based on data characteristics
-- Generate actionable insights that drive business decisions
-</EXPERTISE>
+## YOUR EXPERTISE:
+- Deep understanding of business metrics across industries (advertising, e-commerce, SaaS, operations)
+- Expert at understanding data relationships and patterns without creating calculated fields
+- Master of visual design principles for maximum clarity and impact
+- Skilled at asking the right questions to uncover valuable insights
 
-<ANALYSIS_FRAMEWORK>
-Organize insights by category:
-- Performance over time (trends, seasonality) → line/area charts
-- Efficiency & profitability (ROI, conversion) → scatter plots, dual-axis combo
-- Funnels (conversion steps, drop-off) → funnel charts
-- Segmentation (compare groups) → Top/Bottom X rankings, grouped bars
-- Distributions (outliers, variance) → scatter with size/color dimensions
-- Geographic/categorical (regional performance) → bars, pies, treemap
-- Executive summary (KPIs with context) → scorecards, gauges
-</ANALYSIS_FRAMEWORK>
+## YOUR APPROACH (FRAMEWORK-DRIVEN ANALYSIS):
+1. **Identify Business Domain**: Determine industry (advertising, e-commerce, operations, finance)
+2. **Detect Data Patterns**: Look for time series, categorical hierarchies, numeric distributions, correlations
+3. **Framework-Based Analysis**: Organize insights by business framework:
+   - 📊 PERFORMANCE OVER TIME: Trends, patterns, seasonality (use line charts, area charts)
+   - ⚖️ EFFICIENCY & PROFITABILITY: ROI, conversion rates, cost efficiency (use scatter plots, dual-axis)
+   - 📈 FUNNELS: Conversion steps, drop-off analysis (use funnel charts for stage-based drop-off)
+   - 📦 SEGMENTATION: Compare groups, identify winners/losers (use Top/Bottom X, grouped bars)
+   - 💡 DISTRIBUTIONS: Outliers, ranges, variance (use scatter with size/color dimensions)
+   - 🌍 GEOGRAPHIC/CATEGORICAL: Regional or category performance (use bars, pies, treemap for hierarchy)
+   - 📌 EXECUTIVE SUMMARY: High-level KPIs with context (use scorecards, gauge for targets)
+4. **Multi-Dimensional Thinking**: Use scatter plots with size/color, dual Y-axes, time breakdowns, heatmaps for 2D patterns
+5. **Actionable Insights**: Every chart should answer "What action should we take?"
 
-<CHART_SELECTION_HEURISTICS>
-Use advanced charts when data patterns match:
-- waterfall: variance/change/delta columns, P&L data, sequential calculations
-- funnel: stage/step columns, progressive decrease, conversion flows
-- heatmap: 2 categorical dimensions, time patterns (day×hour), correlation matrix
-- gauge/bullet: actual+target pairs, KPI tracking, performance vs quota
-- cohort: cohort+period+metric dimensions, retention analysis
-- treemap: hierarchical categories, 10+ items, portfolio composition
-- sankey: source+target+flow, journey data, multi-step transitions
-- sparkline: compact trends, embedded visualization, table cells
+## BUSINESS LOGIC HEURISTICS - INTELLIGENT CHART SELECTION:
 
-Default to core charts (bar/line/scatter/combo/pie/table) for standard analysis.
-</CHART_SELECTION_HEURISTICS>
+### DETECT WATERFALL OPPORTUNITIES:
+- Column names contain: "variance", "change", "increase", "decrease", "delta", "difference"
+- Financial data: "revenue", "profit", "expense", "cost" with breakdown components
+- Sequential calculations: starting value → adjustments → final value
+- P&L statements, budget variance, revenue bridges
+→ **Recommend waterfall chart** showing cumulative impact of changes
 
-<CRITICAL_RULES>
-1. Use ONLY column names from the AVAILABLE COLUMNS list
-2. Generate minimum 18 charts (8+ scorecards, 2 MANDATORY rankings, 8+ analytical)
-3. MANDATORY: Include BOTH Top 10 (desc) AND Bottom 10 (asc) bar chart rankings
-4. Use diverse aggregations: sum, avg, count, min, max, distinct
-5. Add size/color dimensions to scatter plots for multi-dimensional analysis
-6. Use combo charts when metric scales differ by >10x ratio
-7. Every chart must answer a specific business question
-8. Respond with valid JSON in the exact format specified
-</CRITICAL_RULES>
+### DETECT FUNNEL OPPORTUNITIES:
+- Column names contain: "stage", "step", "phase", "level", "funnel"
+- Progressive stages: "lead", "qualified", "proposal", "closed"
+- E-commerce: "view", "add to cart", "checkout", "purchase"
+- Values naturally decrease at each stage (conversion funnel pattern)
+→ **Recommend funnel chart** showing drop-off between stages
 
-<SCORECARD_PRIORITY>
-Generate 8-12 scorecards with diverse aggregations:
-- sum: totals (revenue, spend, sales)
-- avg: benchmarks (AOV, conversion rate, efficiency)
-- count: volume (orders, campaigns, transactions)
-- min/max: extremes (peak sales, lowest cost, date ranges)
-- distinct: variety (unique customers, product categories, regions)
-</SCORECARD_PRIORITY>
+### DETECT HEATMAP OPPORTUNITIES:
+- Two categorical dimensions present (e.g., day of week + hour, country + product category)
+- Time patterns: day × hour, month × category, week × region
+- Correlation matrix: multiple categories vs multiple metrics
+- Need to identify hot/cold zones in 2D space
+→ **Recommend heatmap** showing intensity patterns across dimensions
 
-<QUALITY_STANDARDS>
-- Business-focused titles (not "Spend vs Sales" but "Campaign ROI Analysis")
-- Actionable descriptions (explain what patterns indicate)
-- Clear business questions (what decision does this support?)
-- High confidence recommendations (80%+ confidence)
-- Prioritize actionable insights over basic aggregations
-</QUALITY_STANDARDS>`
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-      ],
-        // temperature: 1, // GPT-5-mini only supports default temperature of 1
-        max_completion_tokens: 16000, // Increased to 16k to prevent truncation (PHASE 3 OPTIMIZED: prompt ~4k + completion 16k = 20k total, 56% token reduction)
-      }).finally(() => {
-        // Clear timeout when OpenAI completes
-        if (timeoutId) clearTimeout(timeoutId)
-      }),
-      new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => {
-          reject(new Error('OpenAI API call timed out after 180 seconds'))
-        }, 180000)
+### DETECT GAUGE/BULLET OPPORTUNITIES:
+- Column pairs: "actual" + "target", "current" + "goal", "performance" + "quota"
+- KPI tracking with thresholds
+- Performance monitoring with target comparison
+- Sales vs quota, completion vs goal
+→ **Recommend gauge or bullet chart** for at-a-glance target tracking
+
+### DETECT COHORT OPPORTUNITIES:
+- Three dimensions present: cohort identifier + time period + metric
+- Column names contain: "cohort", "signup date", "acquisition", "retention", "period"
+- User/customer lifecycle analysis
+- Retention rates over time by cohort
+→ **Recommend cohort chart** showing retention grid
+
+### DETECT TREEMAP OPPORTUNITIES:
+- Hierarchical categories: parent-child relationships (category + subcategory)
+- Part-to-whole with many components (>10 categories)
+- Portfolio composition, market share breakdown
+- Need to show relative sizes at a glance
+→ **Recommend treemap** for hierarchical proportions
+
+### DETECT SANKEY OPPORTUNITIES:
+- Flow/journey data: source + destination + volume
+- Column names contain: "source", "target", "from", "to", "channel", "path"
+- Traffic flow, budget allocation, conversion paths
+- Multi-step transitions between states
+→ **Recommend sankey diagram** for flow visualization
+
+### DETECT SPARKLINE OPPORTUNITIES:
+- **Limited display space**: Dashboard tiles, table cells, summary cards, inline trends
+- **Time series data** that needs compact visualization
+- **Small multiples** for comparison across categories
+- **Embedding trends** in tables or dashboards
+- Column names contain: "trend", "history", "timeline", "mini", "compact"
+- **Inline or embedded** visualization needs
+- **At-a-glance** trend indication without detailed axes
+→ **Recommend sparkline** for compact, space-efficient trend display
+
+### GENERAL BUSINESS DOMAIN PATTERNS:
+- **E-commerce**: Likely has conversion funnels, product hierarchies (treemap), customer cohorts
+- **Advertising**: Performance vs targets (gauge), campaign efficiency (scatter), geographic distribution (heatmap)
+- **Finance**: P&L waterfalls, variance analysis (waterfall), budget allocation (sankey)
+- **Operations**: Process stages (funnel), resource allocation (sankey), time patterns (heatmap)
+- **SaaS**: User cohorts (cohort), conversion funnels (funnel), usage patterns (heatmap)
+
+## CRITICAL REQUIREMENTS:
+- Always respond with valid JSON in the EXACT format specified in the user prompt
+- ONLY use column names listed in the "AVAILABLE COLUMNS" section
+- Verify EVERY column name exists before using it (non-existent columns cause failures)
+- Include your reasoning process to show analytical thinking
+- Classify each visualization by insight level (high/medium/low)
+- Every chart must answer a specific business question
+
+## SCORECARD GENERATION - CRITICAL GUIDELINES:
+- ALWAYS generate AT LEAST 6 scorecards for key business metrics (revenue, sales, orders, clicks, impressions, etc.)
+- Use DIVERSE aggregations: sum (totals), avg (averages), count (totals), min (lowest), max (highest), distinct (unique values)
+- Each scorecard should ideally have a DIFFERENT aggregation type (aim for variety)
+- Prioritize high-business-value metrics (revenue > vanity metrics)
+- Examples: "Total Revenue" (sum), "Average Order Value" (avg), "Peak Sales Day" (max)
+- Scorecards provide critical KPIs at-a-glance - they are HIGH priority visualizations
+
+## TOP/BOTTOM X CHARTS - CRITICAL GUIDELINES:
+- ALWAYS generate at least 1-2 "Top X" or "Bottom X" ranking charts
+- Use sortBy to specify which column to sort by (must be a numeric column)
+- Use sortOrder: "desc" for Top X (highest values), "asc" for Bottom X (lowest values)
+- Use limit to control number of items (recommended: Top 10, Bottom 5, Top 15)
+- Include both category and values fields in dataMapping
+- Prioritize Top/Bottom charts for business-critical rankings (best/worst campaigns, products, regions)
+- Examples: "Top 10 Campaigns by Revenue", "Bottom 5 Products by Sales"
+
+## SCATTER PLOT MULTI-DIMENSIONAL ANALYSIS - CRITICAL GUIDELINES:
+- Use scatter plots to show RELATIONSHIPS and EFFICIENCY (not just single metrics)
+- ALWAYS include size and/or color dimensions when using scatter plots
+- Common patterns:
+  * Efficiency Analysis: X=Input (Spend, Cost), Y=Output (Revenue, Orders), Size=Volume, Color=Category
+  * Correlation Analysis: X=Metric1, Y=Metric2, Size=Impact, Color=Segment
+  * Performance Clustering: X=Efficiency%, Y=Volume, Size=Revenue, Color=Region
+- Examples:
+  * "Campaign Efficiency": X=Spend, Y=Revenue, Size=Orders, Color=Country
+  * "Click Performance": X=Impressions, Y=Clicks, Size=Spend, Color=Campaign
+  * "ROAS Analysis": X=Spend, Y=Sales, Size=Orders, Color=ACOS category
+
+## TIME-SERIES ANALYSIS - CRITICAL GUIDELINES:
+- When date/time columns exist, ALWAYS create time-series visualizations
+- Use line charts for SINGLE METRIC or metrics with similar scales (ratio < 3x)
+- Use COMBO charts for MULTIPLE METRICS with different scales (ratio > 10x)
+- Use area charts for cumulative or volume-based time series
+- ALWAYS check scale ratios before choosing chart type (see MANDATORY SCALE DETECTION RULE)
+- Examples: "Impressions vs Clicks Over Time" (COMBO), "Daily Revenue Trend" (LINE)
+
+## QUALITY STANDARDS:
+- Provide comprehensive coverage with 10 high-value analytical charts that reveal different insights
+- Always compare across dimensions (time, segments, categories)
+- Use existing columns to show relationships (e.g., scatter plot of Clicks vs Impressions)
+- Prioritize actionable insights over simple aggregations
+- Use visual best practices: limit complexity, choose appropriate chart types, emphasize key insights`
+            },
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          // temperature: 1, // GPT-5-mini only supports default temperature of 1
+          max_completion_tokens: 16000, // Increased to 16k to prevent truncation (prompt ~9k + completion 16k = 25k total)
+        }).finally(() => {
+          // Clear timeout when OpenAI completes
+          if (timeoutId) clearTimeout(timeoutId)
+        }),
+        new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(new Error('OpenAI API call timed out after 180 seconds'))
+          }, 180000)
+        })
+      ])
+
+      // Cleanup timeout if still pending
+      if (timeoutId) clearTimeout(timeoutId)
+
+      const endTime = Date.now()
+      const openaiDuration = endTime - startTime
+      logger.info('[API-ANALYZE] OpenAI API call completed:', {
+        duration: openaiDuration + 'ms'
       })
-    ])
 
-    // Cleanup timeout if still pending
-    if (timeoutId) clearTimeout(timeoutId)
+      const response = completion.choices[0]?.message?.content
 
-    const endTime = Date.now()
-    const openaiDuration = endTime - startTime
-    logger.info('[API-ANALYZE] OpenAI API call completed:', {
-      duration: openaiDuration + 'ms'
-    })
+      if (!response) {
+        logger.error('[API-ANALYZE] No response from OpenAI', {
+          hasChoices: !!completion.choices,
+          choicesLength: completion.choices?.length,
+          firstChoice: completion.choices?.[0],
+          finishReason: completion.choices?.[0]?.finish_reason,
+          completionObject: JSON.stringify(completion).substring(0, 500)
+        })
+        throw new Error(`No response from OpenAI. Finish reason: ${completion.choices?.[0]?.finish_reason || 'unknown'}`)
+      }
 
-    const response = completion.choices[0]?.message?.content
-
-    if (!response) {
-      logger.error('[API-ANALYZE] No response from OpenAI', {
-        hasChoices: !!completion.choices,
-        choicesLength: completion.choices?.length,
-        firstChoice: completion.choices?.[0],
-        finishReason: completion.choices?.[0]?.finish_reason,
-        completionObject: JSON.stringify(completion).substring(0, 500)
-      })
-      throw new Error(`No response from OpenAI. Finish reason: ${completion.choices?.[0]?.finish_reason || 'unknown'}`)
-    }
-
-    try {
-      // Parse OpenAI response using robust JSON extraction
-      const aiAnalysis = parseJSONFromString<AIAnalysisResponse>(response)
+      try {
+        // Parse OpenAI response using robust JSON extraction
+        const aiAnalysis = parseJSONFromString<AIAnalysisResponse>(response)
 
       logger.debug('[API-ANALYZE] AI response parsed:', {
         chartsCount: aiAnalysis.chartConfig?.length || 0,
@@ -1959,41 +2165,33 @@ Generate 8-12 scorecards with diverse aggregations:
         } : undefined
       }
 
-      // REBALANCING DISABLED: Show all valid charts generated by AI
-      // logger.info('[API-ANALYZE] Rebalancing charts before response:', {
-      //   beforeCount: analysisResult.chartConfig.length,
-      //   scorecards: analysisResult.chartConfig.filter((c: any) => c.type === 'scorecard').length,
-      //   tables: analysisResult.chartConfig.filter((c: any) => c.type === 'table').length
-      // })
-
-      // // Apply rebalancing to chartConfig
-      // // IMPORTANT: For e-commerce/FBA/financial dashboards, we need many KPI scorecards
-      // // AI is prompted to generate 8+ diverse scorecards (sum, avg, count, min, max, distinct)
-      // // Allow up to 10 scorecards to show rich KPI metrics, leaving 5 slots for analytical charts + 1 table
-      // analysisResult.chartConfig = rebalanceCharts(analysisResult.chartConfig as any, 16, {
-      //   minScorecards: 0,   // Don't force minimum - use what AI generated
-      //   maxScorecards: 10,  // Allow up to 10 scorecards for rich KPI dashboards
-      //   preferredScorecards: 8,  // Prefer 8 scorecards (matches AI prompt)
-      //   requireTable: true
-      // }) as any
-
-      // // Log rebalancing results
-      // const chartStats = getChartStats(analysisResult.chartConfig as any)
-      // logger.info('[API-ANALYZE] Charts rebalanced successfully:', chartStats)
-
-      // // Validate layout
-      // const validation = validateChartLayout(analysisResult.chartConfig as any)
-      // if (!validation.valid) {
-      //   logger.warn('[API-ANALYZE] Chart layout validation warnings:', validation.errors)
-      // }
-
-      // Log final chart count without rebalancing
-      logger.info('[API-ANALYZE] Showing all valid charts without rebalancing:', {
-        totalCharts: analysisResult.chartConfig.length,
+      // REBALANCE CHARTS: Enforce exactly 16 charts with layout constraints
+      logger.info('[API-ANALYZE] Rebalancing charts before response:', {
+        beforeCount: analysisResult.chartConfig.length,
         scorecards: analysisResult.chartConfig.filter((c: any) => c.type === 'scorecard').length,
-        visualizations: analysisResult.chartConfig.filter((c: any) => !['scorecard', 'table'].includes(c.type)).length,
         tables: analysisResult.chartConfig.filter((c: any) => c.type === 'table').length
       })
+
+      // Apply rebalancing to chartConfig
+      // IMPORTANT: For e-commerce/FBA/financial dashboards, we need many KPI scorecards
+      // AI is prompted to generate 8+ diverse scorecards (sum, avg, count, min, max, distinct)
+      // Allow up to 10 scorecards to show rich KPI metrics, leaving 5 slots for analytical charts + 1 table
+      analysisResult.chartConfig = rebalanceCharts(analysisResult.chartConfig as any, 16, {
+        minScorecards: 0,   // Don't force minimum - use what AI generated
+        maxScorecards: 10,  // Allow up to 10 scorecards for rich KPI dashboards
+        preferredScorecards: 8,  // Prefer 8 scorecards (matches AI prompt)
+        requireTable: true
+      }) as any
+
+      // Log rebalancing results
+      const chartStats = getChartStats(analysisResult.chartConfig as any)
+      logger.info('[API-ANALYZE] Charts rebalanced successfully:', chartStats)
+
+      // Validate layout
+      const validation = validateChartLayout(analysisResult.chartConfig as any)
+      if (!validation.valid) {
+        logger.warn('[API-ANALYZE] Chart layout validation warnings:', validation.errors)
+      }
 
       // Build enhanced data context
       const dataContext: DataContext = {
@@ -2042,29 +2240,29 @@ Generate 8-12 scorecards with diverse aggregations:
         duration: totalDuration + 'ms'
       })
 
-    logger.debug('[API-ANALYZE] Response structure:', {
-      chartCount: analysisResult.chartConfig.length,
-      chartTypes: analysisResult.chartConfig.map((c: any) => c.type)
-    })
-
-    return NextResponse.json(analysisResult)
-
-    } catch (parseError) {
-      logger.error('[API-ANALYZE] Error parsing OpenAI response:', {
-        error: parseError instanceof Error ? parseError.message : 'Unknown error',
-        responseLength: response?.length
+      logger.debug('[API-ANALYZE] Response structure:', {
+        chartCount: analysisResult.chartConfig.length,
+        chartTypes: analysisResult.chartConfig.map((c: any) => c.type)
       })
-      logger.debug('[API-ANALYZE] Response preview:', response?.substring(0, 200))
 
-      // Return error if AI response is malformed
-      return NextResponse.json(
-        {
-          error: 'Failed to parse AI response. Please try again.',
-          details: parseError instanceof Error ? parseError.message : 'Unknown error'
-        },
-        { status: 500 }
-      )
-    }
+        return NextResponse.json(analysisResult)
+
+      } catch (parseError) {
+        logger.error('[API-ANALYZE] Error parsing OpenAI response:', {
+          error: parseError instanceof Error ? parseError.message : 'Unknown error',
+          responseLength: response?.length
+        })
+        logger.debug('[API-ANALYZE] Response preview:', response?.substring(0, 200))
+
+        // Return error if AI response is malformed
+        return NextResponse.json(
+          {
+            error: 'Failed to parse AI response. Please try again.',
+            details: parseError instanceof Error ? parseError.message : 'Unknown error'
+          },
+          { status: 500 }
+        )
+      }
 
   } catch (error) {
     const totalDuration = Date.now() - requestStartTime

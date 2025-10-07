@@ -69,8 +69,9 @@ export interface OrderByCondition {
 
 export interface AggregationCondition {
   column: string
-  function: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'count_distinct'
+  function: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'count_distinct' | 'median' | 'mode' | 'std' | 'variance' | 'percentile'
   alias?: string
+  percentile?: number // For percentile aggregation (0-100)
 }
 
 export interface ColumnTransform {

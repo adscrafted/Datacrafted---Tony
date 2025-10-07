@@ -18,9 +18,7 @@
   transition-property: left, top, width, height;
   display: flex;
   box-sizing: border-box;
-  /* Ensure minimum chart size - at least 400px wide, 300px tall */
-  min-width: 400px !important;
-  min-height: 300px !important;
+  /* Removed min-width and min-height !important rules that were causing overlap issues */
 }
 
 /* EXCEPTION: Scorecards should NOT have the 400x300 minimum - they use their own sizing */
@@ -129,8 +127,8 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  min-height: 300px;
   box-sizing: border-box;
+  /* Removed min-height to prevent overlap with grid layout calculations */
 }
 
 /* EXCEPTION: Scorecard inner content should NOT have min-height */
@@ -139,17 +137,17 @@
 }
 
 /* Enhanced Grid Layout Responsiveness */
+/* Removed min-width and min-height rules that were causing overlap issues
+   React Grid Layout handles sizing through its grid system */
 @media (max-width: 1200px) {
   .draggable-grid-container .react-grid-item {
-    min-width: 350px !important;
-    min-height: 280px !important;
+    /* Responsive behavior handled by React Grid Layout breakpoints */
   }
 }
 
 @media (max-width: 768px) {
   .draggable-grid-container .react-grid-item {
-    min-width: 300px !important;
-    min-height: 250px !important;
+    /* Responsive behavior handled by React Grid Layout breakpoints */
   }
 }
 
@@ -395,4 +393,24 @@
 
 .animate-glow-pulse {
   animation: glow-pulse 2s ease-in-out infinite;
+}
+
+/* Table row highlight animation for clicked chart data points */
+@keyframes highlight-flash {
+  0% {
+    background-color: rgb(219, 234, 254); /* blue-100 */
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5);
+  }
+  50% {
+    background-color: rgb(191, 219, 254); /* blue-200 */
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
+  }
+  100% {
+    background-color: rgb(219, 234, 254); /* blue-100 */
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5);
+  }
+}
+
+.highlighted-row {
+  animation: highlight-flash 1s ease-in-out;
 }

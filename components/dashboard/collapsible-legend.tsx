@@ -46,6 +46,9 @@ export const CollapsibleLegend: React.FC<CollapsibleLegendProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
+  // Debug: Log payload to see what Recharts is passing
+  // console.log('🔍 [LEGEND DEBUG] Payload:', payload)
+
   // If there are fewer items than maxVisibleItems, show all
   const showExpandButton = payload.length > maxVisibleItems
   const visibleItems = isExpanded ? payload : payload.slice(0, maxVisibleItems)

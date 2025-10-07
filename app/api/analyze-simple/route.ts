@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
+import { parseJSONFromString } from '@/lib/utils/json-extractor'
 
 export async function POST(request: NextRequest) {
   try {
@@ -56,7 +57,7 @@ Respond with JSON:
       throw new Error('No response from OpenAI')
     }
 
-    const result = JSON.parse(response)
+    const result = parseJSONFromString(response)
     return NextResponse.json(result)
 
   } catch (error) {

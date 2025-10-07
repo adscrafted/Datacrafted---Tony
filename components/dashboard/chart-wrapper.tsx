@@ -29,6 +29,8 @@ import { DataRow, ChartCustomization, useDataStore, ChartType } from '@/lib/stor
 import { cn } from '@/lib/utils/cn'
 import { usePerformanceMonitor } from '@/lib/hooks/use-performance-monitor'
 import { renderCollapsibleLegend } from './collapsible-legend'
+import { processChartData, ChartDataMapping } from '@/lib/utils/chart-data-processor'
+import { AggregationType } from '@/lib/utils/data-calculations'
 
 // Lazy load table and waterfall components for better performance
 const TableChartLazy = lazy(() => import('./charts/table-chart').then(m => ({ default: m.TableChart })))
@@ -140,37 +142,72 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
     trackMemory: process.env.NODE_ENV === 'development',
     logThreshold: 32 // Allow 32ms for chart rendering
   })
-  const { 
-    chartCustomizations, 
-    currentTheme, 
-    updateChartCustomization, 
-    setFullScreen, 
+  // CRITICAL FIX: Use Zustand selector to get filteredData directly
+  // This ensures the component re-renders when date filters change
+  const {
+    chartCustomizations,
+    currentTheme,
+    updateChartCustomization,
+    setFullScreen,
     exportChart,
-    getFilteredData,
+    filteredDataFromStore,
     isCustomizing,
     setSelectedChartId,
     selectedChartId,
     setShowChartSettings,
     analysis,
     setAnalysis,
-    dashboardFilters,
-    dateRange,
-    granularity
-  } = useDataStore()
-  
+    // Include raw filter values to trigger re-renders
+    dateRangeFrom,
+    dateRangeTo,
+    granularity,
+    selectedDateColumn
+  } = useDataStore(
+    (state) => ({
+      chartCustomizations: state.chartCustomizations,
+      currentTheme: state.currentTheme,
+      updateChartCustomization: state.updateChartCustomization,
+      setFullScreen: state.setFullScreen,
+      exportChart: state.exportChart,
+      // CRITICAL: Call getFilteredData here in the selector
+      filteredDataFromStore: state.getFilteredData(),
+      isCustomizing: state.isCustomizing,
+      setSelectedChartId: state.setSelectedChartId,
+      selectedChartId: state.selectedChartId,
+      setShowChartSettings: state.setShowChartSettings,
+      analysis: state.analysis,
+      setAnalysis: state.setAnalysis,
+      // Extract primitive values to ensure proper equality checks
+      dateRangeFrom: state.dateRange?.from?.getTime(),
+      dateRangeTo: state.dateRange?.to?.getTime(),
+      granularity: state.granularity,
+      selectedDateColumn: state.selectedDateColumn
+    })
+  )
+
   const customization = chartCustomizations[chartId]
-  
-  // PERFORMANCE OPTIMIZATION: Memoize filtered data with proper dependencies
+
+  // PERFORMANCE OPTIMIZATION: Use filtered data from store selector
+  // The selector already calls getFilteredData(), and including the filter primitives
+  // in the selector ensures re-renders when filters change
   const filteredData = useMemo(() => {
-    return getFilteredData()
-  }, [getFilteredData]) // getFilteredData is already memoized in the store
+    console.log('🔄 [ChartWrapper] Recomputing filtered data for chart:', title, {
+      dateRangeFrom,
+      dateRangeTo,
+      granularity,
+      selectedDateColumn,
+      dataLength: filteredDataFromStore.length
+    })
+    return filteredDataFromStore
+  }, [filteredDataFromStore, dateRangeFrom, dateRangeTo, granularity, selectedDateColumn, title])
 
   // PERFORMANCE OPTIMIZATION: Memoize chart data processing with stable reference
   // Create a stable string key for data comparison to prevent unnecessary recalculations
+  // CRITICAL FIX: Include filter states to ensure recalculation when filters change
   const dataKeyForCache = useMemo(() => {
     const sourceData = (data && data.length > 0) ? data : filteredData
-    return `${sourceData.length}-${sourceData[0] ? Object.keys(sourceData[0]).length : 0}`
-  }, [data, filteredData])
+    return `${sourceData.length}-${sourceData[0] ? Object.keys(sourceData[0]).length : 0}-${dateRangeFrom}-${dateRangeTo}-${granularity}-${selectedDateColumn}`
+  }, [data, filteredData, dateRangeFrom, dateRangeTo, granularity, selectedDateColumn])
 
   // Apply customizations first (moved before chartData to avoid hoisting issues)
   const displayTitle = customization?.customTitle || title
@@ -219,41 +256,58 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
         return sanitizedRow
       })
 
-      // Apply bar chart sorting and limiting if configured
-      if (chartType === 'bar' && customization?.dataMapping) {
-        const { sortBy, sortOrder, limit } = customization.dataMapping
+      // NEW: Apply calculation system if dataMapping specifies calculations
+      if (customization?.dataMapping) {
+        const mapping = customization.dataMapping as ChartDataMapping
 
-        // Apply sorting if sortBy is configured
-        if (sortBy) {
-          // Helper to parse values (handles currency, percentages, etc.)
-          const parseVal = (val: any): number => {
-            if (typeof val === 'number') return val
-            if (typeof val !== 'string') return 0
-            const cleaned = String(val).replace(/[€$£¥,\s%]/g, '')
-            const num = parseFloat(cleaned)
-            return isNaN(num) ? 0 : num
-          }
+        // Check if we have calculation configs (groupBy or derivedMetrics)
+        const hasCalculations = mapping.groupBy || mapping.derivedMetrics
 
-          // Sort data with currency parsing (always sort descending for proper slicing)
-          sanitizedData = [...sanitizedData].sort((a, b) => {
-            const aVal = parseVal(a[sortBy])
-            const bVal = parseVal(b[sortBy])
-            return bVal - aVal // Always sort high to low first
-          })
+        if (hasCalculations) {
+          // Use the chart data processor for advanced calculations
+          const processed = processChartData(sanitizedData, chartType, mapping)
+          sanitizedData = processed.data
 
-          // Apply limit if configured
-          if (limit) {
-            // If ascending (bottom X), take from the end; if descending (top X), take from the start
-            if (sortOrder === 'asc') {
-              sanitizedData = sanitizedData.slice(-limit) // Take last N items (smallest values)
-            } else {
-              sanitizedData = sanitizedData.slice(0, limit) // Take first N items (largest values)
+          // Log calculation metadata for debugging
+          console.log(`[ChartWrapper] Applied calculations:`, processed.metadata)
+        } else {
+          // Apply legacy bar chart sorting and limiting (backward compatibility)
+          if (chartType === 'bar') {
+            const { sortBy, sortOrder, limit } = mapping
+
+            // Apply sorting if sortBy is configured
+            if (sortBy) {
+              // Helper to parse values (handles currency, percentages, etc.)
+              const parseVal = (val: any): number => {
+                if (typeof val === 'number') return val
+                if (typeof val !== 'string') return 0
+                const cleaned = String(val).replace(/[€$£¥,\s%]/g, '')
+                const num = parseFloat(cleaned)
+                return isNaN(num) ? 0 : num
+              }
+
+              // Sort data with currency parsing (always sort descending for proper slicing)
+              sanitizedData = [...sanitizedData].sort((a, b) => {
+                const aVal = parseVal(a[sortBy])
+                const bVal = parseVal(b[sortBy])
+                return bVal - aVal // Always sort high to low first
+              })
+
+              // Apply limit if configured
+              if (limit) {
+                // If ascending (bottom X), take from the end; if descending (top X), take from the start
+                if (sortOrder === 'asc') {
+                  sanitizedData = sanitizedData.slice(-limit) // Take last N items (smallest values)
+                } else {
+                  sanitizedData = sanitizedData.slice(0, limit) // Take first N items (largest values)
+                }
+              }
+
+              // Now apply the final sort order for display
+              if (sortOrder === 'asc') {
+                sanitizedData = sanitizedData.reverse() // Reverse to show ascending order
+              }
             }
-          }
-
-          // Now apply the final sort order for display
-          if (sortOrder === 'asc') {
-            sanitizedData = sanitizedData.reverse() // Reverse to show ascending order
           }
         }
       }
@@ -513,10 +567,12 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
               margin={barMargins}
               stackOffset={barPercentageMode ? "expand" : undefined}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis
                 dataKey={safeDataKey[0]}
-                tick={{ fontSize: 11 }}
+                tick={{ fontSize: 11, fill: '#64748b' }}
+                axisLine={{ stroke: '#e2e8f0' }}
+                tickLine={{ stroke: '#e2e8f0' }}
                 angle={-45}
                 textAnchor="end"
                 height={barMargins.bottom}
@@ -526,7 +582,9 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
                 }}
               />
               <YAxis
-                tick={{ fontSize: 12 }}
+                tick={{ fontSize: 12, fill: '#64748b' }}
+                axisLine={{ stroke: '#e2e8f0' }}
+                tickLine={{ stroke: '#e2e8f0' }}
                 tickFormatter={barPercentageMode
                   ? (value) => `${(value * 100).toFixed(0)}%`
                   : undefined
@@ -540,6 +598,8 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
                   dataKey={key}
                   stackId={barPercentageMode ? "stack" : undefined}
                   fill={DEFAULT_COLORS[index % DEFAULT_COLORS.length]}
+                  fillOpacity={0.6}
+                  radius={[4, 4, 0, 0]}
                 />
               ))}
             </BarChart>
@@ -765,9 +825,9 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
             <CohortGrid
               data={chartData}
               dataMapping={{
-                cohort: customization?.dataMapping?.cohort || safeDataKey[0] || 'cohort',
-                period: customization?.dataMapping?.period || safeDataKey[1] || 'period',
-                retention: customization?.dataMapping?.retention || safeDataKey[2] || 'retention'
+                cohort: (customization?.dataMapping as any)?.cohort || safeDataKey[0] || 'cohort',
+                period: (customization?.dataMapping as any)?.period || safeDataKey[1] || 'period',
+                retention: (customization?.dataMapping as any)?.retention || safeDataKey[2] || 'retention'
               }}
               customization={{
                 maxPeriods: 12,
@@ -783,9 +843,9 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
             <BulletChart
               data={chartData}
               dataMapping={{
-                category: customization?.dataMapping?.category || safeDataKey[0] || 'category',
-                actual: customization?.dataMapping?.actual || safeDataKey[1] || 'actual',
-                target: customization?.dataMapping?.target || undefined,
+                category: (customization?.dataMapping as any)?.category || safeDataKey[0] || 'category',
+                actual: (customization?.dataMapping as any)?.actual || safeDataKey[1] || 'actual',
+                target: typeof (customization?.dataMapping as any)?.target === 'string' ? (customization?.dataMapping as any)?.target : undefined,
                 ranges: undefined  // Would need to be configured specifically
               }}
               customization={{

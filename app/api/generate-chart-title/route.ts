@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
+import { parseJSONFromString } from '@/lib/utils/json-extractor'
 
 interface GenerateTitleRequest {
   chartType: string
@@ -88,7 +89,7 @@ Rules:
       throw new Error('No response from OpenAI')
     }
 
-    const result: GenerateTitleResponse = JSON.parse(responseText)
+    const result: GenerateTitleResponse = parseJSONFromString<GenerateTitleResponse>(responseText)
 
     // Validate and truncate if needed
     const title = result.title?.slice(0, 60) || 'Chart Title'
