@@ -72,6 +72,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     isCustomizing,
     setIsCustomizing,
     updateChartCustomization,
+    batchUpdateChartCustomizations,
     showChartTemplateGallery,
     setShowChartTemplateGallery,
     gridSnapping,
@@ -811,7 +812,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     }
 
     layoutChangeTimerRef.current = setTimeout(() => {
-      // OPTIMIZATION: Batch all position updates into a single store update
+      // PERFORMANCE FIX: Batch all position updates into a SINGLE store update
       const updates: Record<string, { position: {x: number, y: number, w: number, h: number} }> = {}
 
       validatedLayout.forEach(item => {
@@ -820,10 +821,8 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         }
       })
 
-      // Apply all updates in one batch to minimize re-renders
-      Object.entries(updates).forEach(([chartId, update]) => {
-        updateChartCustomization(chartId, update)
-      })
+      // CRITICAL: Use batchUpdate instead of forEach to avoid N re-renders
+      batchUpdateChartCustomizations(updates)
 
       // OPTIMIZATION: Debounced auto-save with cleanup
       if (autoSaveLayouts && currentProjectId && !showSaveDialog) {
@@ -842,7 +841,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         }, 2000) // Increased to 2 seconds to reduce save frequency
       }
     }, 150) // 150ms throttle - balance between responsiveness and performance
-  }, [updateChartCustomization, autoSaveLayouts, showSaveDialog, validateLayout, currentProjectId, chartCustomizations, currentLayout, dashboardFilters, currentTheme, saveDashboardConfig])
+  }, [batchUpdateChartCustomizations, autoSaveLayouts, showSaveDialog, validateLayout, currentProjectId, chartCustomizations, currentLayout, dashboardFilters, currentTheme, saveDashboardConfig])
 
   // Auto-clear newly added chart flag after 5 seconds (safety net)
   useEffect(() => {

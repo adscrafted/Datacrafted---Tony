@@ -142,72 +142,51 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
     trackMemory: process.env.NODE_ENV === 'development',
     logThreshold: 32 // Allow 32ms for chart rendering
   })
-  // CRITICAL FIX: Use Zustand selector to get filteredData directly
-  // This ensures the component re-renders when date filters change
-  const {
-    chartCustomizations,
-    currentTheme,
-    updateChartCustomization,
-    setFullScreen,
-    exportChart,
-    filteredDataFromStore,
-    isCustomizing,
-    setSelectedChartId,
-    selectedChartId,
-    setShowChartSettings,
-    analysis,
-    setAnalysis,
-    // Include raw filter values to trigger re-renders
-    dateRangeFrom,
-    dateRangeTo,
-    granularity,
-    selectedDateColumn
-  } = useDataStore(
+  // PERFORMANCE FIX: Separate selectors to prevent unnecessary re-renders
+  // Only subscribe to the specific chart's customization, not all customizations
+  const customization = useDataStore(
+    (state) => state.chartCustomizations[chartId]
+  )
+
+  const currentTheme = useDataStore((state) => state.currentTheme)
+  const updateChartCustomization = useDataStore((state) => state.updateChartCustomization)
+  const setFullScreen = useDataStore((state) => state.setFullScreen)
+  const exportChart = useDataStore((state) => state.exportChart)
+  const isCustomizing = useDataStore((state) => state.isCustomizing)
+  const setSelectedChartId = useDataStore((state) => state.setSelectedChartId)
+  const selectedChartId = useDataStore((state) => state.selectedChartId)
+  const setShowChartSettings = useDataStore((state) => state.setShowChartSettings)
+  const analysis = useDataStore((state) => state.analysis)
+  const setAnalysis = useDataStore((state) => state.setAnalysis)
+
+  // CRITICAL: Get filter data separately to control re-renders
+  const { rawData, dateRange, granularity, selectedDateColumn, dashboardFilters } = useDataStore(
     (state) => ({
-      chartCustomizations: state.chartCustomizations,
-      currentTheme: state.currentTheme,
-      updateChartCustomization: state.updateChartCustomization,
-      setFullScreen: state.setFullScreen,
-      exportChart: state.exportChart,
-      // CRITICAL: Call getFilteredData here in the selector
-      filteredDataFromStore: state.getFilteredData(),
-      isCustomizing: state.isCustomizing,
-      setSelectedChartId: state.setSelectedChartId,
-      selectedChartId: state.selectedChartId,
-      setShowChartSettings: state.setShowChartSettings,
-      analysis: state.analysis,
-      setAnalysis: state.setAnalysis,
-      // Extract primitive values to ensure proper equality checks
-      dateRangeFrom: state.dateRange?.from?.getTime(),
-      dateRangeTo: state.dateRange?.to?.getTime(),
+      rawData: state.rawData,
+      dateRange: state.dateRange,
       granularity: state.granularity,
-      selectedDateColumn: state.selectedDateColumn
+      selectedDateColumn: state.selectedDateColumn,
+      dashboardFilters: state.dashboardFilters
     })
   )
 
-  const customization = chartCustomizations[chartId]
+  // Get the filtering function (stable reference)
+  const getFilteredData = useDataStore((state) => state.getFilteredData)
 
-  // PERFORMANCE OPTIMIZATION: Use filtered data from store selector
-  // The selector already calls getFilteredData(), and including the filter primitives
-  // in the selector ensures re-renders when filters change
+  // PERFORMANCE OPTIMIZATION: Compute filtered data only when filter dependencies change
+  // This ensures we re-render on date changes but NOT on unrelated store changes
   const filteredData = useMemo(() => {
-    console.log('🔄 [ChartWrapper] Recomputing filtered data for chart:', title, {
-      dateRangeFrom,
-      dateRangeTo,
-      granularity,
-      selectedDateColumn,
-      dataLength: filteredDataFromStore.length
-    })
-    return filteredDataFromStore
-  }, [filteredDataFromStore, dateRangeFrom, dateRangeTo, granularity, selectedDateColumn, title])
+    const result = getFilteredData()
+    console.log('🔄 [ChartWrapper] Filtered data for', title, ':', result.length, 'rows')
+    return result
+  }, [getFilteredData, dateRange, granularity, selectedDateColumn, dashboardFilters, rawData, title])
 
   // PERFORMANCE OPTIMIZATION: Memoize chart data processing with stable reference
   // Create a stable string key for data comparison to prevent unnecessary recalculations
-  // CRITICAL FIX: Include filter states to ensure recalculation when filters change
   const dataKeyForCache = useMemo(() => {
     const sourceData = (data && data.length > 0) ? data : filteredData
-    return `${sourceData.length}-${sourceData[0] ? Object.keys(sourceData[0]).length : 0}-${dateRangeFrom}-${dateRangeTo}-${granularity}-${selectedDateColumn}`
-  }, [data, filteredData, dateRangeFrom, dateRangeTo, granularity, selectedDateColumn])
+    return `${sourceData.length}-${sourceData[0] ? Object.keys(sourceData[0]).length : 0}-${Date.now()}`
+  }, [data, filteredData])
 
   // Apply customizations first (moved before chartData to avoid hoisting issues)
   const displayTitle = customization?.customTitle || title

@@ -399,6 +399,7 @@ interface DataStore {
   setCurrentTheme: (theme: DashboardTheme) => void
   addCustomTheme: (theme: DashboardTheme) => void
   updateChartCustomization: (chartId: string, customization: Partial<ChartCustomization>) => void
+  batchUpdateChartCustomizations: (updates: Record<string, Partial<ChartCustomization>>) => void
   removeChartCustomization: (chartId: string) => void
   addDashboardFilter: (filter: DashboardFilter) => void
   updateDashboardFilter: (filterId: string, updates: Partial<DashboardFilter>) => void
@@ -1109,6 +1110,22 @@ export const useDataStore = create<DataStore>()(
           }
         }))
         get().addToHistory('chart_customize', { chartId, customization })
+      },
+
+      // PERFORMANCE: Batch update multiple chart customizations at once
+      batchUpdateChartCustomizations: (updates: Record<string, Partial<ChartCustomization>>) => {
+        set(state => {
+          const newCustomizations = { ...state.chartCustomizations }
+          Object.entries(updates).forEach(([chartId, customization]) => {
+            newCustomizations[chartId] = {
+              ...newCustomizations[chartId],
+              ...customization,
+              id: chartId
+            }
+          })
+          return { chartCustomizations: newCustomizations }
+        })
+        get().addToHistory('chart_batch_customize', { updates })
       },
       
       removeChartCustomization: (chartId) => {
@@ -1832,11 +1849,12 @@ export const useDataStore = create<DataStore>()(
         set({ draftChart: newChart })
 
         // Create customization entry for the draft chart so Data tab can work with it
+        // PERFORMANCE FIX: Always provide a default position based on template
         const customization: ChartCustomization = {
           id: chartId,
-          position: position ?
-            { x: position.x, y: position.y, ...template.defaultPosition } :
-            undefined,
+          position: position
+            ? { x: position.x, y: position.y, w: template.defaultPosition.w, h: template.defaultPosition.h }
+            : { x: 0, y: 0, w: template.defaultPosition.w, h: template.defaultPosition.h },
           isVisible: true,
           chartType: template.type,
         }

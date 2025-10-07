@@ -2464,6 +2464,223 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
         )
       }
 
+      case 'funnel': {
+        const effectiveDataMapping = customization?.dataMapping || configDataMapping
+        const FunnelChart = React.lazy(() => import('./charts/funnel-chart'))
+
+        return (
+          <React.Suspense fallback={
+            <div className="flex items-center justify-center h-64">
+              <div className="text-sm text-gray-400">Loading funnel chart...</div>
+            </div>
+          }>
+            <FunnelChart
+              data={chartData}
+              dataMapping={{
+                stage: effectiveDataMapping?.stage || safeDataKey[0] || 'stage',
+                value: effectiveDataMapping?.value || safeDataKey[1] || 'value'
+              }}
+              customization={{
+                showLabels: customization?.showLabels !== false,
+                showValues: customization?.showValues !== false,
+                colors: colors
+              }}
+            />
+          </React.Suspense>
+        )
+      }
+
+      case 'heatmap': {
+        const effectiveDataMapping = customization?.dataMapping || configDataMapping
+        const HeatmapChart = React.lazy(() => import('./charts/heatmap-chart'))
+
+        return (
+          <React.Suspense fallback={
+            <div className="flex items-center justify-center h-64">
+              <div className="text-sm text-gray-400">Loading heatmap...</div>
+            </div>
+          }>
+            <HeatmapChart
+              data={chartData}
+              dataMapping={{
+                xAxis: effectiveDataMapping?.xAxis || safeDataKey[0] || 'x',
+                yAxis: effectiveDataMapping?.yAxis || safeDataKey[1] || 'y',
+                value: effectiveDataMapping?.value || safeDataKey[2] || 'value'
+              }}
+              customization={{
+                colorScheme: customization?.colorScheme || 'blue',
+                showValues: customization?.showValues !== false
+              }}
+            />
+          </React.Suspense>
+        )
+      }
+
+      case 'gauge': {
+        const effectiveDataMapping = customization?.dataMapping || configDataMapping
+        const GaugeChart = React.lazy(() => import('./charts/gauge-chart'))
+
+        return (
+          <React.Suspense fallback={
+            <div className="flex items-center justify-center h-64">
+              <div className="text-sm text-gray-400">Loading gauge...</div>
+            </div>
+          }>
+            <GaugeChart
+              data={chartData}
+              dataMapping={{
+                value: effectiveDataMapping?.value || safeDataKey[0] || 'value',
+                target: effectiveDataMapping?.target
+              }}
+              customization={{
+                min: customization?.min || 0,
+                max: customization?.max || 100,
+                unit: customization?.unit || '',
+                showTarget: customization?.showTarget !== false
+              }}
+            />
+          </React.Suspense>
+        )
+      }
+
+      case 'cohort': {
+        const effectiveDataMapping = customization?.dataMapping || configDataMapping
+        const CohortGrid = React.lazy(() => import('./charts/cohort-grid'))
+
+        return (
+          <React.Suspense fallback={
+            <div className="flex items-center justify-center h-64">
+              <div className="text-sm text-gray-400">Loading cohort grid...</div>
+            </div>
+          }>
+            <CohortGrid
+              data={chartData}
+              dataMapping={{
+                cohort: effectiveDataMapping?.cohort || safeDataKey[0] || 'cohort',
+                period: effectiveDataMapping?.period || safeDataKey[1] || 'period',
+                value: effectiveDataMapping?.value || safeDataKey[2] || 'retention'
+              }}
+              customization={{
+                colorScheme: customization?.colorScheme || 'blue',
+                showPercentages: customization?.showPercentages !== false
+              }}
+            />
+          </React.Suspense>
+        )
+      }
+
+      case 'bullet': {
+        const effectiveDataMapping = customization?.dataMapping || configDataMapping
+        const BulletChart = React.lazy(() => import('./charts/bullet-chart'))
+
+        return (
+          <React.Suspense fallback={
+            <div className="flex items-center justify-center h-64">
+              <div className="text-sm text-gray-400">Loading bullet chart...</div>
+            </div>
+          }>
+            <BulletChart
+              data={chartData}
+              dataMapping={{
+                category: effectiveDataMapping?.category || safeDataKey[0] || 'category',
+                actual: effectiveDataMapping?.actual || safeDataKey[1] || 'actual',
+                target: effectiveDataMapping?.comparative || effectiveDataMapping?.target || safeDataKey[2] || 'target',
+                ranges: effectiveDataMapping?.ranges
+              }}
+              customization={{
+                showLabels: customization?.showLabels !== false,
+                showGrid: customization?.showGrid
+              }}
+            />
+          </React.Suspense>
+        )
+      }
+
+      case 'treemap': {
+        const effectiveDataMapping = customization?.dataMapping || configDataMapping
+        const TreemapChart = React.lazy(() => import('./charts/treemap-chart'))
+
+        return (
+          <React.Suspense fallback={
+            <div className="flex items-center justify-center h-64">
+              <div className="text-sm text-gray-400">Loading treemap...</div>
+            </div>
+          }>
+            <TreemapChart
+              data={chartData}
+              dataMapping={{
+                category: effectiveDataMapping?.category || safeDataKey[0] || 'category',
+                value: effectiveDataMapping?.value || safeDataKey[1] || 'value',
+                parentCategory: effectiveDataMapping?.parentCategory
+              }}
+              customization={{
+                colors: colors,
+                showLabels: customization?.showLabels !== false
+              }}
+            />
+          </React.Suspense>
+        )
+      }
+
+      case 'sankey': {
+        const effectiveDataMapping = customization?.dataMapping || configDataMapping
+        const SankeyChart = React.lazy(() => import('./charts/sankey-chart'))
+
+        return (
+          <React.Suspense fallback={
+            <div className="flex items-center justify-center h-64">
+              <div className="text-sm text-gray-400">Loading sankey diagram...</div>
+            </div>
+          }>
+            <SankeyChart
+              data={chartData}
+              dataMapping={{
+                source: effectiveDataMapping?.source || safeDataKey[0] || 'source',
+                target: effectiveDataMapping?.target_node || safeDataKey[1] || 'target',
+                value: effectiveDataMapping?.value || safeDataKey[2] || 'value'
+              }}
+              customization={{
+                nodeWidth: customization?.nodeWidth || 12,
+                nodePadding: customization?.nodePadding || 24,
+                colors: colors
+              }}
+            />
+          </React.Suspense>
+        )
+      }
+
+      case 'sparkline': {
+        const effectiveDataMapping = customization?.dataMapping || configDataMapping
+        const SparklineChart = React.lazy(() => import('./charts/sparkline-chart'))
+
+        // For sparkline, if trend field is specified, use it as both x and y
+        // Otherwise use first two columns as x and y
+        const xField = effectiveDataMapping?.xAxis || safeDataKey[0] || 'x'
+        const yField = effectiveDataMapping?.trend || effectiveDataMapping?.yAxis || safeDataKey[1] || 'y'
+
+        return (
+          <React.Suspense fallback={
+            <div className="flex items-center justify-center h-64">
+              <div className="text-sm text-gray-400">Loading sparkline...</div>
+            </div>
+          }>
+            <SparklineChart
+              data={chartData}
+              dataMapping={{
+                xAxis: xField,
+                yAxis: yField
+              }}
+              height={customization?.height || 60}
+              color={customization?.color || colors[0] || '#3b82f6'}
+              showTooltip={customization?.showTooltip !== false}
+              showDots={customization?.showDots || false}
+              strokeWidth={customization?.strokeWidth || 2}
+              fillArea={customization?.fillArea || false}
+            />
+          </React.Suspense>
+        )
+      }
+
       case 'waterfall': {
         const effectiveDataMapping = customization?.dataMapping || configDataMapping
 

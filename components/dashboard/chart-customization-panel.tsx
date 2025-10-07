@@ -1536,6 +1536,1222 @@ export function ChartCustomizationPanel({
                       </div>
                     )}
 
+                    {/* Funnel Chart Data Mapping */}
+                    {chartType === 'funnel' && (
+                      <div className="space-y-6">
+                        <div>
+                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-40 overflow-y-auto">
+                            <div className="grid grid-cols-1 gap-2">
+                              {columnsByType.all.map((col) => {
+                                const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
+                                const icon = columnType === 'number' ? '🔢' : columnType === 'date' ? '📅' : '📝'
+                                return (
+                                  <div
+                                    key={col}
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.setData('application/json', JSON.stringify({
+                                        fieldName: col,
+                                        fieldType: columnType
+                                      }))
+                                    }}
+                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                  >
+                                    <span className="text-xs">{icon}</span>
+                                    <span className="text-sm font-medium text-gray-700">{col}</span>
+                                    <span className="text-xs text-gray-500 ml-auto">{columnType}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4">
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-blue-400', 'bg-blue-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                handleUpdate({
+                                  dataMapping: {
+                                    ...customization?.dataMapping,
+                                    stage: data.fieldName
+                                  }
+                                })
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">Stage Field (Required)</div>
+                            {effectiveDataMapping?.stage ? (
+                              <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
+                                <span className="text-sm text-blue-800">{effectiveDataMapping.stage}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      stage: undefined
+                                    }
+                                  })}
+                                  className="text-blue-600 hover:text-blue-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                Drop a field for funnel stages
+                              </div>
+                            )}
+                          </div>
+
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-green-400', 'bg-green-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                if (data.fieldType === 'number') {
+                                  handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      value: data.fieldName
+                                    }
+                                  })
+                                }
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">Value Field (Required - Numeric)</div>
+                            {effectiveDataMapping?.value ? (
+                              <div className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
+                                <span className="text-sm text-green-800">{effectiveDataMapping.value}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      value: undefined
+                                    }
+                                  })}
+                                  className="text-green-600 hover:text-green-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                Drop a numeric field for values
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Heatmap Chart Data Mapping */}
+                    {chartType === 'heatmap' && (
+                      <div className="space-y-6">
+                        <div>
+                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-40 overflow-y-auto">
+                            <div className="grid grid-cols-1 gap-2">
+                              {columnsByType.all.map((col) => {
+                                const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
+                                const icon = columnType === 'number' ? '🔢' : columnType === 'date' ? '📅' : '📝'
+                                return (
+                                  <div
+                                    key={col}
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.setData('application/json', JSON.stringify({
+                                        fieldName: col,
+                                        fieldType: columnType
+                                      }))
+                                    }}
+                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                  >
+                                    <span className="text-xs">{icon}</span>
+                                    <span className="text-sm font-medium text-gray-700">{col}</span>
+                                    <span className="text-xs text-gray-500 ml-auto">{columnType}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4">
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-blue-400', 'bg-blue-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                handleUpdate({
+                                  dataMapping: {
+                                    ...customization?.dataMapping,
+                                    xAxis: data.fieldName
+                                  }
+                                })
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">X-Axis Field (Required)</div>
+                            {effectiveDataMapping?.xAxis ? (
+                              <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
+                                <span className="text-sm text-blue-800">{effectiveDataMapping.xAxis}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      xAxis: undefined
+                                    }
+                                  })}
+                                  className="text-blue-600 hover:text-blue-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                Drop a field for X-axis
+                              </div>
+                            )}
+                          </div>
+
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-green-400', 'bg-green-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                handleUpdate({
+                                  dataMapping: {
+                                    ...customization?.dataMapping,
+                                    yAxis: data.fieldName
+                                  }
+                                })
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">Y-Axis Field (Required)</div>
+                            {effectiveDataMapping?.yAxis ? (
+                              <div className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
+                                <span className="text-sm text-green-800">{effectiveDataMapping.yAxis}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      yAxis: undefined
+                                    }
+                                  })}
+                                  className="text-green-600 hover:text-green-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                Drop a field for Y-axis
+                              </div>
+                            )}
+                          </div>
+
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-purple-400', 'bg-purple-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-purple-400', 'bg-purple-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-purple-400', 'bg-purple-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                if (data.fieldType === 'number') {
+                                  handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      value: data.fieldName
+                                    }
+                                  })
+                                }
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">Value Field (Required - Numeric)</div>
+                            {effectiveDataMapping?.value ? (
+                              <div className="flex items-center justify-between p-2 bg-purple-100 border border-purple-300 rounded">
+                                <span className="text-sm text-purple-800">{effectiveDataMapping.value}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      value: undefined
+                                    }
+                                  })}
+                                  className="text-purple-600 hover:text-purple-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                Drop a numeric field for intensity values
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Gauge Chart Data Mapping */}
+                    {chartType === 'gauge' && (
+                      <div className="space-y-6">
+                        <div>
+                          <label className="text-sm font-medium mb-3 block">Available Numeric Fields</label>
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-40 overflow-y-auto">
+                            <div className="grid grid-cols-1 gap-2">
+                              {columnsByType.numeric.map((col) => (
+                                <div
+                                  key={col}
+                                  draggable
+                                  onDragStart={(e) => {
+                                    e.dataTransfer.setData('application/json', JSON.stringify({
+                                      fieldName: col,
+                                      fieldType: 'number'
+                                    }))
+                                  }}
+                                  className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                >
+                                  <span className="text-xs">🔢</span>
+                                  <span className="text-sm font-medium text-gray-700">{col}</span>
+                                  <span className="text-xs text-gray-500 ml-auto">number</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4">
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-blue-400', 'bg-blue-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                if (data.fieldType === 'number') {
+                                  handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      value: data.fieldName
+                                    }
+                                  })
+                                }
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">Value Field (Required)</div>
+                            {effectiveDataMapping?.value ? (
+                              <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
+                                <span className="text-sm text-blue-800">{effectiveDataMapping.value}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      value: undefined
+                                    }
+                                  })}
+                                  className="text-blue-600 hover:text-blue-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                Drop a numeric field for gauge value
+                              </div>
+                            )}
+                          </div>
+
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-green-400', 'bg-green-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                if (data.fieldType === 'number') {
+                                  handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      target: data.fieldName
+                                    }
+                                  })
+                                }
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-green-600 mb-2">Target Field (Optional)</div>
+                            {effectiveDataMapping?.target ? (
+                              <div className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
+                                <span className="text-sm text-green-800">{effectiveDataMapping.target}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      target: undefined
+                                    }
+                                  })}
+                                  className="text-green-600 hover:text-green-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                Drop a numeric field for target (optional)
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Cohort Chart Data Mapping */}
+                    {chartType === 'cohort' && (
+                      <div className="space-y-6">
+                        <div>
+                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-40 overflow-y-auto">
+                            <div className="grid grid-cols-1 gap-2">
+                              {columnsByType.all.map((col) => {
+                                const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
+                                const icon = columnType === 'number' ? '🔢' : columnType === 'date' ? '📅' : '📝'
+                                return (
+                                  <div
+                                    key={col}
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.setData('application/json', JSON.stringify({
+                                        fieldName: col,
+                                        fieldType: columnType
+                                      }))
+                                    }}
+                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                  >
+                                    <span className="text-xs">{icon}</span>
+                                    <span className="text-sm font-medium text-gray-700">{col}</span>
+                                    <span className="text-xs text-gray-500 ml-auto">{columnType}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4">
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-blue-400', 'bg-blue-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                handleUpdate({
+                                  dataMapping: {
+                                    ...customization?.dataMapping,
+                                    cohort: data.fieldName
+                                  }
+                                })
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">Cohort Field (Required)</div>
+                            {effectiveDataMapping?.cohort ? (
+                              <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
+                                <span className="text-sm text-blue-800">{effectiveDataMapping.cohort}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      cohort: undefined
+                                    }
+                                  })}
+                                  className="text-blue-600 hover:text-blue-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                Drop a field for cohort identifier
+                              </div>
+                            )}
+                          </div>
+
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-green-400', 'bg-green-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                handleUpdate({
+                                  dataMapping: {
+                                    ...customization?.dataMapping,
+                                    period: data.fieldName
+                                  }
+                                })
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">Period Field (Required)</div>
+                            {effectiveDataMapping?.period ? (
+                              <div className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
+                                <span className="text-sm text-green-800">{effectiveDataMapping.period}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      period: undefined
+                                    }
+                                  })}
+                                  className="text-green-600 hover:text-green-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                Drop a field for time period
+                              </div>
+                            )}
+                          </div>
+
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-purple-400', 'bg-purple-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-purple-400', 'bg-purple-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-purple-400', 'bg-purple-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                if (data.fieldType === 'number') {
+                                  handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      value: data.fieldName
+                                    }
+                                  })
+                                }
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">Value Field (Required - Numeric)</div>
+                            {effectiveDataMapping?.value ? (
+                              <div className="flex items-center justify-between p-2 bg-purple-100 border border-purple-300 rounded">
+                                <span className="text-sm text-purple-800">{effectiveDataMapping.value}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      value: undefined
+                                    }
+                                  })}
+                                  className="text-purple-600 hover:text-purple-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                Drop a numeric field for retention percentage
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Bullet Chart Data Mapping */}
+                    {chartType === 'bullet' && (
+                      <div className="space-y-6">
+                        <div>
+                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-40 overflow-y-auto">
+                            <div className="grid grid-cols-1 gap-2">
+                              {columnsByType.all.map((col) => {
+                                const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
+                                const icon = columnType === 'number' ? '🔢' : columnType === 'date' ? '📅' : '📝'
+                                return (
+                                  <div
+                                    key={col}
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.setData('application/json', JSON.stringify({
+                                        fieldName: col,
+                                        fieldType: columnType
+                                      }))
+                                    }}
+                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                  >
+                                    <span className="text-xs">{icon}</span>
+                                    <span className="text-sm font-medium text-gray-700">{col}</span>
+                                    <span className="text-xs text-gray-500 ml-auto">{columnType}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4">
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-purple-400', 'bg-purple-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-purple-400', 'bg-purple-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-purple-400', 'bg-purple-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                handleUpdate({
+                                  dataMapping: {
+                                    ...customization?.dataMapping,
+                                    category: data.fieldName
+                                  }
+                                })
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">Category Field (Optional)</div>
+                            {effectiveDataMapping?.category ? (
+                              <div className="flex items-center justify-between p-2 bg-purple-100 border border-purple-300 rounded">
+                                <span className="text-sm text-purple-800">{effectiveDataMapping.category}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      category: undefined
+                                    }
+                                  })}
+                                  className="text-purple-600 hover:text-purple-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                Drop a field for categories (optional)
+                              </div>
+                            )}
+                          </div>
+
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-blue-400', 'bg-blue-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                if (data.fieldType === 'number') {
+                                  handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      actual: data.fieldName
+                                    }
+                                  })
+                                }
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">Actual Field (Required - Numeric)</div>
+                            {effectiveDataMapping?.actual ? (
+                              <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
+                                <span className="text-sm text-blue-800">{effectiveDataMapping.actual}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      actual: undefined
+                                    }
+                                  })}
+                                  className="text-blue-600 hover:text-blue-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                Drop a numeric field for actual value
+                              </div>
+                            )}
+                          </div>
+
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-green-400', 'bg-green-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                if (data.fieldType === 'number') {
+                                  handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      comparative: data.fieldName
+                                    }
+                                  })
+                                }
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">Comparative/Target Field (Required - Numeric)</div>
+                            {effectiveDataMapping?.comparative ? (
+                              <div className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
+                                <span className="text-sm text-green-800">{effectiveDataMapping.comparative}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      comparative: undefined
+                                    }
+                                  })}
+                                  className="text-green-600 hover:text-green-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                Drop a numeric field for comparative/target value
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Treemap Chart Data Mapping */}
+                    {chartType === 'treemap' && (
+                      <div className="space-y-6">
+                        <div>
+                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-40 overflow-y-auto">
+                            <div className="grid grid-cols-1 gap-2">
+                              {columnsByType.all.map((col) => {
+                                const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
+                                const icon = columnType === 'number' ? '🔢' : columnType === 'date' ? '📅' : '📝'
+                                return (
+                                  <div
+                                    key={col}
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.setData('application/json', JSON.stringify({
+                                        fieldName: col,
+                                        fieldType: columnType
+                                      }))
+                                    }}
+                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                  >
+                                    <span className="text-xs">{icon}</span>
+                                    <span className="text-sm font-medium text-gray-700">{col}</span>
+                                    <span className="text-xs text-gray-500 ml-auto">{columnType}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4">
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-blue-400', 'bg-blue-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                handleUpdate({
+                                  dataMapping: {
+                                    ...customization?.dataMapping,
+                                    category: data.fieldName
+                                  }
+                                })
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">Category Field (Required)</div>
+                            {effectiveDataMapping?.category ? (
+                              <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
+                                <span className="text-sm text-blue-800">{effectiveDataMapping.category}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      category: undefined
+                                    }
+                                  })}
+                                  className="text-blue-600 hover:text-blue-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                Drop a field for categories
+                              </div>
+                            )}
+                          </div>
+
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-green-400', 'bg-green-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                if (data.fieldType === 'number') {
+                                  handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      value: data.fieldName
+                                    }
+                                  })
+                                }
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">Value Field (Required - Numeric)</div>
+                            {effectiveDataMapping?.value ? (
+                              <div className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
+                                <span className="text-sm text-green-800">{effectiveDataMapping.value}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      value: undefined
+                                    }
+                                  })}
+                                  className="text-green-600 hover:text-green-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                Drop a numeric field for size values
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Sankey Chart Data Mapping */}
+                    {chartType === 'sankey' && (
+                      <div className="space-y-6">
+                        <div>
+                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-40 overflow-y-auto">
+                            <div className="grid grid-cols-1 gap-2">
+                              {columnsByType.all.map((col) => {
+                                const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
+                                const icon = columnType === 'number' ? '🔢' : columnType === 'date' ? '📅' : '📝'
+                                return (
+                                  <div
+                                    key={col}
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.setData('application/json', JSON.stringify({
+                                        fieldName: col,
+                                        fieldType: columnType
+                                      }))
+                                    }}
+                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                  >
+                                    <span className="text-xs">{icon}</span>
+                                    <span className="text-sm font-medium text-gray-700">{col}</span>
+                                    <span className="text-xs text-gray-500 ml-auto">{columnType}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4">
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-blue-400', 'bg-blue-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                handleUpdate({
+                                  dataMapping: {
+                                    ...customization?.dataMapping,
+                                    source: data.fieldName
+                                  }
+                                })
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">Source Field (Required)</div>
+                            {effectiveDataMapping?.source ? (
+                              <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
+                                <span className="text-sm text-blue-800">{effectiveDataMapping.source}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      source: undefined
+                                    }
+                                  })}
+                                  className="text-blue-600 hover:text-blue-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                Drop a field for source nodes
+                              </div>
+                            )}
+                          </div>
+
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-green-400', 'bg-green-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                handleUpdate({
+                                  dataMapping: {
+                                    ...customization?.dataMapping,
+                                    target_node: data.fieldName
+                                  }
+                                })
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">Target Field (Required)</div>
+                            {effectiveDataMapping?.target_node ? (
+                              <div className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
+                                <span className="text-sm text-green-800">{effectiveDataMapping.target_node}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      target_node: undefined
+                                    }
+                                  })}
+                                  className="text-green-600 hover:text-green-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                Drop a field for target nodes
+                              </div>
+                            )}
+                          </div>
+
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-purple-400', 'bg-purple-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-purple-400', 'bg-purple-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-purple-400', 'bg-purple-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                if (data.fieldType === 'number') {
+                                  handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      value: data.fieldName
+                                    }
+                                  })
+                                }
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">Value Field (Required - Numeric)</div>
+                            {effectiveDataMapping?.value ? (
+                              <div className="flex items-center justify-between p-2 bg-purple-100 border border-purple-300 rounded">
+                                <span className="text-sm text-purple-800">{effectiveDataMapping.value}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      value: undefined
+                                    }
+                                  })}
+                                  className="text-purple-600 hover:text-purple-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                Drop a numeric field for flow values
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Sparkline Chart Data Mapping */}
+                    {chartType === 'sparkline' && (
+                      <div className="space-y-6">
+                        <div>
+                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-40 overflow-y-auto">
+                            <div className="grid grid-cols-1 gap-2">
+                              {columnsByType.all.map((col) => {
+                                const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
+                                const icon = columnType === 'number' ? '🔢' : columnType === 'date' ? '📅' : '📝'
+                                return (
+                                  <div
+                                    key={col}
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.setData('application/json', JSON.stringify({
+                                        fieldName: col,
+                                        fieldType: columnType
+                                      }))
+                                    }}
+                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                  >
+                                    <span className="text-xs">{icon}</span>
+                                    <span className="text-sm font-medium text-gray-700">{col}</span>
+                                    <span className="text-xs text-gray-500 ml-auto">{columnType}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4">
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-blue-400', 'bg-blue-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                if (data.fieldType === 'number') {
+                                  handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      trend: data.fieldName
+                                    }
+                                  })
+                                }
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">Trend Field (Required - Numeric)</div>
+                            {effectiveDataMapping?.trend ? (
+                              <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
+                                <span className="text-sm text-blue-800">{effectiveDataMapping.trend}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      trend: undefined
+                                    }
+                                  })}
+                                  className="text-blue-600 hover:text-blue-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                Drop a numeric field for sparkline trend
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Data Preview */}
                     <div className="pt-2 border-t border-gray-200">
                       <label className="text-sm font-medium mb-2 block">Data Preview</label>
