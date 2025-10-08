@@ -1117,11 +1117,22 @@ export const useDataStore = create<DataStore>()(
         set(state => {
           const newCustomizations = { ...state.chartCustomizations }
           Object.entries(updates).forEach(([chartId, customization]) => {
-            newCustomizations[chartId] = {
+            // CRITICAL FIX: Handle undefined values by deleting properties instead of setting them to undefined
+            // This ensures that setting position: undefined actually REMOVES the position
+            const updated = {
               ...newCustomizations[chartId],
               ...customization,
               id: chartId
             }
+
+            // Remove any properties that were explicitly set to undefined
+            Object.keys(customization).forEach(key => {
+              if (customization[key as keyof typeof customization] === undefined) {
+                delete updated[key as keyof typeof updated]
+              }
+            })
+
+            newCustomizations[chartId] = updated
           })
           return { chartCustomizations: newCustomizations }
         })

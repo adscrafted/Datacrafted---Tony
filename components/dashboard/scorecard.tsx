@@ -66,19 +66,47 @@ export function Scorecard({
     return colors[aggregationType] || 'bg-gray-100 text-gray-700'
   }
 
+  const isTimestamp = (val: number): boolean => {
+    const MIN_TIMESTAMP = 0 // 1970
+    const MAX_TIMESTAMP = 4102444800000 // 2100
+    return val >= MIN_TIMESTAMP && val <= MAX_TIMESTAMP && val > 1000000000000
+  }
+
   const formatValue = (val: string | number) => {
     if (typeof val === 'number') {
+      // Check if it's a timestamp (milliseconds since epoch)
+      if (isTimestamp(val)) {
+        // It's likely a timestamp in milliseconds
+        try {
+          const date = new Date(val)
+          // Check if it's a valid date
+          if (!isNaN(date.getTime())) {
+            return {
+              isDate: true,
+              month: date.toLocaleDateString('en-US', { month: 'short' }),
+              day: date.toLocaleDateString('en-US', { day: 'numeric' }),
+              year: date.toLocaleDateString('en-US', { year: 'numeric' })
+            }
+          }
+        } catch (e) {
+          // If date parsing fails, fall through to number formatting
+        }
+      }
+
+      // Regular number formatting
       // All values show 1 decimal place
       if (val >= 1000000) {
-        return `${(val / 1000000).toFixed(1)}M`
+        return { isDate: false, value: `${(val / 1000000).toFixed(1)}M` }
       } else if (val >= 1000) {
-        return `${(val / 1000).toFixed(1)}K`
+        return { isDate: false, value: `${(val / 1000).toFixed(1)}K` }
       }
       // Always show 1 decimal place for values under 1000
-      return val.toFixed(1)
+      return { isDate: false, value: val.toFixed(1) }
     }
-    return val
+    return { isDate: false, value: val }
   }
+
+  const formattedValue = formatValue(value)
 
   return (
     <div
@@ -94,9 +122,17 @@ export function Scorecard({
       </h3>
 
       {/* Value */}
-      <div className="text-5xl font-bold text-gray-900 tabular-nums">
-        {formatValue(value)}
-      </div>
+      {typeof formattedValue === 'object' && formattedValue.isDate ? (
+        <div className="flex flex-col items-center leading-tight">
+          <div className="text-4xl font-bold text-gray-900">{formattedValue.month}</div>
+          <div className="text-4xl font-bold text-gray-900">{formattedValue.day},</div>
+          <div className="text-4xl font-bold text-gray-900">{formattedValue.year}</div>
+        </div>
+      ) : (
+        <div className="text-5xl font-bold text-gray-900 tabular-nums">
+          {typeof formattedValue === 'object' ? formattedValue.value : formattedValue}
+        </div>
+      )}
     </div>
   )
 }

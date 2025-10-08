@@ -20,6 +20,32 @@ export function ScorecardCalculationDetails({
   className
 }: ScorecardCalculationDetailsProps) {
 
+  // Check if a number is a timestamp
+  const isTimestamp = (val: number): boolean => {
+    const MIN_TIMESTAMP = 0 // 1970
+    const MAX_TIMESTAMP = 4102444800000 // 2100
+    return val >= MIN_TIMESTAMP && val <= MAX_TIMESTAMP && val > 1000000000000
+  }
+
+  // Format a value (handles timestamps and regular numbers)
+  const formatValue = (val: number): string => {
+    if (isTimestamp(val)) {
+      try {
+        const date = new Date(val)
+        if (!isNaN(date.getTime())) {
+          return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+          })
+        }
+      } catch (e) {
+        // Fall through to regular formatting
+      }
+    }
+    return val.toLocaleString()
+  }
+
   // Get human-readable aggregation label
   const getAggregationLabel = () => {
     const labels: Record<string, string> = {
@@ -66,56 +92,56 @@ export function ScorecardCalculationDetails({
 
     const details: Record<string, { primary: string; secondary?: string[] }> = {
       sum: {
-        primary: `Sum of ${count.toLocaleString()} values = ${result.toLocaleString()}`,
+        primary: `Sum of ${count.toLocaleString()} values = ${formatValue(result)}`,
         secondary: [
           `Data points: ${count.toLocaleString()}`,
-          `Range: ${min.toLocaleString()} to ${max.toLocaleString()}`
+          `Range: ${formatValue(min)} to ${formatValue(max)}`
         ]
       },
       avg: {
-        primary: `Sum: ${sum.toLocaleString()} ÷ Count: ${count.toLocaleString()} = ${result.toFixed(2)}`,
+        primary: `Sum: ${formatValue(sum)} ÷ Count: ${count.toLocaleString()} = ${formatValue(result)}`,
         secondary: [
-          `Total: ${sum.toLocaleString()}`,
+          `Total: ${formatValue(sum)}`,
           `Data points: ${count.toLocaleString()}`,
-          `Average: ${result.toFixed(2)}`
+          `Average: ${formatValue(result)}`
         ]
       },
       count: {
-        primary: `Total data points = ${result.toLocaleString()}`,
+        primary: `Total data points = ${formatValue(result)}`,
         secondary: [
           `Non-null values counted: ${count.toLocaleString()}`
         ]
       },
       min: {
-        primary: `Minimum value = ${result.toLocaleString()}`,
+        primary: `Minimum value = ${formatValue(result)}`,
         secondary: [
           `Found from ${count.toLocaleString()} values`,
-          `Maximum: ${max.toLocaleString()}`
+          `Maximum: ${formatValue(max)}`
         ]
       },
       max: {
-        primary: `Maximum value = ${result.toLocaleString()}`,
+        primary: `Maximum value = ${formatValue(result)}`,
         secondary: [
           `Found from ${count.toLocaleString()} values`,
-          `Minimum: ${min.toLocaleString()}`
+          `Minimum: ${formatValue(min)}`
         ]
       },
       distinct: {
-        primary: `Unique values = ${result.toLocaleString()}`,
+        primary: `Unique values = ${formatValue(result)}`,
         secondary: [
           `Total values: ${count.toLocaleString()}`,
-          `Unique: ${result.toLocaleString()}`
+          `Unique: ${formatValue(result)}`
         ]
       },
       median: {
-        primary: `Median value = ${result.toLocaleString()}`,
+        primary: `Median value = ${formatValue(result)}`,
         secondary: [
           `Data points: ${count.toLocaleString()}`,
-          `Average: ${avg.toFixed(2)}`
+          `Average: ${formatValue(avg)}`
         ]
       },
       mode: {
-        primary: `Most frequent value = ${result.toLocaleString()}`,
+        primary: `Most frequent value = ${formatValue(result)}`,
         secondary: [
           `Data points: ${count.toLocaleString()}`
         ]
@@ -124,18 +150,18 @@ export function ScorecardCalculationDetails({
         primary: `Standard deviation = ${result.toFixed(4)}`,
         secondary: [
           `Data points: ${count.toLocaleString()}`,
-          `Mean: ${avg.toFixed(2)}`
+          `Mean: ${formatValue(avg)}`
         ]
       },
       variance: {
         primary: `Variance = ${result.toFixed(4)}`,
         secondary: [
           `Data points: ${count.toLocaleString()}`,
-          `Mean: ${avg.toFixed(2)}`
+          `Mean: ${formatValue(avg)}`
         ]
       },
       percentile: {
-        primary: `Percentile value = ${result.toLocaleString()}`,
+        primary: `Percentile value = ${formatValue(result)}`,
         secondary: [
           `Data points: ${count.toLocaleString()}`
         ]
@@ -143,7 +169,7 @@ export function ScorecardCalculationDetails({
     }
 
     return details[aggregationType] || {
-      primary: `Result = ${result.toLocaleString()}`,
+      primary: `Result = ${formatValue(result)}`,
       secondary: [`Data points: ${count.toLocaleString()}`]
     }
   }
@@ -209,7 +235,7 @@ export function ScorecardCalculationDetails({
                   key={index}
                   className="text-xs font-mono bg-white px-2 py-1 rounded border border-gray-200 text-gray-700"
                 >
-                  {value.toLocaleString()}
+                  {formatValue(value)}
                 </span>
               ))}
               {values.length > 3 && (

@@ -51,19 +51,17 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
   data,
   className
 }) => {
-  console.log('🏗️ [FLEXIBLE_DASHBOARD] Component rendering with:', {
-    analysisChartConfigLength: analysis.chartConfig?.length || 0,
-    dataLength: data.length,
-    chartTitles: analysis.chartConfig?.map(c => c.title)
-  })
 
   const [selectedChartId, setSelectedChartId] = useState<string | null>(null)
   const [newlyAddedChartId, setNewlyAddedChartId] = useState<string | null>(null) // Track newly added chart by ID
-  const [layouts, setLayouts] = useState<{ [key: string]: GridLayout[] }>({})
   const [isLayoutMode, setIsLayoutMode] = useState(false)
   const [saveLayoutName, setSaveLayoutName] = useState('')
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [layoutKey, setLayoutKey] = useState(0) // Force re-render key
+
+  // Refs
+  const layoutChangeTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const {
     chartCustomizations,
@@ -104,18 +102,9 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
   // Wrap filtered data in useMemo with proper dependencies
   const filteredData = useMemo(() => {
     const result = getFilteredData()
-    console.log('🔄 [FlexibleDashboardLayout] Recomputing filtered data:', {
-      dateRangeFrom: dateRange?.from?.toISOString() || 'none',
-      dateRangeTo: dateRange?.to?.toISOString() || 'none',
-      granularity,
-      selectedDateColumn,
-      filteredDataLength: result.length,
-      rawDataLength: data.length
-    })
     // IMPORTANT: If store returns empty but we have data prop, use data prop
     // This handles the case where store isn't initialized yet
     if (result.length === 0 && data.length > 0) {
-      console.log('⚠️ [FlexibleDashboardLayout] Store returned empty, using data prop instead')
       return data
     }
     return result
@@ -145,177 +134,26 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     }
   }, [currentProjectId, loadDashboardConfig, updateChartCustomization])
 
-  // Auto-reset layout on initial load if charts don't have positions
-  const hasRunInitialLayout = useRef(false)
-  const lastAnalysisId = useRef<string | null>(null)
-
-  useEffect(() => {
-    // Reset the flag when analysis changes (new data upload)
-    const currentAnalysisId = analysis?.chartConfig?.map(c => c.id || c.title).join(',') || ''
-    if (currentAnalysisId !== lastAnalysisId.current) {
-      hasRunInitialLayout.current = false
-      lastAnalysisId.current = currentAnalysisId
-    }
-
-    // Only run once per analysis load
-    if (hasRunInitialLayout.current) return
-    if (!analysis?.chartConfig || analysis.chartConfig.length === 0) return
-
-    // Small delay to ensure component is fully mounted
-    const timer = setTimeout(() => {
-      // Check if any charts are missing positions
-      const chartsNeedPositions = analysis.chartConfig.some(config => {
-        const chartId = config.id || `chart-${analysis.chartConfig.indexOf(config)}`
-        const customization = chartCustomizations[chartId]
-        return !customization?.position
-      })
-
-      console.log('🔄 [AUTO_LAYOUT] Checking if layout reset needed:', {
-        chartsNeedPositions,
-        totalCharts: analysis.chartConfig.length,
-        customizationsCount: Object.keys(chartCustomizations).length
-      })
-
-      if (chartsNeedPositions) {
-        console.log('🔄 [AUTO_LAYOUT] Running initial layout reset for charts without positions')
-        hasRunInitialLayout.current = true
-
-      // Helper to get dimensions (inlined to avoid dependency issues)
-      const getDimensions = (config: any) => {
-        switch (config.type) {
-          case 'scorecard':
-            return { w: 2, h: 1 }
-          case 'table':
-            return { w: 12, h: 6 }
-          case 'pie':
-            return { w: 4, h: 4 }
-          case 'bar':
-          case 'line':
-          case 'area':
-          case 'scatter':
-          case 'combo':
-          case 'waterfall':
-          case 'funnel':
-            return { w: 6, h: 4 }
-          default:
-            return { w: 6, h: 4 }
-        }
-      }
-
-      // Run the same logic as the Reset Layout button
-      const scorecards: Array<{ config: any, chartId: string }> = []
-      const otherCharts: Array<{ config: any, chartId: string }> = []
-
-      analysis.chartConfig.forEach(config => {
-        const originalIndex = analysis.chartConfig.indexOf(config)
-        const chartId = config.id || `chart-${originalIndex}`
-
-        if (config.type === 'scorecard') {
-          scorecards.push({ config, chartId })
-        } else {
-          otherCharts.push({ config, chartId })
-        }
-      })
-
-      let currentX = 0
-      let currentY = 0
-      const SCORECARD_WIDTH = 2
-      const GRID_COLS = 12
-
-      // Place scorecards at top
-      scorecards.forEach(({ config, chartId }) => {
-        if (currentX + SCORECARD_WIDTH > GRID_COLS) {
-          currentX = 0
-          currentY += 1
-        }
-
-        updateChartCustomization(chartId, {
-          position: {
-            x: currentX,
-            y: currentY,
-            w: SCORECARD_WIDTH,
-            h: 1
-          }
-        })
-
-        currentX += SCORECARD_WIDTH
-      })
-
-      // Place other charts with 2-per-row layout
-      currentX = 0
-      currentY = scorecards.length > 0 ? Math.ceil(scorecards.length * SCORECARD_WIDTH / GRID_COLS) : 0
-
-      otherCharts.forEach(({ config, chartId }) => {
-        const dims = getDimensions(config)
-
-        if (currentX + dims.w > GRID_COLS) {
-          currentX = 0
-          currentY += dims.h
-        }
-
-        updateChartCustomization(chartId, {
-          position: {
-            x: currentX,
-            y: currentY,
-            w: dims.w,
-            h: dims.h
-          }
-        })
-
-        currentX += dims.w
-      })
-
-        setLayoutKey(prev => prev + 1)
-      }
-    }, 100) // Small delay to ensure everything is ready
-
-    return () => clearTimeout(timer)
-  }, [analysis?.chartConfig, chartCustomizations, updateChartCustomization])
-
   // Filter out invalid charts before rendering
   const validCharts = useMemo(() => {
-    console.log('🔍 [FLEXIBLE_DASHBOARD] Filtering charts:', {
-      totalCharts: analysis.chartConfig?.length || 0,
-      dataRows: data.length,
-      chartTypes: analysis.chartConfig?.map(c => c.type).join(', ')
-    })
-
     // CRITICAL FIX: If data is empty but we have charts, don't filter them out
     // The charts will display "No data" states individually rather than hiding the entire dashboard
     if (!data || data.length === 0) {
-      console.warn('⚠️ [FLEXIBLE_DASHBOARD] Data is empty - showing all charts with empty state')
       return analysis.chartConfig || []
     }
 
-    const filtered = filterValidCharts(analysis.chartConfig, data)
-
-    console.log('🔍 [FLEXIBLE_DASHBOARD] Charts after filtering:', {
-      validCharts: filtered.length,
-      filteredOut: (analysis.chartConfig?.length || 0) - filtered.length,
-      filteredOutTitles: (analysis.chartConfig || [])
-        .filter(c => !filtered.includes(c))
-        .map(c => c.title)
-    })
-
-    return filtered
+    return filterValidCharts(analysis.chartConfig, data)
   }, [analysis.chartConfig, data])
 
   // Sort charts by quality score (highest first), keeping scorecards separate
   // CRITICAL: Filter out draft chart from rendering - it should NOT appear on dashboard yet
   const sortedCharts = useMemo(() => {
-    console.log('📊 [FLEXIBLE_DASHBOARD] Sorting charts by quality score', {
-      validChartsCount: validCharts.length,
-      validChartTitles: validCharts.map(c => c.title),
-      draftChartId: draftChart?.id
-    })
-
     // CRITICAL: Filter out the draft chart - it shouldn't be visible on the dashboard yet
     // Also filter out unconfigured scorecards (missing metric or formula)
     const chartsToDisplay = validCharts.filter(chart => {
       const chartId = chart.id || `chart-${analysis.chartConfig.indexOf(chart)}`
       const isDraft = draftChart?.id === chartId
       if (isDraft) {
-        console.log('🚫 [FLEXIBLE_DASHBOARD] Filtering out draft chart:', chart.title)
         return false
       }
 
@@ -342,7 +180,6 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         const isConfigured = effectiveDM && (effectiveDM.metric || effectiveDM.formula)
 
         if (!isConfigured) {
-          console.log('🚫 [FLEXIBLE_DASHBOARD] Filtering out unconfigured scorecard:', chart.title)
           return false
         }
       }
@@ -350,12 +187,6 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       // ADDITIONAL VALIDATION: Check for type/dataMapping mismatches
       // If chart type was changed via customization, ensure dataMapping matches the new type
       if (customizationChartType && customizationChartType !== chart.type) {
-        console.log('⚠️ [FLEXIBLE_DASHBOARD] Chart type override detected:', chart.title, {
-          originalType: chart.type,
-          customizedType: customizationChartType,
-          hasDataMapping: !!effectiveDM && Object.keys(effectiveDM).length > 0
-        })
-
         // Validate that the chart has appropriate dataMapping for its new type
         const hasValidMapping = (() => {
           if (!effectiveDM || Object.keys(effectiveDM).length === 0) return false
@@ -382,10 +213,6 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         })()
 
         if (!hasValidMapping) {
-          console.log('🚫 [FLEXIBLE_DASHBOARD] Filtering out chart with invalid type/dataMapping mismatch:', chart.title, {
-            effectiveChartType: customizationChartType,
-            effectiveDataMapping: effectiveDM
-          })
           return false
         }
       }
@@ -393,18 +220,17 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       return true
     })
 
-    console.log('📊 [FLEXIBLE_DASHBOARD] Charts after draft filter:', {
-      beforeFilter: validCharts.length,
-      afterFilter: chartsToDisplay.length,
-      filteredOutDraft: validCharts.length > chartsToDisplay.length
-    })
-
     // Separate scorecards from other charts
+    // CRITICAL FIX: Use EFFECTIVE chart type (considering customization overrides)
     const scorecards: typeof chartsToDisplay = []
     const otherCharts: typeof chartsToDisplay = []
 
     chartsToDisplay.forEach(chart => {
-      if (chart.type === 'scorecard') {
+      const chartId = chart.id || `chart-${analysis.chartConfig.indexOf(chart)}`
+      const customization = chartCustomizations[chartId]
+      const effectiveType = customization?.chartType || chart.type
+
+      if (effectiveType === 'scorecard') {
         scorecards.push(chart)
       } else {
         otherCharts.push(chart)
@@ -418,23 +244,9 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       return scoreB - scoreA // Descending order
     })
 
-    const result = [...scorecards, ...sortedOthers]
-
-    console.log('📊 [FLEXIBLE_DASHBOARD] Sorted chart order:', {
-      scorecards: scorecards.length,
-      otherCharts: sortedOthers.length,
-      totalSorted: result.length,
-      sortedTitles: result.map(c => c.title),
-      otherCharts: sortedOthers.map(c => ({
-        title: c.title,
-        type: c.type,
-        quality: c.qualityScore ?? 'N/A'
-      }))
-    })
-
     // Return scorecards first, then sorted other charts
-    return result
-  }, [validCharts, draftChart, analysis.chartConfig])
+    return [...scorecards, ...sortedOthers]
+  }, [validCharts, draftChart, analysis.chartConfig, chartCustomizations])
 
   // Extract quality scores from enhanced analysis if available
   const qualityScores = useMemo(() => {
@@ -459,8 +271,12 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
 
   // Enhanced default dimensions for each chart type with proper 320x400px minimum sizing
   // Row height is 200px, so h: 2 = 400px, h: 3 = 600px, h: 4 = 800px
-  const getFixedDimensions = useCallback((config: any) => {
-    switch (config.type) {
+  const getFixedDimensions = useCallback((config: any, chartId?: string) => {
+    // CRITICAL FIX: Use effective chart type (considering customization overrides)
+    const customization = chartId ? chartCustomizations[chartId] : undefined
+    const effectiveType = customization?.chartType || config.type
+
+    switch (effectiveType) {
       case 'scorecard':
         // Scorecards: compact size - 2 columns wide, 1 row tall
         return { w: 2, h: 1 }
@@ -484,350 +300,197 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         // Default minimum professional chart size: 480x800px (increased from h: 3 to h: 4)
         return { w: 6, h: 4 }
     }
-  }, [])
+  }, [chartCustomizations])
 
-  /**
-   * OPTIMIZED 2-PER-ROW PLACEMENT ALGORITHM
-   *
-   * Finds optimal initial position for new charts with 2-per-row priority:
-   * 1. For 6-column charts: tries x=0 and x=6 positions first (2 per row)
-   * 2. For other widths: scans left-to-right, top-to-bottom
-   * 3. Uses precise rectangle collision detection for existing items
-   * 4. React Grid Layout's vertical compaction will optimize spacing after placement
-   */
-  const findAvailablePosition = useCallback((width: number, height: number, existingItems: Array<{x: number, y: number, w: number, h: number}>) => {
-    const maxWidth = Math.min(width, 12)
+  // Calculate default positions for all charts
+  // This is the SINGLE SOURCE OF TRUTH for chart positions
+  const calculateDefaultPositions = useCallback((charts: typeof sortedCharts) => {
+    const positions: Record<string, { x: number, y: number, w: number, h: number }> = {}
+    const scorecards: Array<{ config: any, chartId: string }> = []
+    const otherCharts: Array<{ config: any, chartId: string }> = []
 
-    // OPTIMIZATION: For 6-column charts (standard charts), prioritize 2-per-row layout
-    // by checking x=0 and x=6 positions first at each Y level
-    if (maxWidth === 6) {
-      for (let y = 0; y < 100; y++) {
-        for (const x of [0, 6]) { // Try left position first, then right position
-          const candidate = { x, y, w: maxWidth, h: height }
+    // Separate scorecards from other charts
+    // CRITICAL FIX: Use EFFECTIVE chart type (considering customization overrides)
+    charts.forEach(config => {
+      const originalIndex = analysis.chartConfig.indexOf(config)
+      const chartId = config.id || `chart-${originalIndex}`
 
-          const hasOverlap = existingItems.some(item => {
-            return !(
-              candidate.x >= item.x + item.w ||
-              candidate.x + candidate.w <= item.x ||
-              candidate.y >= item.y + item.h ||
-              candidate.y + candidate.h <= item.y
-            )
-          })
+      // Get effective chart type (customization can override original type)
+      const customization = chartCustomizations[chartId]
+      const effectiveType = customization?.chartType || config.type
 
-          if (!hasOverlap) {
-            return { x, y }
-          }
-        }
+      if (effectiveType === 'scorecard') {
+        scorecards.push({ config, chartId })
+      } else {
+        otherCharts.push({ config, chartId })
       }
-    } else {
-      // For other widths (scorecards, pie charts, tables), use standard scanning
-      for (let y = 0; y < 100; y++) {
-        for (let x = 0; x <= 12 - maxWidth; x++) {
-          const candidate = { x, y, w: maxWidth, h: height }
+    })
 
-          const hasOverlap = existingItems.some(item => {
-            return !(
-              candidate.x >= item.x + item.w ||
-              candidate.x + candidate.w <= item.x ||
-              candidate.y >= item.y + item.h ||
-              candidate.y + candidate.h <= item.y
-            )
-          })
+    let currentX = 0
+    let currentY = 0
+    const SCORECARD_WIDTH = 2
+    const SCORECARD_HEIGHT = 1
+    const GRID_COLS = 12
 
-          if (!hasOverlap) {
-            return { x, y }
-          }
-        }
+    // Position scorecards in 2-column grid at top
+    let maxScorecardY = 0 // Track the bottom-most scorecard Y position
+    scorecards.forEach(({ config, chartId }) => {
+      if (currentX + SCORECARD_WIDTH > GRID_COLS) {
+        currentX = 0
+        currentY += SCORECARD_HEIGHT
       }
+
+      positions[chartId] = {
+        x: currentX,
+        y: currentY,
+        w: SCORECARD_WIDTH,
+        h: SCORECARD_HEIGHT
+      }
+
+      // Track the maximum Y value (bottom-most position)
+      maxScorecardY = Math.max(maxScorecardY, currentY)
+
+      currentX += SCORECARD_WIDTH
+    })
+
+    // CRITICAL FIX: Start other charts AFTER the last scorecard row
+    // If we have scorecards, start at maxScorecardY + 1 (the row after the last scorecard)
+    // If we have no scorecards, start at 0
+    currentX = 0
+    currentY = scorecards.length > 0 ? maxScorecardY + SCORECARD_HEIGHT : 0
+
+    otherCharts.forEach(({ config, chartId }) => {
+      const dims = getFixedDimensions(config, chartId)
+
+      // If current chart doesn't fit in the current row, move to next row
+      if (currentX + dims.w > GRID_COLS) {
+        currentX = 0
+        currentY += dims.h
+      }
+
+      positions[chartId] = {
+        x: currentX,
+        y: currentY,
+        w: dims.w,
+        h: dims.h
+      }
+
+      currentX += dims.w
+    })
+
+    return positions
+  }, [analysis.chartConfig, getFixedDimensions, chartCustomizations])
+
+  // Reset layout to default positions
+  const performLayoutReset = useCallback(() => {
+    // CRITICAL FIX: Filter out invisible charts before calculating positions
+    // This prevents gaps where hidden charts would be positioned
+    const visibleCharts = sortedCharts.filter(config => {
+      const originalIndex = analysis.chartConfig.indexOf(config)
+      const chartId = config.id || `chart-${originalIndex}`
+      const customization = chartCustomizations[chartId]
+      return customization?.isVisible !== false
+    })
+
+    // Calculate default positions for only visible charts
+    const defaultPositions = calculateDefaultPositions(visibleCharts)
+
+    // CRITICAL FIX: Build batch updates that include REMOVING positions from invisible charts
+    // This prevents React Grid Layout from reserving space for them
+    const batchUpdates: Record<string, { position?: { x: number, y: number, w: number, h: number } }> = {}
+
+    // Set positions for visible charts
+    Object.entries(defaultPositions).forEach(([chartId, position]) => {
+      batchUpdates[chartId] = { position }
+    })
+
+    // CRITICAL: REMOVE positions from invisible charts to eliminate ghost spots
+    sortedCharts.forEach(config => {
+      const originalIndex = analysis.chartConfig.indexOf(config)
+      const chartId = config.id || `chart-${originalIndex}`
+      const customization = chartCustomizations[chartId]
+      const isVisible = customization?.isVisible !== false
+
+      // If chart is invisible and not in the visible positions, clear its position
+      if (!isVisible && !defaultPositions[chartId]) {
+        batchUpdates[chartId] = { position: undefined }
+      }
+    })
+
+    batchUpdateChartCustomizations(batchUpdates)
+
+    // Force layout refresh
+    setLayoutKey(prev => prev + 1)
+  }, [sortedCharts, calculateDefaultPositions, batchUpdateChartCustomizations, analysis.chartConfig, chartCustomizations])
+
+  // Initialize positions on first load - SIMPLE AND CLEAN
+  const hasInitialized = useRef(false)
+  useEffect(() => {
+    // Only run once per mount
+    if (hasInitialized.current) return
+
+    // Wait for charts to be available
+    if (!sortedCharts || sortedCharts.length === 0) return
+
+    // Check if any visible charts are missing positions
+    const needsLayout = sortedCharts.some(config => {
+      const originalIndex = analysis.chartConfig.indexOf(config)
+      const chartId = config.id || `chart-${originalIndex}`
+      const customization = chartCustomizations[chartId]
+      const isVisible = customization?.isVisible !== false
+      return isVisible && !customization?.position
+    })
+
+    if (needsLayout) {
+      hasInitialized.current = true
+      // Use same logic as Reset Layout button - no delays, no complexity
+      performLayoutReset()
     }
+  }, [sortedCharts, chartCustomizations, performLayoutReset, analysis.chartConfig])
 
-    const maxY = Math.max(0, ...existingItems.map(item => item.y + item.h))
-    return { x: 0, y: maxY }
-  }, [])
 
-  /**
-   * OPTIMIZED CHART POSITIONING SYSTEM
-   *
-   * This system provides initial placement for charts, then relies on React Grid Layout's
-   * vertical compaction to minimize white space. Benefits:
-   * - Smart initial placement prevents initial overlaps
-   * - Vertical compaction automatically fills gaps when charts are added/removed/resized
-   * - Simpler code that leverages built-in RGL optimization
-   */
-
-  // Global position tracker - ONLY maintains positions for VISIBLE charts (sortedCharts)
-  // This prevents gaps from filtered-out charts
-  const globalPlacedItems = useMemo(() => {
-    const allPositions: Array<{x: number, y: number, w: number, h: number, chartId: string}> = []
-
-    // Create a Set of visible chart IDs for fast lookup
-    const visibleChartIds = new Set(
-      sortedCharts.map(config => {
-        const originalIndex = analysis.chartConfig.indexOf(config)
-        return config.id || `chart-${originalIndex}`
-      })
-    )
-
-    // Only add positions for charts that are actually visible
-    Object.entries(chartCustomizations).forEach(([chartId, customization]) => {
-      if (customization.position && visibleChartIds.has(chartId)) {
-        allPositions.push({
-          x: customization.position.x,
-          y: customization.position.y,
-          w: customization.position.w,
-          h: customization.position.h,
-          chartId
-        })
-      }
-    })
-
-    return allPositions
-  }, [chartCustomizations, sortedCharts, analysis.chartConfig])
-
-  // Generate layout items with bulletproof placement and gap elimination
+  // Generate layout items from chart positions
+  // This is PURELY a transformation - no logic, just converts store data to RGL format
   const layoutItems = useMemo(() => {
-    const items: Array<{i: string, x: number, y: number, w: number, h: number, minW: number, minH: number, maxW: number, maxH: number, isResizable?: boolean, static?: boolean}> = []
-
-    // Create working copy of placed items for collision detection
-    const workingPlacedItems: Array<{x: number, y: number, w: number, h: number}> =
-      globalPlacedItems.map(item => ({ x: item.x, y: item.y, w: item.w, h: item.h }))
-
-    console.log('🔍 [LAYOUT_ITEMS] Starting layout generation:', {
-      sortedChartsCount: sortedCharts.length,
-      globalPlacedItemsCount: globalPlacedItems.length,
-      workingPlacedItemsCount: workingPlacedItems.length
-    })
-
-    // Separate scorecards and other charts for gap detection
-    const scorecardItems: Array<{chartId: string, config: any, customization: any}> = []
-    const otherItems: Array<{chartId: string, config: any, customization: any}> = []
+    const items: Array<{
+      i: string
+      x: number
+      y: number
+      w: number
+      h: number
+      minW: number
+      minH: number
+      maxW: number
+      maxH: number
+      isResizable: boolean
+      static: boolean
+    }> = []
 
     sortedCharts.forEach((config) => {
       const originalIndex = analysis.chartConfig.indexOf(config)
       const chartId = config.id || `chart-${originalIndex}`
       const customization = chartCustomizations[chartId]
 
-      // Skip invisible charts
+      // Skip invisible charts unless in layout mode
       const isVisible = customization?.isVisible !== false
       if (!isVisible && !isLayoutMode) {
-        console.log(`🚫 [LAYOUT] Skipping invisible chart from layout: "${config.title}"`)
         return
       }
 
-      if (config.type === 'scorecard') {
-        scorecardItems.push({ chartId, config, customization })
-      } else {
-        otherItems.push({ chartId, config, customization })
+      // CRITICAL FIX: Only create layout items for charts with positions
+      // This prevents React Grid Layout from trying to position charts with undefined positions
+      // which could cause layout issues and ghost spots
+      if (!customization?.position) {
+        return
       }
-    })
 
-    // CRITICAL FIX: Detect and fix gaps in scorecard positions
-    // Check if scorecards have saved positions with gaps
-    let hasGaps = false
-    if (scorecardItems.length > 0) {
-      const scorecardPositions = scorecardItems
-        .map((item, idx) => ({
-          index: idx,
-          chartId: item.chartId,
-          title: item.config.title,
-          position: item.customization?.position
-        }))
-        .filter(item => item.position !== undefined)
-        .sort((a, b) => {
-          if (a.position.y !== b.position.y) return a.position.y - b.position.y
-          return a.position.x - b.position.x
-        })
+      const position = customization.position
 
-      if (scorecardPositions.length === scorecardItems.length && scorecardPositions.length > 0) {
-        // Check for gaps in scorecard row
-        let expectedX = 0
-        let currentY = scorecardPositions[0]?.position?.y ?? 0
-
-        for (const item of scorecardPositions) {
-          const pos = item.position
-
-          // If we moved to a new row, reset expectedX
-          if (pos.y !== currentY) {
-            currentY = pos.y
-            expectedX = 0
-          }
-
-          // If there's a gap (position doesn't match expected)
-          if (pos.x !== expectedX) {
-            hasGaps = true
-            console.log('⚠️ [LAYOUT_ITEMS] Gap detected in scorecard positions:', {
-              title: item.title,
-              expected: expectedX,
-              actual: pos.x,
-              gap: pos.x - expectedX,
-              y: pos.y
-            })
-            break
-          }
-
-          expectedX += 2 // Scorecards are 2 columns wide
-          if (expectedX >= 12) {
-            expectedX = 0
-            currentY += 1
-          }
-        }
-      } else if (scorecardPositions.length !== scorecardItems.length) {
-        // Some scorecards don't have positions - this will be handled by the normal flow
-        console.log('ℹ️ [LAYOUT_ITEMS] Some scorecards missing positions:', {
-          totalScorecards: scorecardItems.length,
-          withPositions: scorecardPositions.length
-        })
-      }
-    }
-
-    // If gaps detected, reposition ALL scorecards tightly
-    if (hasGaps) {
-      console.log('🔧 [LAYOUT_ITEMS] Fixing scorecard gaps - repositioning all scorecards')
-      let currentX = 0
-      let currentY = 0
-
-      scorecardItems.forEach(({ chartId, config, customization }) => {
-        if (currentX + 2 > 12) {
-          currentX = 0
-          currentY += 1
-        }
-
-        const position = {
-          x: currentX,
-          y: currentY,
-          w: 2,
-          h: 1
-        }
-
-        console.log(`📍 [LAYOUT_ITEMS] Fixed scorecard position for "${config.title}": (${position.x}, ${position.y})`)
-
-        items.push({
-          i: chartId,
-          x: position.x,
-          y: position.y,
-          w: position.w,
-          h: position.h,
-          minW: 2,
-          minH: 1,
-          maxW: 2,
-          maxH: 1,
-          isResizable: false,
-          static: false
-        })
-
-        workingPlacedItems.push({
-          x: position.x,
-          y: position.y,
-          w: position.w,
-          h: position.h
-        })
-
-        currentX += 2
-      })
-
-      // Update positions in store (will be done in next effect)
-      // For now, just update the layout items
-    } else {
-      // No gaps - use existing positions
-      scorecardItems.forEach(({ chartId, config, customization }) => {
-        const isScorecard = config.type === 'scorecard'
-        const defaultDimensions = getFixedDimensions(config)
-
-        let position
-        if (customization?.position) {
-          position = customization.position
-
-          // FORCE UPDATE: If this is a scorecard with old dimensions (3x2), update to new dimensions (2x1)
-          if (isScorecard && (position.w !== 2 || position.h !== 1)) {
-            console.log(`🔧 [LAYOUT] Auto-correcting scorecard "${config.title}" from ${position.w}×${position.h} to 2×1`)
-            position = {
-              ...position,
-              w: 2,
-              h: 1
-            }
-          }
-
-          console.log(`📍 [LAYOUT_ITEMS] Using saved position for "${config.title}":`, {
-            chartId,
-            type: config.type,
-            position: `(${position.x}, ${position.y}) ${position.w}×${position.h}`
-          })
-        } else {
-          const availablePos = findAvailablePosition(defaultDimensions.w, defaultDimensions.h, workingPlacedItems)
-          position = {
-            x: availablePos.x,
-            y: availablePos.y,
-            w: defaultDimensions.w,
-            h: defaultDimensions.h
-          }
-
-          console.log(`📍 [LAYOUT_ITEMS] Calculated new position for "${config.title}":`, {
-            chartId,
-            type: config.type,
-            position: `(${position.x}, ${position.y}) ${position.w}×${position.h}`,
-            workingPlacedItemsCount: workingPlacedItems.length
-          })
-
-          workingPlacedItems.push({
-            x: position.x,
-            y: position.y,
-            w: position.w,
-            h: position.h
-          })
-        }
-
-        items.push({
-          i: chartId,
-          x: position.x,
-          y: position.y,
-          w: position.w,
-          h: position.h,
-          minW: isScorecard ? 2 : config.type === 'table' ? 8 : 4,
-          minH: isScorecard ? 1 : 2,
-          maxW: isScorecard ? 2 : config.type === 'table' ? 12 : 12,
-          maxH: isScorecard ? 1 : 10,
-          isResizable: !isScorecard,
-          static: false
-        })
-      })
-    }
-
-    // Process other charts
-    otherItems.forEach(({ chartId, config, customization }) => {
-      const defaultDimensions = getFixedDimensions(config)
-
-      let position
-      if (customization?.position) {
-        position = customization.position
-
-        console.log(`📍 [LAYOUT_ITEMS] Using saved position for "${config.title}":`, {
-          chartId,
-          type: config.type,
-          position: `(${position.x}, ${position.y}) ${position.w}×${position.h}`
-        })
-      } else {
-        const availablePos = findAvailablePosition(defaultDimensions.w, defaultDimensions.h, workingPlacedItems)
-        position = {
-          x: availablePos.x,
-          y: availablePos.y,
-          w: defaultDimensions.w,
-          h: defaultDimensions.h
-        }
-
-        console.log(`📍 [LAYOUT_ITEMS] Calculated new position for "${config.title}":`, {
-          chartId,
-          type: config.type,
-          position: `(${position.x}, ${position.y}) ${position.w}×${position.h}`,
-          workingPlacedItemsCount: workingPlacedItems.length
-        })
-
-        workingPlacedItems.push({
-          x: position.x,
-          y: position.y,
-          w: position.w,
-          h: position.h
-        })
-      }
+      // CRITICAL FIX: Use EFFECTIVE type (considering customization overrides)
+      // This fixes the sizing issue where scorecards were sized as regular charts
+      const effectiveType = customization?.chartType || config.type
+      const isScorecard = effectiveType === 'scorecard'
+      const isTable = effectiveType === 'table'
 
       items.push({
         i: chartId,
@@ -835,84 +498,29 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         y: position.y,
         w: position.w,
         h: position.h,
-        minW: config.type === 'table' ? 8 : 4,
-        minH: 2,
-        maxW: config.type === 'table' ? 12 : 12,
-        maxH: 10,
-        isResizable: true,
+        minW: isScorecard ? 2 : isTable ? 8 : 4,
+        minH: isScorecard ? 1 : 2,
+        maxW: isScorecard ? 2 : isTable ? 12 : 12,
+        maxH: isScorecard ? 1 : 10,
+        isResizable: !isScorecard,
         static: false
       })
     })
 
-    console.log('🔍 [LAYOUT_ITEMS] Final layout items:', items.map(item => ({
-      id: item.i,
-      position: `(${item.x}, ${item.y}) ${item.w}×${item.h}`
-    })))
-
     return items
-  }, [sortedCharts, chartCustomizations, getFixedDimensions, analysis.chartConfig, findAvailablePosition, globalPlacedItems, isLayoutMode])
+  }, [sortedCharts, chartCustomizations, analysis.chartConfig, isLayoutMode])
 
   // Force layout refresh when chart count changes
   useEffect(() => {
     // Force a layout key update to trigger re-render when charts are added/removed
     setLayoutKey(prev => prev + 1)
-
-    // Clear layouts to force recalculation
-    setLayouts({})
   }, [sortedCharts.length])
 
-  // Save calculated positions immediately for charts without positions OR when positions were auto-fixed
-  useEffect(() => {
-    let hasUpdates = false
-    const updates: Array<{chartId: string, position: {x: number, y: number, w: number, h: number}}> = []
-
-    sortedCharts.forEach((config, index) => {
-      const originalIndex = analysis.chartConfig.indexOf(config)
-      const chartId = config.id || `chart-${originalIndex}`
-      const customization = chartCustomizations[chartId]
-      const layoutItem = layoutItems.find(item => item.i === chartId)
-
-      if (!layoutItem) return
-
-      const newPosition = {
-        x: layoutItem.x,
-        y: layoutItem.y,
-        w: layoutItem.w,
-        h: layoutItem.h
-      }
-
-      // Save position if:
-      // 1. It doesn't exist yet (newly calculated)
-      // 2. OR it has changed (auto-fixed for gaps)
-      if (!customization?.position) {
-        updates.push({ chartId, position: newPosition })
-        hasUpdates = true
-      } else {
-        const existingPos = customization.position
-        if (
-          existingPos.x !== newPosition.x ||
-          existingPos.y !== newPosition.y ||
-          existingPos.w !== newPosition.w ||
-          existingPos.h !== newPosition.h
-        ) {
-          console.log(`🔄 [LAYOUT_SAVE] Position changed for "${config.title}":`, {
-            old: `(${existingPos.x}, ${existingPos.y}) ${existingPos.w}×${existingPos.h}`,
-            new: `(${newPosition.x}, ${newPosition.y}) ${newPosition.w}×${newPosition.h}`
-          })
-          updates.push({ chartId, position: newPosition })
-          hasUpdates = true
-        }
-      }
-    })
-
-    // Batch all position updates to avoid multiple re-renders
-    if (hasUpdates) {
-      console.log(`💾 [LAYOUT_SAVE] Saving ${updates.length} position updates`)
-      updates.forEach(({ chartId, position }) => {
-        updateChartCustomization(chartId, { position })
-      })
-    }
-  }, [layoutItems, sortedCharts, analysis.chartConfig, chartCustomizations, updateChartCustomization])
+  // REMOVED: The auto-save effect that was causing race conditions
+  // Position updates now happen ONLY in two places:
+  // 1. performLayoutReset() - called on initial load and manual reset
+  // 2. handleLayoutChange() - called when user drags/resizes charts
+  // This eliminates the race condition between multiple effects trying to update positions
 
   // Layout validation - ensure bounds are respected
   const validateLayout = useCallback((layout: GridLayout[]) => {
@@ -924,14 +532,9 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
   }, [])
 
   // PERFORMANCE OPTIMIZATION: Throttled layout change handler to prevent excessive re-renders
-  const layoutChangeTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
-
-  const handleLayoutChange = useCallback((layout: GridLayout[], allLayouts: { [key: string]: GridLayout[] }) => {
+  const handleLayoutChange = useCallback((layout: GridLayout[]) => {
     // Validate and fix any overlaps
     const validatedLayout = validateLayout(layout)
-
-    setLayouts(allLayouts)
 
     // OPTIMIZATION: Throttle position updates during drag/resize
     if (layoutChangeTimerRef.current) {
@@ -940,11 +543,27 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
 
     layoutChangeTimerRef.current = setTimeout(() => {
       // PERFORMANCE FIX: Batch all position updates into a SINGLE store update
-      const updates: Record<string, { position: {x: number, y: number, w: number, h: number} }> = {}
+      const updates: Record<string, { position?: {x: number, y: number, w: number, h: number} }> = {}
 
+      // Update positions for items in the layout
       validatedLayout.forEach(item => {
         updates[item.i] = {
           position: { x: item.x, y: item.y, w: item.w, h: item.h }
+        }
+      })
+
+      // CRITICAL FIX: Clear positions for charts that are not in the layout
+      // This prevents ghost spots from invisible/filtered charts
+      const layoutItemIds = new Set(validatedLayout.map(item => item.i))
+      sortedCharts.forEach(config => {
+        const originalIndex = analysis.chartConfig.indexOf(config)
+        const chartId = config.id || `chart-${originalIndex}`
+        const customization = chartCustomizations[chartId]
+        const isVisible = customization?.isVisible !== false
+
+        // If chart is not visible and not in layout, ensure position is cleared
+        if (!isVisible && !layoutItemIds.has(chartId) && customization?.position) {
+          updates[chartId] = { position: undefined }
         }
       })
 
@@ -968,7 +587,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         }, 2000) // Increased to 2 seconds to reduce save frequency
       }
     }, 150) // 150ms throttle - balance between responsiveness and performance
-  }, [batchUpdateChartCustomizations, autoSaveLayouts, showSaveDialog, validateLayout, currentProjectId, chartCustomizations, currentLayout, dashboardFilters, currentTheme, saveDashboardConfig])
+  }, [batchUpdateChartCustomizations, autoSaveLayouts, showSaveDialog, validateLayout, currentProjectId, chartCustomizations, currentLayout, dashboardFilters, currentTheme, saveDashboardConfig, sortedCharts, analysis.chartConfig])
 
   // Auto-clear newly added chart flag after 5 seconds (safety net)
   useEffect(() => {
@@ -1092,82 +711,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
 
           {/* Reset Layout Button */}
           <Button
-            onClick={() => {
-              /**
-               * OPTIMIZED COMPACT LAYOUT RESET ALGORITHM WITH QUALITY SORTING
-               *
-               * This algorithm only positions VISIBLE charts (sortedCharts),
-               * completely ignoring filtered-out charts to prevent gaps.
-               */
-
-              // Use ONLY sortedCharts (which excludes filtered charts)
-              const scorecards: Array<{ config: any, chartId: string }> = []
-              const otherCharts: Array<{ config: any, chartId: string }> = []
-
-              sortedCharts.forEach(config => {
-                const originalIndex = analysis.chartConfig.indexOf(config)
-                const chartId = config.id || `chart-${originalIndex}`
-
-                if (config.type === 'scorecard') {
-                  scorecards.push({ config, chartId })
-                } else {
-                  otherCharts.push({ config, chartId })
-                }
-              })
-
-              let currentX = 0
-              let currentY = 0
-              const SCORECARD_WIDTH = 2
-              const GRID_COLS = 12
-
-              // Place scorecards at top (y=0) in horizontal rows
-              scorecards.forEach(({ config, chartId }) => {
-                if (currentX + SCORECARD_WIDTH > GRID_COLS) {
-                  currentX = 0
-                  currentY += 1
-                }
-
-                updateChartCustomization(chartId, {
-                  position: {
-                    x: currentX,
-                    y: currentY,
-                    w: SCORECARD_WIDTH,
-                    h: 1
-                  }
-                })
-
-                currentX += SCORECARD_WIDTH
-              })
-
-              // Reset for other charts - place them with 2-per-row layout
-              currentX = 0
-              currentY = scorecards.length > 0 ? Math.ceil(scorecards.length * SCORECARD_WIDTH / GRID_COLS) : 0
-
-              otherCharts.forEach(({ config, chartId }) => {
-                const dims = getFixedDimensions(config)
-
-                // 2-per-row layout: reset X when full
-                if (currentX + dims.w > GRID_COLS) {
-                  currentX = 0
-                  currentY += dims.h // Move down by chart height
-                }
-
-                updateChartCustomization(chartId, {
-                  position: {
-                    x: currentX,
-                    y: currentY,
-                    w: dims.w,
-                    h: dims.h
-                  }
-                })
-
-                currentX += dims.w
-              })
-
-              // Force re-render
-              setLayouts({})
-              setLayoutKey(prev => prev + 1)
-            }}
+            onClick={performLayoutReset}
             size="sm"
             variant="outline"
             className="text-blue-600 border-blue-200 hover:bg-blue-50"
@@ -1271,18 +815,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         "dashboard-container draggable-grid-container relative",
         isLayoutMode && "layout-mode"
       )}>
-        {(() => {
-          // CRITICAL DEBUG: Log actual state at render time
-          console.log('🚨 [RENDER_CHECK] Empty state check:', {
-            sortedChartsLength: sortedCharts.length,
-            validChartsLength: validCharts.length,
-            dataLength: data.length,
-            analysisChartConfigLength: analysis.chartConfig?.length || 0,
-            sortedChartTitles: sortedCharts.map(c => c.title),
-            validChartTitles: validCharts.map(c => c.title)
-          })
-
-          return sortedCharts.length === 0 ? (
+        {sortedCharts.length === 0 ? (
             <div className="flex items-center justify-center py-32">
               <div className="text-center space-y-6 max-w-md">
                 <div className="w-20 h-20 mx-auto bg-gray-100 rounded-3xl flex items-center justify-center">
@@ -1304,10 +837,16 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
               </div>
             </div>
           ) : (
-            <ResponsiveGridLayout
-            key={layoutKey} // Force re-render when charts are added/removed
+          <ResponsiveGridLayout
+            key={layoutKey}
             className="layout"
-            layouts={Object.keys(layouts).length > 0 ? layouts : { lg: layoutItems }}
+            layouts={{
+              lg: layoutItems,
+              md: layoutItems,
+              sm: layoutItems,
+              xs: layoutItems,
+              xxs: layoutItems
+            }}
             breakpoints={breakpoints}
             cols={cols}
             rowHeight={200}
@@ -1315,19 +854,15 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
             onDragStart={handleDragStart}
             onDragStop={handleDragStop}
             isDraggable={true}
-            isResizable={true} // Global default, but overridden per-item for scorecards
-            compactType="vertical" // OPTIMIZED: Enable vertical compaction to minimize white space
-            preventCollision={false} // Allow compaction to move items and fill gaps
-            allowOverlap={false} // Never allow overlaps
-            useCSSTransforms={true} // PERFORMANCE: Use CSS transforms for smooth animations
-            transformScale={1} // PERFORMANCE: Optimize transform calculations
-            margin={[24, 24]} // Increased from 16 to 24 for better spacing
-            containerPadding={[16, 16]} // Added padding to prevent charts from touching edges
+            isResizable={true}
+            compactType="vertical"
+            preventCollision={false}
+            allowOverlap={false}
+            useCSSTransforms={true}
+            margin={[24, 24]}
+            containerPadding={[16, 16]}
             autoSize={true}
-            isDroppable={false} // Disable external dropping to prevent conflicts
-            // PERFORMANCE OPTIMIZATIONS:
-            measureBeforeMount={false} // Skip initial measurement for faster load
-            draggableHandle=".drag-handle" // Limit drag to specific handle (if using customize mode)
+            isDroppable={false}
           >
             {sortedCharts.map((config, index) => {
               const originalIndex = analysis.chartConfig.indexOf(config)
@@ -1339,20 +874,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
               // But we need to ensure this is working correctly
               const isVisible = customization?.isVisible !== false
 
-              console.log(`🎨 [CHART_RENDER] Chart ${index}:`, {
-                chartId,
-                title: config.title,
-                type: config.type,
-                hasCustomization: !!customization,
-                customizationIsVisible: customization?.isVisible,
-                computedIsVisible: isVisible,
-                isLayoutMode,
-                willRender: isVisible || isLayoutMode,
-                willReturnNull: !isVisible && !isLayoutMode
-              })
-
               if (!isVisible && !isLayoutMode) {
-                console.warn(`⚠️ [CHART_RENDER] Skipping chart "${config.title}" - not visible and not in layout mode`)
                 return null
               }
 
@@ -1397,8 +919,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
               )
             })}
           </ResponsiveGridLayout>
-          )
-        })()}
+        )}
       </div>
 
       {/* Customization Mode Indicator */}
@@ -1462,8 +983,6 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         isOpen={showChartTemplateGallery}
         onClose={() => setShowChartTemplateGallery(false)}
         onChartAdded={(chartId) => {
-          console.log('🎨 [DASHBOARD] Chart added from gallery:', chartId)
-
           // CRITICAL: Set selection FIRST, then trigger customization
           // This ensures the chart is selected when autoOpen evaluates
           setSelectedChartId(chartId)
@@ -1472,7 +991,6 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
           // Delay customization trigger slightly to ensure state is updated
           // This allows React to process the selection state before opening panel
           setTimeout(() => {
-            console.log('🎨 [DASHBOARD] Opening customization panel for new chart')
             setIsCustomizing(true)
           }, 50)
         }}
@@ -1480,29 +998,21 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
 
       {/* Standalone Chart Customization Panel for Draft Charts */}
       {/* CRITICAL FIX: Draft charts are filtered out from rendering, so we need a standalone panel */}
-      {draftChart && (() => {
-        console.log('🎯 [DASHBOARD] Rendering standalone panel for draft chart:', {
-          draftChartId: draftChart.id,
-          draftChartType: draftChart.type,
-          hasCustomization: !!chartCustomizations[draftChart.id],
-          customization: chartCustomizations[draftChart.id]
-        })
-        return (
-          <div className="hidden">
-            {/* Hidden div - just hosts the panel which renders via portal */}
-            <ChartCustomizationPanel
-              chartId={draftChart.id}
-              title={draftChart.title}
-              description={draftChart.description}
-              chartType={draftChart.type as any}
-              customization={chartCustomizations[draftChart.id] || {}}
-              onCustomizationChange={updateChartCustomization}
-              initialTab="data"
-              autoOpen={true}
-            />
-          </div>
-        )
-      })()}
+      {draftChart && (
+        <div className="hidden">
+          {/* Hidden div - just hosts the panel which renders via portal */}
+          <ChartCustomizationPanel
+            chartId={draftChart.id}
+            title={draftChart.title}
+            description={draftChart.description}
+            chartType={draftChart.type as any}
+            customization={chartCustomizations[draftChart.id] || {}}
+            onCustomizationChange={updateChartCustomization}
+            initialTab="data"
+            autoOpen={true}
+          />
+        </div>
+      )}
     </div>
   )
 }
