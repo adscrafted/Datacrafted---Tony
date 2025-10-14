@@ -12,7 +12,7 @@ interface GaugeChartProps {
   data: any[];
   dataMapping: {
     metric: string;
-    target?: string;
+    aggregation?: 'sum' | 'average' | 'median' | 'min' | 'max' | 'count';
   };
   customization?: {
     min?: number;
@@ -33,7 +33,7 @@ const DEFAULT_THRESHOLDS: Threshold[] = [
   { value: 100, color: '#10b981', label: 'High' },    // Green
 ];
 
-export default function GaugeChart({
+const GaugeChart = React.memo(function GaugeChart({
   data,
   dataMapping,
   customization = {},
@@ -51,14 +51,50 @@ export default function GaugeChart({
     }
 
     try {
-      // Extract metric and target values
-      const metricValue = Number(data[0]?.[dataMapping.metric]) || 0;
-      const targetValue = dataMapping.target
-        ? Number(data[0]?.[dataMapping.target]) || undefined
-        : undefined;
+      // Extract all metric values from data
+      const values = data
+        .map(row => Number(row[dataMapping.metric]))
+        .filter(val => !isNaN(val));
+
+      if (values.length === 0) {
+        console.warn('GaugeChart: No valid numeric values found');
+        return null;
+      }
+
+      // Apply aggregation
+      const aggregation = dataMapping.aggregation || 'sum';
+      let metricValue: number;
+
+      switch (aggregation) {
+        case 'sum':
+          metricValue = values.reduce((acc, val) => acc + val, 0);
+          break;
+        case 'average':
+          metricValue = values.reduce((acc, val) => acc + val, 0) / values.length;
+          break;
+        case 'median':
+          const sorted = [...values].sort((a, b) => a - b);
+          const mid = Math.floor(sorted.length / 2);
+          metricValue = sorted.length % 2 === 0
+            ? (sorted[mid - 1] + sorted[mid]) / 2
+            : sorted[mid];
+          break;
+        case 'min':
+          metricValue = Math.min(...values);
+          break;
+        case 'max':
+          metricValue = Math.max(...values);
+          break;
+        case 'count':
+          metricValue = values.length;
+          break;
+        default:
+          metricValue = values.reduce((acc, val) => acc + val, 0); // Default to sum
+      }
 
       // Determine max value
-      const max = customMax ?? targetValue ?? 100;
+      // Priority: 1. Custom max (required now), 2. Fallback to 100
+      const max = customMax !== undefined && customMax !== null ? customMax : 100;
 
       // Validate values
       if (isNaN(metricValue) || metricValue < 0) {
@@ -67,7 +103,7 @@ export default function GaugeChart({
       }
 
       // Calculate percentage
-      const percentage = Math.min(((metricValue - min) / (max - min)) * 100, 100);
+      const percentage = Math.min(Math.max(((metricValue - min) / (max - min)) * 100, 0), 100);
 
       // Determine color based on thresholds
       const sortedThresholds = [...thresholds].sort((a, b) => a.value - b.value);
@@ -81,11 +117,6 @@ export default function GaugeChart({
         }
       }
 
-      // Calculate target percentage if target exists
-      const targetPercentage = targetValue
-        ? Math.min(((targetValue - min) / (max - min)) * 100, 100)
-        : undefined;
-
       return {
         value: metricValue,
         percentage,
@@ -93,8 +124,6 @@ export default function GaugeChart({
         min,
         color,
         label,
-        target: targetValue,
-        targetPercentage,
       };
     } catch (error) {
       console.error('GaugeChart: Error transforming data', error);
@@ -186,16 +215,6 @@ export default function GaugeChart({
         </div>
       </div>
 
-      {/* Target indicator line */}
-      {gaugeData.target !== undefined && gaugeData.targetPercentage !== undefined && (
-        <div className="absolute bottom-0 left-0 right-0 text-center pb-2">
-          <div className="inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-            <div className="w-3 h-0.5 bg-blue-500" />
-            <span>Target: {gaugeData.target.toLocaleString()}</span>
-          </div>
-        </div>
-      )}
-
       {/* Min and Max labels */}
       <div className="absolute bottom-0 left-0 right-0 flex justify-between px-4 pb-2">
         <span className="text-xs text-gray-500 dark:text-gray-400">
@@ -207,4 +226,22 @@ export default function GaugeChart({
       </div>
     </div>
   );
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison to prevent unnecessary re-renders
+  const dataEqual =
+    prevProps.data === nextProps.data ||
+    (prevProps.data?.length === nextProps.data?.length &&
+     prevProps.data?.[0] === nextProps.data?.[0]);
+
+  const mappingEqual =
+    prevProps.dataMapping.metric === nextProps.dataMapping.metric &&
+    prevProps.dataMapping.aggregation === nextProps.dataMapping.aggregation;
+
+  const customizationEqual =
+    prevProps.customization?.min === nextProps.customization?.min &&
+    prevProps.customization?.max === nextProps.customization?.max;
+
+  return dataEqual && mappingEqual && customizationEqual;
+});
+
+export default GaugeChart;

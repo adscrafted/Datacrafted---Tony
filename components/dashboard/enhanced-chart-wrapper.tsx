@@ -53,6 +53,7 @@ import {
 import { Scorecard } from './scorecard'
 import { ChartCustomizationPanel } from './chart-customization-panel'
 import { DataRow, useDataStore, ChartTemplate, ChartType } from '@/lib/store'
+import { useShallow } from 'zustand/react/shallow'
 import { cn } from '@/lib/utils/cn'
 import { QualityBadge } from './quality-indicator'
 import { renderCollapsibleLegend } from './collapsible-legend'
@@ -207,6 +208,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
 }) {
   const chartRef = useRef<HTMLDivElement>(null)
   const [isHovered, setIsHovered] = useState(false)
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [showEditTitle, setShowEditTitle] = useState(false)
   const [editableTitle, setEditableTitle] = useState(title)
   const [editableDescription, setEditableDescription] = useState(description)
@@ -224,7 +226,20 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
     contextMenuPosition,
     contextMenuChartId,
     draftChart
-  } = useDataStore()
+  } = useDataStore(useShallow((state: any) => ({
+    setFullScreen: state.setFullScreen,
+    exportChart: state.exportChart,
+    chartCustomizations: state.chartCustomizations,
+    removeChart: state.removeChart,
+    duplicateChart: state.duplicateChart,
+    updateChartType: state.updateChartType,
+    updateChartCustomization: state.updateChartCustomization,
+    chartTemplates: state.chartTemplates,
+    setContextMenu: state.setContextMenu,
+    contextMenuPosition: state.contextMenuPosition,
+    contextMenuChartId: state.contextMenuChartId,
+    draftChart: state.draftChart
+  })))
 
   // Get chart customization
   const customization = chartCustomizations[id]
@@ -2518,14 +2533,12 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
             <GaugeChart
               data={chartData}
               dataMapping={{
-                value: effectiveDataMapping?.value || safeDataKey[0] || 'value',
-                target: effectiveDataMapping?.target
+                metric: effectiveDataMapping?.value || safeDataKey[0] || 'value',
+                aggregation: (effectiveDataMapping as any)?.aggregation || 'sum'
               }}
               customization={{
                 min: customization?.min || 0,
-                max: customization?.max || 100,
-                unit: customization?.unit || '',
-                showTarget: customization?.showTarget !== false
+                max: customization?.max || 100
               }}
             />
           </React.Suspense>
@@ -2732,8 +2745,8 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
             onClick={handleClick}
             onContextMenu={handleContextMenu}
           >
-            {/* Controls overlay - shown on hover */}
-            {(isHovered || isSelected) && (
+            {/* Controls overlay - shown on hover or when dropdown is open */}
+            {(isHovered || isSelected || isDropdownOpen) && (
               <div className="absolute top-2 right-2 z-10 flex items-center space-x-1 bg-white/90 backdrop-blur-sm rounded-lg p-1 shadow-sm">
                 <Button
                   variant="ghost"
@@ -2758,7 +2771,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                   configDataMapping={configDataMapping}
                   autoOpen={(isSelected && initialTab === 'data') || isDraftChart}
                 />
-                <DropdownMenu>
+                <DropdownMenu onOpenChange={setIsDropdownOpen}>
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="ghost"
@@ -2933,10 +2946,10 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                 )}
               </div>
 
-              {/* Controls - shown on hover or selection */}
+              {/* Controls - shown on hover, selection, or when dropdown is open */}
               <div className={cn(
                 "flex items-center space-x-1 transition-opacity duration-200",
-                (isHovered || isSelected) ? "opacity-100" : "opacity-0"
+                (isHovered || isSelected || isDropdownOpen) ? "opacity-100" : "opacity-0"
               )}>
                 <Button
                   variant="ghost"
@@ -2989,7 +3002,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                   <Maximize2 className="h-4 w-4" />
                 </Button>
 
-                <DropdownMenu>
+                <DropdownMenu onOpenChange={setIsDropdownOpen}>
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="ghost"

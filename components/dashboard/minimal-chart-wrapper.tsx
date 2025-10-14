@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
   LineChart,
   Line,
@@ -76,6 +76,7 @@ export const MinimalChartWrapper = React.memo<MinimalChartWrapperProps>(function
 }) {
   const chartId = id || `chart-${Date.now()}`
   const { setFullScreen, exportChart, getFilteredData } = useDataStore()
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
 
   // Use filtered data with aggregation support
   const chartData = useMemo(() => {
@@ -899,8 +900,11 @@ export const MinimalChartWrapper = React.memo<MinimalChartWrapperProps>(function
   if (type === 'scorecard') {
     return (
       <div className="group relative bg-white transition-all duration-200 h-full">
-        {/* Controls overlay - shown on hover */}
-        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+        {/* Controls overlay - shown on hover or when dropdown is open */}
+        <div className={cn(
+          "absolute top-2 right-2 z-10 transition-opacity duration-200",
+          isDropdownOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        )}>
           <div className="flex items-center space-x-1 bg-white/90 backdrop-blur-sm rounded-lg p-1 shadow-sm">
             <Button
               variant="ghost"
@@ -915,7 +919,7 @@ export const MinimalChartWrapper = React.memo<MinimalChartWrapperProps>(function
               <Maximize2 className="h-3.5 w-3.5" />
             </Button>
 
-            <DropdownMenu>
+            <DropdownMenu onOpenChange={setIsDropdownOpen}>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
@@ -963,8 +967,11 @@ export const MinimalChartWrapper = React.memo<MinimalChartWrapperProps>(function
             )}
           </div>
 
-          {/* Minimal controls - hidden by default, shown on hover */}
-          <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          {/* Minimal controls - hidden by default, shown on hover or when dropdown is open */}
+          <div className={cn(
+            "flex items-center space-x-1 transition-opacity duration-200",
+            isDropdownOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          )}>
             <Button
               variant="ghost"
               size="sm"
@@ -978,7 +985,7 @@ export const MinimalChartWrapper = React.memo<MinimalChartWrapperProps>(function
               <Maximize2 className="h-4 w-4" />
             </Button>
 
-            <DropdownMenu>
+            <DropdownMenu onOpenChange={setIsDropdownOpen}>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"

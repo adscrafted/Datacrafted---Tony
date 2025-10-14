@@ -8,8 +8,9 @@ import { useDataStore, ChatMessage } from '@/lib/store'
 import { ChatMessages } from './chat-messages'
 import { ExampleQuestions } from './example-questions'
 import { ChartSuggestions } from './chart-suggestions'
-import { extractChartSuggestions, ChartSuggestion } from '@/lib/services/chat-service'
+import { extractChartSuggestions, ChartSuggestion, stripChartSuggestions } from '@/lib/services/chat-service'
 import { useChartRegeneration } from '@/lib/hooks/use-chart-regeneration'
+import { auth } from '@/lib/config/firebase'
 
 export const ChatInterface = React.memo(function ChatInterface() {
   const {
@@ -110,6 +111,22 @@ export const ChatInterface = React.memo(function ChatInterface() {
     setStreamingMessage('')
 
     try {
+      // Get Firebase auth token
+      let authToken: string | undefined
+      try {
+        const currentUser = auth.currentUser
+        if (currentUser) {
+          authToken = await currentUser.getIdToken()
+          console.log('✅ [CHAT] Got Firebase auth token')
+        } else {
+          console.warn('⚠️ [CHAT] No authenticated user - chat requires authentication')
+          throw new Error('You must be signed in to use the AI Data Scientist')
+        }
+      } catch (authError) {
+        console.error('❌ [CHAT] Failed to get auth token:', authError)
+        throw new Error('Authentication failed. Please sign in and try again.')
+      }
+
       // Prepare conversation history for context
       const conversationHistory = chatMessages.map(msg => ({
         role: msg.role,
@@ -119,18 +136,25 @@ export const ChatInterface = React.memo(function ChatInterface() {
       // Get selected chart details if any
       let selectedChart = null
       if (selectedChartId && analysis) {
-        selectedChart = analysis.chartConfig.find(c => 
+        selectedChart = analysis.chartConfig.find(c =>
           (c.id || `chart-${analysis.chartConfig.indexOf(c)}`) === selectedChartId
         )
+      }
+
+      // Build headers with auth token
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
+      }
+
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`
       }
 
       // Try streaming first
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
-        },
+        headers,
         body: JSON.stringify({
           message: userMessage.content,
           data: rawData,

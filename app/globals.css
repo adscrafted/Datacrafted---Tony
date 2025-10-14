@@ -250,13 +250,13 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    --background: 216 28% 98.8%; /* #f8fafd in HSL */
     --foreground: 222.2 84% 4.9%;
 
-    --card: 0 0% 100%;
+    --card: 216 28% 98.8%; /* #f8fafd in HSL for consistency */
     --card-foreground: 222.2 84% 4.9%;
 
-    --popover: 0 0% 100%;
+    --popover: 216 28% 98.8%; /* #f8fafd in HSL for consistency */
     --popover-foreground: 222.2 84% 4.9%;
 
     --primary: 222.2 47.4% 11.2%;
@@ -316,8 +316,13 @@
   * {
     border-color: hsl(var(--border));
   }
+  html {
+    @apply bg-background;
+  }
   body {
     @apply bg-background text-foreground;
+    margin: 0;
+    padding: 0;
   }
 }
 

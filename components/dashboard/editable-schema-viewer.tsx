@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useDataStore } from '@/lib/store'
 import { cn } from '@/lib/utils/cn'
+import { auth, DEBUG_MODE } from '@/lib/config/firebase'
 
 interface SchemaField {
   name: string
@@ -117,12 +118,39 @@ export function EditableSchemaViewer({ onAIUpdateComplete }: EditableSchemaViewe
         fileName: dataSchema?.fileName
       })
 
+      // Get Firebase auth token for API authentication
+      const currentUser = auth.currentUser
+      if (!currentUser && !DEBUG_MODE) {
+        console.warn('⚠️ [PUSH-TO-AI] No authenticated user for schema update')
+        return
+      }
+
+      let authToken: string | undefined
+      if (currentUser) {
+        try {
+          authToken = await currentUser.getIdToken()
+          console.log('✅ [PUSH-TO-AI] Got Firebase auth token for API request')
+        } catch (authError) {
+          if (!DEBUG_MODE) {
+            console.warn('⚠️ [PUSH-TO-AI] Failed to get auth token')
+          }
+          return
+        }
+      }
+
+      // Build headers with optional auth token
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`
+      }
+
       // Send sample data (same as initial upload) with corrected schema
       const response = await fetch('/api/analyze', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           data: rawData.slice(0, 100), // Send sample (first 100 rows) just like initial upload
           schema: dataSchema, // Send current schema

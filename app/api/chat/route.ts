@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { DataRow, DataSchema } from '@/lib/store'
+import { withAuth } from '@/lib/middleware/auth'
 
 // Initialize OpenAI client
 function getOpenAIClient() {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error('OpenAI API key not configured')
   }
-  
+
   return new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
   })
@@ -21,16 +22,16 @@ const RATE_LIMIT_WINDOW = 60 * 60 * 1000 // 1 hour in milliseconds
 function checkRateLimit(clientId: string): boolean {
   const now = Date.now()
   const clientData = requestCounts.get(clientId)
-  
+
   if (!clientData || now > clientData.resetTime) {
     requestCounts.set(clientId, { count: 1, resetTime: now + RATE_LIMIT_WINDOW })
     return true
   }
-  
+
   if (clientData.count >= RATE_LIMIT) {
     return false
   }
-  
+
   clientData.count++
   return true
 }
@@ -138,7 +139,7 @@ Actual Data Sample (first ${sampleData.length} rows - USE THIS TO CALCULATE REAL
 ${JSON.stringify(sampleData, null, 2)}`
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request, authUser) => {
   try {
     // Check API key
     if (!process.env.OPENAI_API_KEY) {
@@ -148,13 +149,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get client IP for rate limiting
-    const clientIp = request.headers.get('x-forwarded-for') || 
-                     request.headers.get('x-real-ip') || 
-                     'unknown'
+    // SECURITY: Use authenticated user ID for rate limiting
+    const clientId = authUser.uid
 
-    // Check rate limit
-    if (!checkRateLimit(clientIp)) {
+    // Check rate limit per authenticated user
+    if (!checkRateLimit(clientId)) {
       return NextResponse.json(
         { error: 'Rate limit exceeded. Please try again later.' },
         { status: 429 }
@@ -352,12 +351,12 @@ Current conversation context: The user is asking about their uploaded dataset.`
       { status: 500 }
     )
   }
-}
+})
 
 // For streaming support (optional enhancement)
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request, authUser) => {
   return NextResponse.json(
     { error: 'Use POST method for chat messages' },
     { status: 405 }
   )
-}
+})

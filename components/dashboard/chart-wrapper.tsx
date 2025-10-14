@@ -71,7 +71,7 @@ interface ChartWrapperProps {
     metric?: string
     min?: number
     max?: number
-    target?: number
+    aggregation?: 'sum' | 'average' | 'median' | 'min' | 'max' | 'count'
     // Cohort-specific
     cohort?: string
     period?: string
@@ -788,7 +788,7 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
               data={chartData}
               dataMapping={{
                 metric: customization?.dataMapping?.metric || safeDataKey[0] || 'value',
-                target: typeof customization?.dataMapping?.target === 'string' ? customization?.dataMapping?.target : undefined
+                aggregation: (customization?.dataMapping as any)?.aggregation || 'sum'
               }}
               customization={{
                 min: customization?.dataMapping?.min ?? 0,

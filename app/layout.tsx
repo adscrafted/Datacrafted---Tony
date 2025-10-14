@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter, Space_Grotesk, Montserrat } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/lib/contexts/auth-context'
+import { ToastContainer } from '@/components/ui/toast'
 
 const inter = Inter({ subsets: ['latin'] })
 const interTight = Inter({
@@ -66,7 +67,8 @@ export default function RootLayout({
             --chart-color-6: #06b6d4;
           }
 
-          * {
+          /* Apply transitions only to interactive elements, not globally */
+          button, a, input, textarea, select {
             transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
           }
         `}</style>
@@ -74,6 +76,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <AuthProvider>
           {children}
+          <ToastContainer />
         </AuthProvider>
       </body>
     </html>

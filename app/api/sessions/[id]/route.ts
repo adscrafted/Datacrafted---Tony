@@ -1,18 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession, updateSession, deleteSession } from '@/lib/session'
+import { withAuth } from '@/lib/middleware/auth'
+import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+const getHandler = withAuth(async (request, authUser, context) => {
   try {
-    const { id } = await params
+    const { id } = await context!.params
     const session = await getSession(id)
 
     if (!session) {
       return NextResponse.json(
-        { error: 'Session not found' },
+        { error: 'Not found' },
         { status: 404 }
+      )
+    }
+
+    // AUTHORIZATION: Verify user owns this session
+    if (session.userId !== authUser.uid) {
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
       )
     }
 
@@ -32,14 +39,30 @@ export async function GET(
       { status: 500 }
     )
   }
-}
+})
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withRateLimit(RATE_LIMITS.SESSION, getHandler)
+
+const patchHandler = withAuth(async (request, authUser, context) => {
   try {
-    const { id } = await params
+    const { id } = await context!.params
+
+    // AUTHORIZATION: Verify ownership before update
+    const existingSession = await getSession(id)
+    if (!existingSession) {
+      return NextResponse.json(
+        { error: 'Not found' },
+        { status: 404 }
+      )
+    }
+
+    if (existingSession.userId !== authUser.uid) {
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const { name, description } = body
 
@@ -47,8 +70,8 @@ export async function PATCH(
 
     if (!session) {
       return NextResponse.json(
-        { error: 'Session not found' },
-        { status: 404 }
+        { error: 'Failed to update session' },
+        { status: 500 }
       )
     }
 
@@ -68,20 +91,36 @@ export async function PATCH(
       { status: 500 }
     )
   }
-}
+})
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withRateLimit(RATE_LIMITS.SESSION, patchHandler)
+
+const deleteHandler = withAuth(async (request, authUser, context) => {
   try {
-    const { id } = await params
+    const { id } = await context!.params
+
+    // AUTHORIZATION: Verify ownership before deletion
+    const existingSession = await getSession(id)
+    if (!existingSession) {
+      return NextResponse.json(
+        { error: 'Not found' },
+        { status: 404 }
+      )
+    }
+
+    if (existingSession.userId !== authUser.uid) {
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
+      )
+    }
+
     const success = await deleteSession(id)
 
     if (!success) {
       return NextResponse.json(
-        { error: 'Session not found' },
-        { status: 404 }
+        { error: 'Failed to delete session' },
+        { status: 500 }
       )
     }
 
@@ -93,4 +132,6 @@ export async function DELETE(
       { status: 500 }
     )
   }
-}
+})
+
+export const DELETE = withRateLimit(RATE_LIMITS.SESSION, deleteHandler)

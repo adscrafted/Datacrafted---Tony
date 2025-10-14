@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Clock, ChevronRight, Plus, FileText, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/lib/contexts/auth-context'
+import { AuthGateModal } from '@/components/auth/auth-gate-modal'
 import { useProjectStore } from '@/lib/stores/project-store'
 import { FileUploadCore } from '@/components/upload/file-upload-core'
 import { formatDistanceToNow } from 'date-fns'
@@ -12,7 +13,7 @@ import { useDataStore } from '@/lib/store'
 import { MinimalHeader } from '@/components/ui/minimal-header'
 
 function ProjectsContent() {
-  const { user, logout } = useAuth()
+  const { user, logout, loading: authLoading, isSyncing, isDebugMode } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
   const newProjectId = searchParams.get('newProject')
@@ -31,6 +32,24 @@ function ProjectsContent() {
   useEffect(() => {
     loadProjects(user?.uid || 'anonymous')
   }, [user, loadProjects])
+
+  // Show auth gate if not authenticated (unless in debug mode)
+  if (!authLoading && !user && !isDebugMode) {
+    return <AuthGateModal redirectPath="/projects" message="Sign in to view your projects" />
+  }
+
+  // Show loading state while user is syncing to database
+  if (isSyncing) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <h2 className="text-xl font-medium text-gray-900 mb-2">Setting up your account...</h2>
+          <p className="text-gray-500">This will only take a moment</p>
+        </div>
+      </div>
+    )
+  }
 
   // Highlight new project for a few seconds
   useEffect(() => {

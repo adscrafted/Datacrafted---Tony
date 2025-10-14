@@ -1,19 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSession } from '@/lib/session'
+import { withAuth } from '@/lib/middleware/auth'
+import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+const getHandler = withAuth(async (request, authUser, context) => {
   try {
-    const { id: sessionId } = await params
+    const { id: sessionId } = await context!.params
     const session = await getSession(sessionId)
 
     if (!session) {
       return NextResponse.json(
-        { error: 'Session not found' },
+        { error: 'Not found' },
         { status: 404 }
+      )
+    }
+
+    // AUTHORIZATION: Verify user owns this session
+    if (session.userId !== authUser.uid) {
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
       )
     }
 
@@ -44,20 +51,27 @@ export async function GET(
       { status: 500 }
     )
   }
-}
+})
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withRateLimit(RATE_LIMITS.SESSION, getHandler)
+
+const postHandler = withAuth(async (request, authUser, context) => {
   try {
-    const { id: sessionId } = await params
+    const { id: sessionId } = await context!.params
     const session = await getSession(sessionId)
 
     if (!session) {
       return NextResponse.json(
-        { error: 'Session not found' },
+        { error: 'Not found' },
         { status: 404 }
+      )
+    }
+
+    // AUTHORIZATION: Verify user owns this session
+    if (session.userId !== authUser.uid) {
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
       )
     }
 
@@ -96,20 +110,27 @@ export async function POST(
       { status: 500 }
     )
   }
-}
+})
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const POST = withRateLimit(RATE_LIMITS.SESSION, postHandler)
+
+const deleteHandler = withAuth(async (request, authUser, context) => {
   try {
-    const { id: sessionId } = await params
+    const { id: sessionId } = await context!.params
     const session = await getSession(sessionId)
 
     if (!session) {
       return NextResponse.json(
-        { error: 'Session not found' },
+        { error: 'Not found' },
         { status: 404 }
+      )
+    }
+
+    // AUTHORIZATION: Verify user owns this session
+    if (session.userId !== authUser.uid) {
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
       )
     }
 
@@ -129,4 +150,6 @@ export async function DELETE(
       { status: 500 }
     )
   }
-}
+})
+
+export const DELETE = withRateLimit(RATE_LIMITS.SESSION, deleteHandler)

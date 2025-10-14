@@ -119,20 +119,26 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
   }, [data, setAvailableColumns])
 
   // Load saved dashboard config when project changes
+  // CRITICAL FIX: Removed chartCustomizations from dependencies to prevent infinite loop
+  // When API returns 403, savedConfig is null and the else block modifies chartCustomizations
+  // which would trigger this useEffect again, causing infinite retries
   useEffect(() => {
     if (currentProjectId) {
-      const savedConfig = loadDashboardConfig(currentProjectId)
-      if (savedConfig) {
-        Object.entries(savedConfig.chartCustomizations).forEach(([chartId, customization]) => {
-          updateChartCustomization(chartId, customization)
-        })
-      } else {
-        Object.keys(chartCustomizations).forEach(chartId => {
-          updateChartCustomization(chartId, { position: undefined })
-        })
-      }
+      loadDashboardConfig(currentProjectId).then(savedConfig => {
+        if (savedConfig) {
+          Object.entries(savedConfig.chartCustomizations).forEach(([chartId, customization]) => {
+            updateChartCustomization(chartId, customization)
+          })
+        }
+        // REMOVED: else block that was modifying chartCustomizations on null config
+        // This was causing infinite loop when API returned errors
+      }).catch(error => {
+        console.error('Failed to load dashboard config:', error)
+        // Error is logged but doesn't trigger retry - dashboard will use default positions
+      })
     }
-  }, [currentProjectId, loadDashboardConfig, updateChartCustomization])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProjectId])
 
   // Filter out invalid charts before rendering
   const validCharts = useMemo(() => {

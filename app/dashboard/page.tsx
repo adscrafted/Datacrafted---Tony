@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, Suspense, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Download, FileSpreadsheet, Loader2, Maximize2, X, BarChart3, Layout, Share2, PanelLeftClose, PanelLeft, Grid3x3 } from 'lucide-react'
+import { ArrowLeft, Download, FileSpreadsheet, Loader2, Maximize2, X, BarChart3, Layout, Share2, PanelLeftClose, PanelLeft, Grid3x3, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useDataStore } from '@/lib/store'
@@ -20,7 +20,7 @@ import { ThemeProvider } from '@/components/dashboard/theme-provider'
 import { EditableSchemaViewer } from '@/components/dashboard/editable-schema-viewer'
 import { ShareDialog } from '@/components/dashboard/share-dialog'
 import { useProjectStore } from '@/lib/stores/project-store'
-// Removed auth imports - no longer needed for simplified flow
+import { useAuth } from '@/lib/contexts/auth-context'
 import { filterValidCharts } from '@/lib/utils/chart-validator'
 import { FullscreenDataTable } from '@/components/dashboard/fullscreen-data-table'
 import { ScorecardCalculationDetails } from '@/components/dashboard/scorecard-calculation-details'
@@ -70,6 +70,15 @@ function DashboardContent() {
   
   // Track if analysis has been initiated to prevent multiple calls
   const analysisInitiatedRef = React.useRef(false)
+
+  // Track which project has been loaded to prevent duplicate API calls
+  const loadedProjectIdRef = React.useRef<string | null>(null)
+
+  // Track if we're currently loading data from API
+  const [isLoadingFromAPI, setIsLoadingFromAPI] = useState(false)
+
+  // Track if we're waiting for IndexedDB to load data
+  const [isWaitingForIndexedDB, setIsWaitingForIndexedDB] = useState(false)
   
   const {
     fileName,
@@ -97,9 +106,9 @@ function DashboardContent() {
     setRawData,
     setDataSchema
   } = useDataStore()
-  
-  
-  // const { user } = useAuth() // Removed - no longer needed
+
+
+  const { user, logout } = useAuth()
   const { getProjectData, loadProjectDataAsync, loadProject } = useProjectStore()
 
   const performAnalysis = React.useCallback(async (skipDuplicateCheck = false) => {
@@ -120,10 +129,14 @@ function DashboardContent() {
     setAnalysisProgress(0)
 
     try {
-      const result = await analyzeData(rawData, (progress, usingAI) => {
+      // CRITICAL FIX: analyzeData returns { promise, cancel }, not a Promise directly
+      const { promise, cancel } = analyzeData(rawData, (progress, usingAI) => {
         setAnalysisProgress(progress)
         setUsingAI(usingAI)
       })
+
+      // Await the promise to get the actual AnalysisResult
+      const result = await promise
 
       setAnalysis(result)
 
@@ -131,7 +144,9 @@ function DashboardContent() {
       analysisInitiatedRef.current = false
 
     } catch (error) {
-      console.error('Analysis error:', error)
+      console.error('❌ [DASHBOARD] Analysis error:', error)
+      // Clear any stale analysis state on error
+      setAnalysis(null)
       setError(error instanceof Error ? error.message : 'Analysis failed')
     } finally {
       setIsAnalyzing(false)
@@ -140,8 +155,115 @@ function DashboardContent() {
 
   // Single consolidated effect for loading and analysis
   useEffect(() => {
+    // SIMPLIFIED: Check if we already have data in store (from upload)
+    // If we have data, skip the API call and just trigger analysis
+    // This restores the original pre-auth behavior
+
+    const storeState = useDataStore.getState()
+    // CRITICAL FIX: Check for both rawData AND dataId (IndexedDB reference)
+    // rawData may not be immediately available after navigation because it's loaded async from IndexedDB
+    // BUT: Only consider it "has data" if analysis has ACTUAL CHARTS (not empty analysis)
+    const hasValidAnalysis = storeState.analysis &&
+                             storeState.analysis.chartConfig &&
+                             storeState.analysis.chartConfig.length > 0
+
+    const hasDataInStore = (storeState.rawData && storeState.rawData.length > 0) ||
+                           (!!storeState.dataId && hasValidAnalysis)
+
+    console.log('🔍 [DASHBOARD] Effect running:', {
+      directId,
+      hasDataInStore,
+      hasRawData: !!(storeState.rawData && storeState.rawData.length > 0),
+      hasDataId: !!storeState.dataId,
+      hasAnalysis: !!analysis,
+      isAnalyzing
+    })
+
+    // If we have a directId but NO data in store, load from API
+    // This handles the case where user refreshes the page or comes from a saved project
+    if (directId && !hasDataInStore && loadedProjectIdRef.current !== directId) {
+      console.log('🔵 [DASHBOARD] No data in store, loading from API:', directId)
+      loadedProjectIdRef.current = directId
+      setIsLoadingFromAPI(true)
+
+      const loadFromAPI = async () => {
+        try {
+          const { auth } = await import('@/lib/config/firebase')
+          const token = await auth.currentUser?.getIdToken()
+
+          const headers: HeadersInit = {
+            'Content-Type': 'application/json',
+          }
+
+          if (token) {
+            headers['Authorization'] = `Bearer ${token}`
+          }
+
+          const response = await fetch(`/api/projects/${directId}/data`, {
+            headers
+          })
+
+          if (!response.ok) {
+            throw new Error('Failed to load project data from API')
+          }
+
+          const projectData = await response.json()
+          console.log('✅ [DASHBOARD] Project data loaded from API')
+
+          if (projectData.data && projectData.data.length > 0) {
+            const { setFileName, setRawData, setAnalysis, setDataSchema } = useDataStore.getState()
+
+            setFileName(projectData.metadata?.name || 'Project Data')
+            await setRawData(projectData.data)
+
+            if (projectData.analysis) {
+              setAnalysis(projectData.analysis)
+            }
+
+            if (projectData.schema) {
+              setDataSchema(projectData.schema)
+            }
+
+            analysisInitiatedRef.current = false
+          }
+        } catch (error) {
+          console.error('❌ [DASHBOARD] Failed to load from API:', error)
+          const { setError } = useDataStore.getState()
+          setError('Failed to load project data')
+        } finally {
+          setIsLoadingFromAPI(false)
+        }
+      }
+
+      loadFromAPI()
+      return // Don't continue to other loading logic
+    }
+
+    // If we have data in store (from fresh upload), mark that we've handled this directId
+    if (directId && hasDataInStore && loadedProjectIdRef.current !== directId) {
+      console.log('✅ [DASHBOARD] Data already in store from upload, skipping API call')
+      loadedProjectIdRef.current = directId
+
+      // CRITICAL: If we have dataId but no rawData, we're waiting for IndexedDB load
+      if (storeState.dataId && (!storeState.rawData || storeState.rawData.length === 0)) {
+        console.log('⏳ [DASHBOARD] Waiting for IndexedDB to load data...')
+        setIsWaitingForIndexedDB(true)
+
+        // Set a timeout to clear the loading state if IndexedDB doesn't respond
+        setTimeout(() => {
+          const currentState = useDataStore.getState()
+          if (currentState.dataId && (!currentState.rawData || currentState.rawData.length === 0)) {
+            console.error('❌ [DASHBOARD] IndexedDB load timed out')
+            setIsWaitingForIndexedDB(false)
+          }
+        }, 5000)
+      } else {
+        setIsWaitingForIndexedDB(false)
+      }
+    }
+
     // If we have a project ID, load project data
-    if (projectId) {
+    else if (projectId) {
       const loadProjectData = async () => {
         try {
           // Try synchronous first (for small datasets in localStorage)
@@ -204,7 +326,7 @@ function DashboardContent() {
       console.log('🎨 [DASHBOARD] Chart types in dashboard:', analysis?.chartConfig?.map(c => c.type).join(', '))
       console.log('🎨 [DASHBOARD] ===== END ANALYSIS =====')
     }
-  }, [rawData, analysis, isAnalyzing, sessionId, currentSession, projectId])
+  }, [rawData, analysis, isAnalyzing, sessionId, currentSession, projectId, directId])
 
   // Auto-open chat interface when on dashboard
   useEffect(() => {
@@ -298,17 +420,48 @@ function DashboardContent() {
     }
   }, [analysisProgress, usingAI, isAnalyzing, loadingMessages.length, lastProgressTrigger])
 
-  const shouldShowLoading = isAnalyzing ||
+  // Clear IndexedDB waiting state when rawData loads
+  useEffect(() => {
+    if (rawData && rawData.length > 0 && isWaitingForIndexedDB) {
+      console.log('✅ [DASHBOARD] IndexedDB data loaded, clearing wait state')
+      setIsWaitingForIndexedDB(false)
+    }
+  }, [rawData, isWaitingForIndexedDB])
+
+  // Debug loading conditions
+  const shouldShowLoading = isLoadingFromAPI ||
+                            isWaitingForIndexedDB ||
+                            isAnalyzing ||
                             (rawData && rawData.length > 0 && !analysis) ||
                             (fileName && !rawData) ||
                             (dataId && (!rawData || rawData.length === 0))
+
+  // Log when conditions change
+  React.useEffect(() => {
+    console.log('🔍 [DASHBOARD] Loading screen check:', {
+      shouldShowLoading,
+      isLoadingFromAPI,
+      isWaitingForIndexedDB,
+      isAnalyzing,
+      hasRawData: !!(rawData && rawData.length > 0),
+      hasAnalysis: !!analysis,
+      hasFileName: !!fileName,
+      hasDataId: !!dataId
+    })
+  }, [shouldShowLoading, isLoadingFromAPI, isWaitingForIndexedDB, isAnalyzing, rawData, analysis, fileName, dataId])
 
   if (shouldShowLoading) {
     // Determine loading message based on state
     let loadingTitle = 'Processing...'
     let loadingSubtitle = 'Please wait'
 
-    if (dataId && (!rawData || rawData.length === 0)) {
+    if (isLoadingFromAPI) {
+      loadingTitle = 'Loading your project...'
+      loadingSubtitle = 'Retrieving data from database'
+    } else if (isWaitingForIndexedDB) {
+      loadingTitle = 'Loading your data...'
+      loadingSubtitle = 'Retrieving from browser storage'
+    } else if (dataId && (!rawData || rawData.length === 0)) {
       loadingTitle = 'Loading your data...'
       loadingSubtitle = 'Retrieving from secure storage'
     } else if (!rawData) {
@@ -606,6 +759,18 @@ function DashboardContent() {
               {/* Date Range Selector - only shows if date columns detected */}
               <DateRangeSelector />
 
+              {/* User Management */}
+              {user && (
+                <div className="hidden sm:flex items-center space-x-2 px-3 py-2 rounded-lg bg-gray-50 mr-2">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-green-500 flex items-center justify-center text-white text-sm font-medium">
+                    {user.displayName?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
+                  </div>
+                  <span className="text-sm font-medium text-gray-700">
+                    {user.displayName || user.email?.split('@')[0]}
+                  </span>
+                </div>
+              )}
+
               <Button
                 variant="ghost"
                 size="sm"
@@ -622,6 +787,19 @@ function DashboardContent() {
               >
                 <Share2 className="h-4 w-4" />
               </Button>
+
+              {/* Logout Button */}
+              {user && (
+                <Button
+                  onClick={logout}
+                  variant="ghost"
+                  size="sm"
+                  className="text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                  title="Sign out"
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </div>
         </header>

@@ -265,10 +265,10 @@ export interface GaugeDataPoint {
  * Configuration for gauge chart data mapping
  */
 export interface GaugeDataMapping {
-  /** Column containing current value */
+  /** Column containing metric values to aggregate */
   readonly value: string
-  /** Column containing target value */
-  readonly target?: string
+  /** Aggregation method to apply to values (default: sum) */
+  readonly aggregation?: 'sum' | 'average' | 'median' | 'min' | 'max' | 'count'
   /** Column containing minimum value */
   readonly min?: string
   /** Column containing metric label */

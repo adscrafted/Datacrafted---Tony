@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSession, getRecentSessions, setSessionCookie } from '@/lib/session'
+import { withAuth } from '@/lib/middleware/auth'
+import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 
-export async function POST(request: NextRequest) {
+const postHandler = withAuth(async (request, authUser) => {
   try {
     const body = await request.json()
-    const { name, description, userId } = body
+    const { name, description } = body
 
-    // Create new session
+    // Create new session using authenticated user's ID
+    // SECURITY: Never trust userId from request body - use authUser.uid instead
     const session = await createSession({
       name,
       description,
-      userId,
+      userId: authUser.uid,
     })
 
     // Set session cookie
@@ -32,15 +35,18 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
-}
+})
 
-export async function GET(request: NextRequest) {
+export const POST = withRateLimit(RATE_LIMITS.SESSION, postHandler)
+
+const getHandler = withAuth(async (request, authUser) => {
   try {
     const { searchParams } = new URL(request.url)
-    const userId = searchParams.get('userId')
     const limit = parseInt(searchParams.get('limit') || '10')
 
-    const sessions = await getRecentSessions(userId || undefined, limit)
+    // SECURITY: Only fetch sessions for the authenticated user
+    // Never trust userId from query params
+    const sessions = await getRecentSessions(authUser.uid, limit)
 
     return NextResponse.json({
       sessions: sessions.map((session) => ({
@@ -58,4 +64,6 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
-}
+})
+
+export const GET = withRateLimit(RATE_LIMITS.SESSION, getHandler)

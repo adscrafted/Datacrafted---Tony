@@ -4,21 +4,25 @@ import { DynamicFileUpload } from '@/components/upload/dynamic-file-upload'
 import { useEffect, useCallback, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { preloadUploadResources, shouldPrefetch } from '@/lib/utils/preloader'
-import { MinimalHeader } from '@/components/ui/minimal-header'
+import { LandingHeader } from '@/components/ui/landing-header'
 import { useProjectStore } from '@/lib/stores/project-store'
 import { useDataStore } from '@/lib/store'
 import { useAuth } from '@/lib/contexts/auth-context'
 import { UploadStatusBar } from '@/components/ui/upload-status-bar'
+import { AuthModal } from '@/components/auth/auth-modal'
 
 export default function Home() {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const { createProject, saveProjectData } = useProjectStore()
   const {
     setUploadComplete,
     setUploadProjectId,
     setUploadProgress
   } = useDataStore()
+
+  // Auth modal state
+  const [showAuthModal, setShowAuthModal] = useState(false)
 
   // Typing animation state
   const [typedText, setTypedText] = useState('')
@@ -100,22 +104,29 @@ export default function Home() {
   }, [router, user?.uid, createProject, saveProjectData, setUploadComplete, setUploadProjectId, setUploadProgress])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f8fafd]">
-      {/* Subtle blue gradient glow - NotebookLM style */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-[rgb(11,40,212)]/10 rounded-full mix-blend-normal filter blur-3xl animate-blob" />
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-[rgb(11,40,212)]/8 rounded-full mix-blend-normal filter blur-3xl animate-blob animation-delay-2000" />
-        <div className="absolute top-0 right-1/4 w-80 h-80 bg-[rgb(11,40,212)]/5 rounded-full mix-blend-normal filter blur-3xl animate-blob animation-delay-4000" />
-      </div>
+    <div className="min-h-screen flex flex-col bg-[#f8fafd]">
+      {/* Landing Header with Auth */}
+      <LandingHeader
+        user={user}
+        onSignInClick={() => setShowAuthModal(true)}
+        onLogout={logout}
+      />
 
-      <div className="relative z-10 text-center px-4 w-full max-w-6xl mx-auto">
-        {/* Logo */}
-        <div className="mb-12">
-          <h1 className="text-2xl font-semibold tracking-tight text-[#1f1f1f]" style={{ fontFamily: "'Google Sans Text', Helvetica, Arial, sans-serif" }}>
-            DataCrafted
-          </h1>
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+      />
+
+      <div className="flex-1 flex items-center justify-center">
+        {/* Subtle blue gradient glow - NotebookLM style */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute -top-40 -right-40 w-96 h-96 bg-[rgb(11,40,212)]/10 rounded-full mix-blend-normal filter blur-3xl animate-blob" />
+          <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-[rgb(11,40,212)]/8 rounded-full mix-blend-normal filter blur-3xl animate-blob animation-delay-2000" />
+          <div className="absolute top-0 right-1/4 w-80 h-80 bg-[rgb(11,40,212)]/5 rounded-full mix-blend-normal filter blur-3xl animate-blob animation-delay-4000" />
         </div>
 
+      <div className="relative z-10 text-center px-4 w-full max-w-6xl mx-auto">
         {/* Hero text with typing animation */}
         <h2 className="text-6xl md:text-7xl lg:text-8xl font-bold mb-8 min-h-[240px] flex flex-col items-center justify-center text-center tracking-tight leading-[1.1]" style={{ fontFamily: "'Google Sans Text', Helvetica, Arial, sans-serif" }}>
           {typedText.split('\n').map((line, i) => (
@@ -156,8 +167,9 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Upload Status Bar */}
-      <UploadStatusBar />
+        {/* Upload Status Bar */}
+        <UploadStatusBar />
+      </div>
     </div>
   )
 }

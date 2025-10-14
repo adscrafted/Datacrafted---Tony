@@ -1855,131 +1855,113 @@ export function ChartCustomizationPanel({
                     {/* Gauge Chart Data Mapping */}
                     {chartType === 'gauge' && (
                       <div className="space-y-6">
+                        {/* Metric Field */}
                         <div>
-                          <label className="text-sm font-medium mb-3 block">Available Numeric Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-40 overflow-y-auto">
-                            <div className="grid grid-cols-1 gap-2">
-                              {columnsByType.numeric.map((col) => (
-                                <div
-                                  key={col}
-                                  draggable
-                                  onDragStart={(e) => {
-                                    e.dataTransfer.setData('application/json', JSON.stringify({
-                                      fieldName: col,
-                                      fieldType: 'number'
-                                    }))
-                                  }}
-                                  className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Metric Field (Required)
+                          </label>
+                          <div
+                            className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 min-h-[60px] bg-gray-50 dark:bg-gray-800"
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              const fieldName = e.dataTransfer.getData('text/plain')
+                              if (fieldName) {
+                                handleUpdate({
+                                  dataMapping: {
+                                    ...customization?.dataMapping,
+                                    metric: fieldName
+                                  }
+                                })
+                              }
+                            }}
+                          >
+                            {effectiveDataMapping?.metric ? (
+                              <div className="flex items-center justify-between bg-white dark:bg-gray-700 px-3 py-2 rounded">
+                                <span className="text-sm font-medium">{effectiveDataMapping.metric}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      metric: undefined
+                                    }
+                                  })}
+                                  className="text-gray-400 hover:text-red-500"
                                 >
-                                  <span className="text-xs">🔢</span>
-                                  <span className="text-sm font-medium text-gray-700">{col}</span>
-                                  <span className="text-xs text-gray-500 ml-auto">number</span>
-                                </div>
-                              ))}
-                            </div>
+                                  ×
+                                </button>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
+                                Drag a numeric field here
+                              </p>
+                            )}
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-4">
-                          <div
-                            onDragOver={(e) => {
-                              e.preventDefault()
-                              e.currentTarget.classList.add('border-blue-400', 'bg-blue-50')
-                            }}
-                            onDragLeave={(e) => {
-                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
-                            }}
-                            onDrop={(e) => {
-                              e.preventDefault()
-                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
-                              try {
-                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                if (data.fieldType === 'number') {
-                                  handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      value: data.fieldName
-                                    }
-                                  })
-                                }
-                              } catch (error) {
-                                console.error('Failed to parse drop data:', error)
+                        {/* Aggregation Type */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Aggregation (Required)
+                          </label>
+                          <select
+                            value={effectiveDataMapping?.aggregation || 'sum'}
+                            onChange={(e) => handleUpdate({
+                              dataMapping: {
+                                ...customization?.dataMapping,
+                                aggregation: e.target.value as 'sum' | 'average' | 'median' | 'min' | 'max' | 'count'
                               }
-                            }}
-                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                            })}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                           >
-                            <div className="text-sm font-medium text-gray-600 mb-2">Value Field (Required)</div>
-                            {effectiveDataMapping?.value ? (
-                              <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
-                                <span className="text-sm text-blue-800">{effectiveDataMapping.value}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      value: undefined
-                                    }
-                                  })}
-                                  className="text-blue-600 hover:text-blue-800 text-xs"
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="text-center py-3 text-gray-500 text-sm">
-                                Drop a numeric field for gauge value
-                              </div>
-                            )}
-                          </div>
+                            <option value="sum">Sum</option>
+                            <option value="average">Average</option>
+                            <option value="median">Median</option>
+                            <option value="min">Minimum</option>
+                            <option value="max">Maximum</option>
+                            <option value="count">Count</option>
+                          </select>
+                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            How to aggregate the metric across all rows
+                          </p>
+                        </div>
 
-                          <div
-                            onDragOver={(e) => {
-                              e.preventDefault()
-                              e.currentTarget.classList.add('border-green-400', 'bg-green-50')
-                            }}
-                            onDragLeave={(e) => {
-                              e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
-                            }}
-                            onDrop={(e) => {
-                              e.preventDefault()
-                              e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
-                              try {
-                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                if (data.fieldType === 'number') {
-                                  handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      target: data.fieldName
-                                    }
-                                  })
-                                }
-                              } catch (error) {
-                                console.error('Failed to parse drop data:', error)
-                              }
-                            }}
-                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
-                          >
-                            <div className="text-sm font-medium text-green-600 mb-2">Target Field (Optional)</div>
-                            {effectiveDataMapping?.target ? (
-                              <div className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
-                                <span className="text-sm text-green-800">{effectiveDataMapping.target}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      target: undefined
-                                    }
-                                  })}
-                                  className="text-green-600 hover:text-green-800 text-xs"
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="text-center py-3 text-gray-500 text-sm">
-                                Drop a numeric field for target (optional)
-                              </div>
-                            )}
-                          </div>
+                        {/* Max Value Input */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Maximum Value (Required)
+                          </label>
+                          <input
+                            type="number"
+                            value={(customization as any)?.max || ''}
+                            onChange={(e) => handleUpdate({
+                              max: e.target.value ? Number(e.target.value) : undefined
+                            })}
+                            placeholder="e.g., 100000"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                          />
+                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            The maximum value for the gauge (100% mark)
+                          </p>
+                        </div>
+
+                        {/* Min Value Input (Optional) */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Minimum Value (Optional)
+                          </label>
+                          <input
+                            type="number"
+                            value={(customization as any)?.min !== undefined ? (customization as any)?.min : 0}
+                            onChange={(e) => handleUpdate({
+                              min: e.target.value ? Number(e.target.value) : 0
+                            })}
+                            placeholder="0"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                          />
+                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            The minimum value for the gauge (0% mark). Default: 0
+                          </p>
                         </div>
                       </div>
                     )}

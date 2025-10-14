@@ -1,152 +1,225 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
   output   = "../lib/generated/prisma"
 }
 
 datasource db {
-  provider     = "sqlite"
-  url          = env("DATABASE_URL")
-  relationMode = "prisma"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  // Optional user identification (can be anonymous)
-  name      String?
-  email     String?
-  
-  // Relationships
-  sessions  Session[]
-  
+  id                String              @id @default(cuid())
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  email             String?             @unique
+  emailVerified     DateTime?
+  name              String?
+  photoURL          String?
+  firebaseUid       String?             @unique
+  preferences       String?
+  dashboard_configs dashboard_configs[]
+  projects          projects[]
+  sessions          Session[]
+
   @@map("users")
 }
 
 model Session {
-  id          String   @id @default(cuid())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  expiresAt   DateTime?
-  
-  // Session metadata
-  name        String?
-  description String?
-  isActive    Boolean  @default(true)
-  
-  // User association (can be null for anonymous sessions)
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // Relationships
-  uploadedFiles UploadedFile[]
-  analyses    Analysis[]
-  chatMessages ChatMessage[]
-  
+  id                String              @id @default(cuid())
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  expiresAt         DateTime?
+  name              String?
+  description       String?
+  isActive          Boolean             @default(true)
+  userId            String?
+  projectId         String?
+  analyses          Analysis[]
+  chatMessages      ChatMessage[]
+  dashboard_configs dashboard_configs[]
+  projects          projects?           @relation(fields: [projectId], references: [id])
+  user              User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  uploadedFiles     UploadedFile[]
+
+  @@index([projectId])
+  @@index([userId])
   @@map("sessions")
 }
 
 model UploadedFile {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  // File metadata
-  fileName      String
-  originalName  String
-  fileSize      Int
-  mimeType      String
-  fileHash      String?   // For deduplication
-  
-  // File storage path
-  filePath      String
-  
-  // Parsed data storage (JSON)
-  parsedData    String    // JSON string of the parsed data
-  dataSchema    String?   // JSON schema of the data structure
-  
-  // Session relationship
-  sessionId     String
-  session       Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  
-  // Relationships
-  analyses      Analysis[]
-  
+  id           String     @id @default(cuid())
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  fileName     String
+  originalName String
+  fileSize     Int
+  mimeType     String
+  fileHash     String?
+  filePath     String
+  parsedData   String
+  dataSchema   String?
+  sessionId    String
+  analyses     Analysis[]
+  session      Session    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([fileHash])
+  @@index([sessionId])
   @@map("uploaded_files")
 }
 
 model Analysis {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  // Analysis metadata
-  name        String?
-  description String?
-  
-  // AI analysis results (JSON)
-  insights      String    // JSON array of insights
-  summary       String    // JSON object of summary data
-  keyFindings   String?   // AI-generated key findings
-  recommendations String? // AI-generated recommendations
-  businessContext String? // AI-generated business context
-  
-  // Session and file relationships
-  sessionId     String
-  session       Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  
-  fileId        String
-  file          UploadedFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
-  
-  // Relationships
-  charts        Chart[]
-  
+  id              String       @id @default(cuid())
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  name            String?
+  description     String?
+  insights        String
+  summary         String
+  keyFindings     String?
+  recommendations String?
+  businessContext String?
+  sessionId       String
+  fileId          String
+  file            UploadedFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  session         Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  charts          Chart[]
+
+  @@index([fileId])
+  @@index([sessionId])
   @@map("analyses")
 }
 
 model Chart {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  // Chart configuration
-  type        String   // 'line', 'bar', 'pie', 'area', 'scatter'
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  type        String
   title       String
   description String?
-  
-  // Chart data configuration (JSON)
-  dataKeys    String   // JSON array of data keys
-  config      String?  // Additional chart configuration
-  
-  // Display settings
-  position    Int?     // For ordering charts in dashboard
+  dataKeys    String
+  config      String?
+  position    Int?
   isVisible   Boolean  @default(true)
-  
-  // Analysis relationship
   analysisId  String
   analysis    Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
-  
+
+  @@index([analysisId])
+  @@index([position])
   @@map("charts")
 }
 
 model ChatMessage {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
-  
-  // Message content
-  role      String   // 'user' or 'assistant'
+  role      String
   content   String
-  
-  // Optional metadata
-  metadata  String?  // JSON for additional message data
-  
-  // Session relationship
+  metadata  String?
   sessionId String
   session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  
+
+  @@index([createdAt])
+  @@index([sessionId])
   @@map("chat_messages")
+}
+
+model dashboard_configs {
+  id                  String    @id
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime
+  userId              String
+  sessionId           String?
+  projectId           String?
+  chartCustomizations String
+  currentTheme        String?
+  currentLayout       String?
+  dashboardFilters    String?
+  version             Int       @default(1)
+  projects            projects? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sessions            Session?  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  users               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sessionId, projectId])
+  @@index([projectId])
+  @@index([sessionId])
+  @@index([updatedAt])
+  @@index([userId])
+}
+
+model projects {
+  id                String              @id
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime
+  name              String
+  description       String?
+  color             String?
+  icon              String?
+  settings          String?
+  userId            String
+  dashboard_configs dashboard_configs[]
+  users             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions          Session[]
+  projectData       ProjectData[]
+
+  @@index([userId])
+}
+
+model ProjectData {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  projectId String
+  version   Int      @default(1)
+
+  // File metadata
+  originalFileName String
+  originalFileSize Int
+  mimeType         String
+  fileHash         String?
+
+  // Data storage - compressed for efficiency
+  compressedData       Bytes
+  compressionAlgorithm String @default("gzip")
+  uncompressedSize     Int
+
+  // Data metadata
+  rowCount    Int
+  columnCount Int
+  columnNames String // JSON array of column names
+  columnTypes String // JSON object mapping column names to inferred types
+
+  // Sample data for quick previews (first 100 rows, uncompressed)
+  sampleData String? // JSON array of first 100 rows
+
+  // Data quality metrics
+  nullCount         Int    @default(0)
+  duplicateRowCount Int    @default(0)
+  dataQualityScore  Float? // 0-100 score
+
+  // Processing metadata
+  processingTimeMs Int?
+  parsingErrors    String? // JSON array of parsing errors if any
+
+  // Status tracking
+  status   String  @default("active") // active, archived, deleted
+  isActive Boolean @default(true)
+
+  // AI Analysis storage
+  analysisData        String?   @db.Text // JSON stringified AI analysis results
+  hasAnalysis         Boolean   @default(false)
+  analysisVersion     Int       @default(1)
+  analysisCreatedAt   DateTime?
+  chartCustomizations String?   @db.Text // JSON stringified user chart edits
+
+  // Relationships
+  project projects @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([projectId, version])
+  @@index([projectId, status])
+  @@index([fileHash])
+  @@index([createdAt])
+  @@index([isActive, projectId])
+  @@index([hasAnalysis])
+  @@map("project_data")
 }

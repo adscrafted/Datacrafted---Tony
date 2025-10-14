@@ -368,7 +368,7 @@ interface DataStore {
   setDataSchema: (schema: DataSchema) => void
 
   /** Set analysis result - supports both legacy and enhanced formats */
-  setAnalysis: (analysis: AnalysisResult | EnhancedAnalysisResult) => void
+  setAnalysis: (analysis: AnalysisResult | EnhancedAnalysisResult | null) => void
 
   /** Update corrected schema from user feedback */
   setCorrectedSchema: (schema: CorrectedColumn[]) => void
@@ -996,6 +996,13 @@ export const useDataStore = create<DataStore>()(
       setDataSchema: (schema) => set({ dataSchema: schema }),
 
       setAnalysis: (analysis) => {
+        // CRITICAL: Handle null explicitly to clear analysis
+        if (analysis === null) {
+          console.log('📦 [STORE] ===== CLEARING ANALYSIS =====')
+          set({ analysis: null, dataContext: null })
+          return
+        }
+
         // CRITICAL LOGGING: Track what's being stored
         console.log('📦 [STORE] ===== STORING ANALYSIS =====')
         console.log('📦 [STORE] analysis.chartConfig.length:', analysis?.chartConfig?.length || 0)
@@ -2196,7 +2203,12 @@ export const useDataStore = create<DataStore>()(
         fileName: state.fileName,
         dataId: state.dataId, // Store reference to IndexedDB data
         dataSchema: state.dataSchema,
-        analysis: state.analysis,
+        // CRITICAL FIX: Only persist analysis if it has actual charts
+        // Empty analysis objects (chartConfig.length === 0) should not be persisted
+        // This prevents stale empty analysis from blocking new AI analysis on page load
+        analysis: state.analysis && state.analysis.chartConfig && state.analysis.chartConfig.length > 0
+          ? state.analysis
+          : undefined,
         correctedSchema: state.correctedSchema,
         dataContext: state.dataContext,
         currentSession: state.currentSession,

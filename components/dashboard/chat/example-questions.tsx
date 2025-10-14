@@ -127,8 +127,8 @@ export function ExampleQuestions({ onQuestionClick, analysis }: ExampleQuestions
   // Generate contextual questions based on the data analysis
   const getContextualQuestions = () => {
     const questions = []
-    
-    if (analysis) {
+
+    if (analysis && analysis.summary && analysis.summary.columns) {
       const numericColumns = analysis.summary.columns.filter(col => col.type === 'number')
       const categoricalColumns = analysis.summary.columns.filter(col => 
         col.type === 'string' && col.uniqueValues < 20

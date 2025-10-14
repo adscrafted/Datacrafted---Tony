@@ -514,6 +514,17 @@ export function filterValidCharts(
   chartConfigs: ChartConfig[],
   data: DataRow[]
 ): ChartConfig[] {
+  // Defensive: return empty array if inputs are invalid
+  if (!chartConfigs || !Array.isArray(chartConfigs)) {
+    console.warn('⚠️ [CHART_VALIDATOR] Invalid chartConfigs provided:', chartConfigs)
+    return []
+  }
+
+  if (!data || !Array.isArray(data) || data.length === 0) {
+    console.warn('⚠️ [CHART_VALIDATOR] Invalid or empty data provided')
+    return []
+  }
+
   console.log('🔍 [CHART_VALIDATOR] Starting chart validation:', {
     totalCharts: chartConfigs.length,
     chartTypes: chartConfigs.map(c => c.type).join(', ')
