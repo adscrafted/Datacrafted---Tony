@@ -111,8 +111,14 @@ export function parseStreamingResponse(
 
 // Utility function to remove chart suggestion blocks from message content
 export function stripChartSuggestions(message: string): string {
-  // Remove all **CHART_SUGGESTION** ... **END_SUGGESTION** blocks
-  return message.replace(/\*\*CHART_SUGGESTION\*\*[\s\S]*?\*\*END_SUGGESTION\*\*/gi, '').trim()
+  // Remove all **CHART_SUGGESTION** ... **END_SUGGESTION** blocks (complete blocks)
+  let cleaned = message.replace(/\*\*CHART_SUGGESTION\*\*[\s\S]*?\*\*END_SUGGESTION\*\*/gi, '')
+
+  // Also remove partial/incomplete chart suggestion blocks during streaming
+  // This prevents the marker from appearing while the AI is still typing it
+  cleaned = cleaned.replace(/\*\*CHART_SUGGESTION\*\*[\s\S]*$/gi, '')
+
+  return cleaned.trim()
 }
 
 // Utility function to detect if a message contains chart suggestions

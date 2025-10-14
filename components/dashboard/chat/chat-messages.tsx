@@ -34,21 +34,21 @@ export function ChatMessages({ messages, streamingMessage, isStreaming }: ChatMe
       // Handle bullet points
       if (line.trim().startsWith('- ') || line.trim().startsWith('• ')) {
         return (
-          <li key={index} className="ml-4 list-disc" dangerouslySetInnerHTML={{ __html: formattedLine.replace(/^[\-•]\s/, '') }} />
+          <li key={index} className="ml-4 list-disc break-words" dangerouslySetInnerHTML={{ __html: formattedLine.replace(/^[\-•]\s/, '') }} />
         )
       }
-      
+
       // Handle numbered lists
       if (/^\d+\.\s/.test(line.trim())) {
         return (
-          <li key={index} className="ml-4 list-decimal" dangerouslySetInnerHTML={{ __html: formattedLine.replace(/^\d+\.\s/, '') }} />
+          <li key={index} className="ml-4 list-decimal break-words" dangerouslySetInnerHTML={{ __html: formattedLine.replace(/^\d+\.\s/, '') }} />
         )
       }
-      
+
       // Regular paragraphs
       if (line.trim()) {
         return (
-          <p key={index} className="mb-2 last:mb-0" dangerouslySetInnerHTML={{ __html: formattedLine }} />
+          <p key={index} className="mb-2 last:mb-0 break-words" dangerouslySetInnerHTML={{ __html: formattedLine }} />
         )
       }
       
@@ -79,17 +79,17 @@ export function ChatMessages({ messages, streamingMessage, isStreaming }: ChatMe
           </div>
 
           {/* Message Content */}
-          <div className={`flex-1 max-w-[80%] ${message.role === 'user' ? 'text-right' : ''}`}>
+          <div className={`flex-1 max-w-[80%] min-w-0 ${message.role === 'user' ? 'text-right' : ''}`}>
             <div className={`rounded-lg p-3 ${
               message.role === 'user'
                 ? 'bg-primary text-primary-foreground ml-auto'
                 : 'bg-gray-100 text-gray-900'
             }`}>
-              <div className="text-sm leading-relaxed">
+              <div className="text-sm leading-relaxed break-words overflow-wrap-anywhere">
                 {message.role === 'user' ? (
-                  <p>{message.content}</p>
+                  <p className="break-words">{message.content}</p>
                 ) : (
-                  <div>{formatMessageContent(stripChartSuggestions(message.content))}</div>
+                  <div className="break-words">{formatMessageContent(stripChartSuggestions(message.content))}</div>
                 )}
               </div>
             </div>
@@ -113,10 +113,10 @@ export function ChatMessages({ messages, streamingMessage, isStreaming }: ChatMe
           </div>
 
           {/* Message Content */}
-          <div className="flex-1 max-w-[80%]">
+          <div className="flex-1 max-w-[80%] min-w-0">
             <div className="rounded-lg p-3 bg-gray-100 text-gray-900">
-              <div className="text-sm leading-relaxed">
-                <div>{formatMessageContent(stripChartSuggestions(streamingMessage))}</div>
+              <div className="text-sm leading-relaxed break-words overflow-wrap-anywhere">
+                <div className="break-words">{formatMessageContent(stripChartSuggestions(streamingMessage))}</div>
                 <div className="inline-block w-2 h-4 bg-primary animate-pulse ml-1" />
               </div>
             </div>

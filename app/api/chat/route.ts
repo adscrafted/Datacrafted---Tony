@@ -70,8 +70,8 @@ function generateDataContext(data: DataRow[], schema: DataSchema | null, fileNam
 
     let context = `Dataset Context:
 File: ${fileName || schema.fileName || 'Uploaded data'}
-Rows: ${schema.rowCount.toLocaleString()}
-Columns: ${schema.columnCount}
+Rows: ${schema.rowCount ? schema.rowCount.toLocaleString() : data.length.toLocaleString()}
+Columns: ${schema.columnCount || 'Unknown'}
 `
 
     // Add business context if available
@@ -334,17 +334,23 @@ Current conversation context: The user is asking about their uploaded dataset.`
     }
 
   } catch (error) {
-    console.error('Error in chat API:', error)
-    
+    // Enhanced error logging
+    console.error('❌ [CHAT API] Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      type: error instanceof Error ? error.constructor.name : typeof error,
+      fullError: error
+    })
+
     if (error instanceof Error && error.message.includes('API key')) {
       return NextResponse.json(
         { error: 'OpenAI API is not configured properly' },
         { status: 500 }
       )
     }
-    
+
     return NextResponse.json(
-      { 
+      {
         error: error instanceof Error ? error.message : 'Chat request failed',
         details: 'Please try again or rephrase your question'
       },

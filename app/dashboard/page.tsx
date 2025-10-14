@@ -19,6 +19,7 @@ import { FlexibleDashboardLayout } from '@/components/dashboard/flexible-dashboa
 import { ThemeProvider } from '@/components/dashboard/theme-provider'
 import { EditableSchemaViewer } from '@/components/dashboard/editable-schema-viewer'
 import { ShareDialog } from '@/components/dashboard/share-dialog'
+import { SaveDashboardButton } from '@/components/dashboard/save-dashboard-button'
 import { useProjectStore } from '@/lib/stores/project-store'
 import { useAuth } from '@/lib/contexts/auth-context'
 import { filterValidCharts } from '@/lib/utils/chart-validator'
@@ -79,6 +80,10 @@ function DashboardContent() {
 
   // Track if we're waiting for IndexedDB to load data
   const [isWaitingForIndexedDB, setIsWaitingForIndexedDB] = useState(false)
+
+  // Track if we're currently loading saved dashboard config
+  // This prevents race condition where AI analysis triggers before config is loaded
+  const [isLoadingConfig, setIsLoadingConfig] = useState(false)
   
   const {
     fileName,
@@ -109,7 +114,7 @@ function DashboardContent() {
 
 
   const { user, logout } = useAuth()
-  const { getProjectData, loadProjectDataAsync, loadProject } = useProjectStore()
+  const { getProjectData, loadProjectDataAsync, loadProject, setCurrentProject, saveProjectData } = useProjectStore()
 
   const performAnalysis = React.useCallback(async (skipDuplicateCheck = false) => {
     if (!rawData || rawData.length === 0) {
@@ -122,7 +127,7 @@ function DashboardContent() {
     }
 
     // Get setters from store directly to avoid dependency issues
-    const { setIsAnalyzing, setError, setAnalysisProgress, setUsingAI, setAnalysis } = useDataStore.getState()
+    const { setIsAnalyzing, setError, setAnalysisProgress, setUsingAI, setAnalysis, dataSchema } = useDataStore.getState()
 
     setIsAnalyzing(true)
     setError(null)
@@ -140,6 +145,29 @@ function DashboardContent() {
 
       setAnalysis(result)
 
+      // Auto-save the INITIAL AI-generated analysis to database
+      // This only happens for new analysis, not for user customizations
+      const currentProjectId = directId || projectId
+      if (currentProjectId) {
+        console.log('💾 [DASHBOARD] Auto-saving initial AI analysis to database:', {
+          projectId: currentProjectId,
+          chartCount: result.chartConfig?.length || 0
+        })
+
+        try {
+          await saveProjectData(
+            currentProjectId,
+            rawData,
+            result,
+            dataSchema || undefined
+          )
+          console.log('✅ [DASHBOARD] Initial analysis saved to database')
+        } catch (error) {
+          console.error('❌ [DASHBOARD] Failed to save initial analysis:', error)
+          // Don't throw - this shouldn't block the UI
+        }
+      }
+
       // Reset the analysis initiated flag for future uploads
       analysisInitiatedRef.current = false
 
@@ -151,7 +179,7 @@ function DashboardContent() {
     } finally {
       setIsAnalyzing(false)
     }
-  }, [rawData, isAnalyzing, analysis])
+  }, [rawData, isAnalyzing, analysis, directId, projectId, saveProjectData])
 
   // Single consolidated effect for loading and analysis
   useEffect(() => {
@@ -183,8 +211,14 @@ function DashboardContent() {
     // This handles the case where user refreshes the page or comes from a saved project
     if (directId && !hasDataInStore && loadedProjectIdRef.current !== directId) {
       console.log('🔵 [DASHBOARD] No data in store, loading from API:', directId)
+      console.log('🔵 [DASHBOARD] Setting current project:', directId)
+      setCurrentProject(directId)
       loadedProjectIdRef.current = directId
       setIsLoadingFromAPI(true)
+
+      // CRITICAL: Set loading state SYNCHRONOUSLY before async operations
+      // This prevents race condition where AI analysis triggers before config is loaded
+      setIsLoadingConfig(true)
 
       const loadFromAPI = async () => {
         try {
@@ -214,22 +248,73 @@ function DashboardContent() {
             const { setFileName, setRawData, setAnalysis, setDataSchema } = useDataStore.getState()
 
             setFileName(projectData.metadata?.name || 'Project Data')
-            await setRawData(projectData.data)
 
-            if (projectData.analysis) {
-              setAnalysis(projectData.analysis)
+            // CRITICAL: Check for saved dashboard config BEFORE setting rawData
+            // This prevents the analysis effect from triggering prematurely
+            console.log('🔍 [DASHBOARD] Checking for saved dashboard config...')
+            const { loadDashboardConfig } = useProjectStore.getState()
+            const savedConfig = await loadDashboardConfig(directId)
+
+            // Set this flag early to prevent AI analysis from triggering
+            if (savedConfig && savedConfig.chartCustomizations && Object.keys(savedConfig.chartCustomizations).length > 0) {
+              analysisInitiatedRef.current = true
+              console.log('✅ [DASHBOARD] Found saved config, marking to skip AI analysis')
             }
+
+            // Now safe to set rawData
+            await setRawData(projectData.data)
 
             if (projectData.schema) {
               setDataSchema(projectData.schema)
             }
 
-            analysisInitiatedRef.current = false
+            if (savedConfig && savedConfig.chartCustomizations && Object.keys(savedConfig.chartCustomizations).length > 0) {
+              console.log('✅ [DASHBOARD] Found saved dashboard config, applying customizations')
+
+              // Apply saved config to the analysis
+              if (projectData.analysis) {
+                const updatedAnalysis = {
+                  ...projectData.analysis,
+                  chartConfig: projectData.analysis.chartConfig.map((chart: any) => {
+                    const chartId = chart.id || `chart-${projectData.analysis.chartConfig.indexOf(chart)}`
+                    const customization = savedConfig.chartCustomizations[chartId]
+
+                    if (customization) {
+                      return {
+                        ...chart,
+                        customization
+                      }
+                    }
+                    return chart
+                  })
+                }
+
+                setAnalysis(updatedAnalysis)
+
+                // Mark that we don't need to run AI analysis again
+                analysisInitiatedRef.current = true
+                console.log('✅ [DASHBOARD] Loaded saved dashboard, skipping AI analysis')
+              }
+            } else {
+              console.log('ℹ️ [DASHBOARD] No saved config found, will use default analysis')
+
+              // Use default analysis from project data
+              if (projectData.analysis) {
+                setAnalysis(projectData.analysis)
+                analysisInitiatedRef.current = true
+              } else {
+                analysisInitiatedRef.current = false
+              }
+            }
+
+            // Config loading complete - clear loading state
+            setIsLoadingConfig(false)
           }
         } catch (error) {
           console.error('❌ [DASHBOARD] Failed to load from API:', error)
           const { setError } = useDataStore.getState()
           setError('Failed to load project data')
+          setIsLoadingConfig(false)
         } finally {
           setIsLoadingFromAPI(false)
         }
@@ -242,6 +327,8 @@ function DashboardContent() {
     // If we have data in store (from fresh upload), mark that we've handled this directId
     if (directId && hasDataInStore && loadedProjectIdRef.current !== directId) {
       console.log('✅ [DASHBOARD] Data already in store from upload, skipping API call')
+      console.log('🔵 [DASHBOARD] Setting current project:', directId)
+      setCurrentProject(directId)
       loadedProjectIdRef.current = directId
 
       // CRITICAL: If we have dataId but no rawData, we're waiting for IndexedDB load
@@ -264,6 +351,13 @@ function DashboardContent() {
 
     // If we have a project ID, load project data
     else if (projectId) {
+      console.log('🔵 [DASHBOARD] Setting current project:', projectId)
+      setCurrentProject(projectId)
+
+      // CRITICAL: Set loading state SYNCHRONOUSLY before async operations
+      // This prevents race condition where AI analysis triggers before config is loaded
+      setIsLoadingConfig(true)
+
       const loadProjectData = async () => {
         try {
           // Try synchronous first (for small datasets in localStorage)
@@ -277,7 +371,6 @@ function DashboardContent() {
           if (projectData && projectData.rawData && projectData.rawData.length > 0) {
             const { setFileName, setRawData, setAnalysis, setDataSchema } = useDataStore.getState()
             setFileName(projectData.dataSchema?.fileName || 'Project Data')
-            await setRawData(projectData.rawData)
 
             console.log('🔍 [DASHBOARD] Loading project data:', {
               hasAnalysis: !!projectData.analysis,
@@ -285,19 +378,69 @@ function DashboardContent() {
               projectId
             })
 
-            if (projectData.analysis) {
-              setAnalysis(projectData.analysis)
+            // CRITICAL: Check for saved dashboard config BEFORE setting rawData
+            console.log('🔍 [DASHBOARD] Checking for saved dashboard config...')
+            const { loadDashboardConfig } = useProjectStore.getState()
+            const savedConfig = await loadDashboardConfig(projectId)
+
+            // Set this flag early to prevent AI analysis from triggering
+            if (savedConfig && savedConfig.chartCustomizations && Object.keys(savedConfig.chartCustomizations).length > 0) {
+              analysisInitiatedRef.current = true
+              console.log('✅ [DASHBOARD] Found saved config, marking to skip AI analysis')
             }
+
+            // Now safe to set rawData
+            await setRawData(projectData.rawData)
+
+            if (savedConfig && savedConfig.chartCustomizations && Object.keys(savedConfig.chartCustomizations).length > 0) {
+              console.log('✅ [DASHBOARD] Found saved dashboard config, applying customizations')
+
+              // Apply saved config to the analysis
+              if (projectData.analysis) {
+                const updatedAnalysis = {
+                  ...projectData.analysis,
+                  chartConfig: projectData.analysis.chartConfig.map((chart: any) => {
+                    const chartId = chart.id || `chart-${projectData.analysis.chartConfig.indexOf(chart)}`
+                    const customization = savedConfig.chartCustomizations[chartId]
+
+                    if (customization) {
+                      return {
+                        ...chart,
+                        customization
+                      }
+                    }
+                    return chart
+                  })
+                }
+
+                setAnalysis(updatedAnalysis)
+                analysisInitiatedRef.current = true
+                console.log('✅ [DASHBOARD] Loaded saved dashboard, skipping AI analysis')
+              }
+            } else {
+              console.log('ℹ️ [DASHBOARD] No saved config found, will use default analysis')
+
+              // Use default analysis from project data
+              if (projectData.analysis) {
+                setAnalysis(projectData.analysis)
+                analysisInitiatedRef.current = true
+              } else {
+                analysisInitiatedRef.current = false
+              }
+            }
+
             if (projectData.dataSchema) {
               setDataSchema(projectData.dataSchema)
             }
-            // Reset the analysis initiated flag when loading a project
-            analysisInitiatedRef.current = false
+
+            // Config loading complete - clear loading state
+            setIsLoadingConfig(false)
           }
         } catch (error) {
           console.error('Failed to load project data:', error)
           const { setError } = useDataStore.getState()
           setError('Failed to load project data')
+          setIsLoadingConfig(false)
         }
       }
 
@@ -312,21 +455,16 @@ function DashboardContent() {
     }
 
     // Perform analysis if we have data but no analysis (only once)
-    if (rawData && rawData.length > 0 && !analysis && !isAnalyzing && !analysisInitiatedRef.current) {
+    // CRITICAL: Don't trigger if we're loading config - prevents race condition
+    if (rawData && rawData.length > 0 && !analysis && !isAnalyzing && !analysisInitiatedRef.current && !isLoadingConfig) {
       analysisInitiatedRef.current = true
       // Run analysis - it will use fallback charts if no API key
       performAnalysis()
     }
 
-    // CRITICAL LOGGING: Check what the dashboard sees in analysis
-    if (analysis) {
-      console.log('🎨 [DASHBOARD] ===== ANALYSIS IN DASHBOARD =====')
-      console.log('🎨 [DASHBOARD] analysis.chartConfig.length:', analysis?.chartConfig?.length || 0)
-      console.log('🎨 [DASHBOARD] Chart titles in dashboard:', analysis?.chartConfig?.map(c => c.title).join(', '))
-      console.log('🎨 [DASHBOARD] Chart types in dashboard:', analysis?.chartConfig?.map(c => c.type).join(', '))
-      console.log('🎨 [DASHBOARD] ===== END ANALYSIS =====')
-    }
-  }, [rawData, analysis, isAnalyzing, sessionId, currentSession, projectId, directId])
+    // Only log analysis once when it first loads (not on every render)
+    // Removed excessive logging to reduce console noise
+  }, [rawData, analysis, isAnalyzing, sessionId, currentSession, projectId, directId, isLoadingConfig])
 
   // Auto-open chat interface when on dashboard
   useEffect(() => {
@@ -431,24 +569,13 @@ function DashboardContent() {
   // Debug loading conditions
   const shouldShowLoading = isLoadingFromAPI ||
                             isWaitingForIndexedDB ||
+                            isLoadingConfig ||
                             isAnalyzing ||
                             (rawData && rawData.length > 0 && !analysis) ||
                             (fileName && !rawData) ||
                             (dataId && (!rawData || rawData.length === 0))
 
-  // Log when conditions change
-  React.useEffect(() => {
-    console.log('🔍 [DASHBOARD] Loading screen check:', {
-      shouldShowLoading,
-      isLoadingFromAPI,
-      isWaitingForIndexedDB,
-      isAnalyzing,
-      hasRawData: !!(rawData && rawData.length > 0),
-      hasAnalysis: !!analysis,
-      hasFileName: !!fileName,
-      hasDataId: !!dataId
-    })
-  }, [shouldShowLoading, isLoadingFromAPI, isWaitingForIndexedDB, isAnalyzing, rawData, analysis, fileName, dataId])
+  // Removed excessive loading state logging to reduce console noise
 
   if (shouldShowLoading) {
     // Determine loading message based on state
@@ -458,6 +585,9 @@ function DashboardContent() {
     if (isLoadingFromAPI) {
       loadingTitle = 'Loading your project...'
       loadingSubtitle = 'Retrieving data from database'
+    } else if (isLoadingConfig) {
+      loadingTitle = 'Loading saved dashboard...'
+      loadingSubtitle = 'Retrieving your customizations'
     } else if (isWaitingForIndexedDB) {
       loadingTitle = 'Loading your data...'
       loadingSubtitle = 'Retrieving from browser storage'
@@ -759,6 +889,9 @@ function DashboardContent() {
               {/* Date Range Selector - only shows if date columns detected */}
               <DateRangeSelector />
 
+              {/* Save Dashboard Button */}
+              <SaveDashboardButton />
+
               {/* User Management */}
               {user && (
                 <div className="hidden sm:flex items-center space-x-2 px-3 py-2 rounded-lg bg-gray-50 mr-2">
@@ -855,16 +988,6 @@ function DashboardContent() {
                 <div className="p-8 pb-24">
                   {/* Enhanced Flexible Dashboard Layout */}
                   {(() => {
-                    console.log('🔥 [DASHBOARD_PAGE] Render check:', {
-                      hasAnalysis: !!analysis,
-                      analysisIsNull: analysis === null,
-                      analysisIsUndefined: analysis === undefined,
-                      chartConfigLength: analysis?.chartConfig?.length || 0,
-                      chartTitles: analysis?.chartConfig?.map(c => c.title),
-                      dataLength: rawData.length,
-                      willRenderDashboard: !!analysis
-                    })
-
                     if (!analysis) {
                       console.warn('⚠️ [DASHBOARD_PAGE] Analysis is falsy - showing empty state instead of dashboard')
                       return (

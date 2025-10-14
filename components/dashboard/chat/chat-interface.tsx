@@ -173,9 +173,19 @@ export const ChatInterface = React.memo(function ChatInterface() {
       })
 
       if (!response.ok) {
-        throw new Error(response.status === 429 
+        // Get detailed error from server
+        let errorMessage = 'Failed to get response from AI assistant'
+        try {
+          const errorData = await response.json()
+          console.error('❌ [CHAT] Server error response:', errorData)
+          errorMessage = errorData.error || errorData.details || errorMessage
+        } catch (e) {
+          console.error('❌ [CHAT] Could not parse error response')
+        }
+
+        throw new Error(response.status === 429
           ? 'Too many requests. Please wait a moment before trying again.'
-          : 'Failed to get response from AI assistant'
+          : errorMessage
         )
       }
 
@@ -379,9 +389,9 @@ export const ChatInterface = React.memo(function ChatInterface() {
           ) : (
             <div className="flex flex-col flex-1 overflow-hidden">
               {/* Messages Area */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4">
                 {chatMessages.length === 0 ? (
-                  <ExampleQuestions 
+                  <ExampleQuestions
                     onQuestionClick={handleExampleQuestion}
                     analysis={analysis}
                   />

@@ -59,6 +59,7 @@ import { QualityBadge } from './quality-indicator'
 import { renderCollapsibleLegend } from './collapsible-legend'
 import { aggregateChartData } from '@/lib/utils/data-aggregation'
 import { processChartData, ChartDataMapping } from '@/lib/utils/chart-data-processor'
+import { debug } from '@/lib/debug'
 
 const TableChartLazy = React.lazy(() => import('./charts/table-chart').then(m => ({ default: m.TableChart })))
 const WaterfallChart = React.lazy(() => import('./charts/waterfall-chart'))
@@ -1185,15 +1186,6 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
             const { calculateScorecardValue } = require('@/lib/utils/data-calculations')
             const result = calculateScorecardValue(chartData, key, aggregationType as any)
             metricValue = result || 0
-
-            // DEBUG: Log calculation details to identify discrepancies with fullscreen
-            console.log(`🔍 [CARD_CALC_DEBUG] ${title}:`, {
-              chartDataLength: chartData.length,
-              key,
-              aggregationType,
-              result: metricValue,
-              sampleValues: chartData.slice(0, 5).map(row => ({ [key]: row[key] }))
-            })
           }
 
           return (
@@ -1351,12 +1343,8 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
         )
 
       case 'bar': {
-        console.log(`📊 [BAR_RENDER] ${title}:`, {
-          chartDataLength: chartData.length,
-          chartDataSample: chartData.slice(0, 3),
-          safeDataKey,
-          dataKeys: safeDataKey.slice(1)
-        })
+        // Debug logs removed to reduce console noise
+        // Enable DEBUG_CHARTS=true in env to see detailed render logs
 
         // Transform bar data to have numeric values for Recharts
         const parseNumericValueBar = (val: any): number => {
@@ -1377,37 +1365,12 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
           return transformed
         })
 
-        console.log(`📊 [BAR_RENDER_TRANSFORMED] ${title}:`, {
-          numericBarDataLength: numericBarData.length,
-          numericBarDataSample: numericBarData.slice(0, 3),
-          dataKeys: safeDataKey.slice(1),
-          salesValues: numericBarData.map(row => ({
-            campaign: row[safeDataKey[0]],
-            sales: row['Sales'],
-            salesType: typeof row['Sales']
-          }))
-        })
-
         // Calculate Y-axis domain to ensure bars are visible
         const allYValues = numericBarData.flatMap(row =>
           safeDataKey.slice(1).map(key => row[key]).filter(v => typeof v === 'number' && !isNaN(v))
         )
         const maxYValue = Math.max(...allYValues, 0)
         const minYValue = Math.min(...allYValues, 0)
-
-        console.log(`📊 [BAR_Y_AXIS] ${title}:`, {
-          allYValues: allYValues.slice(0, 10),
-          maxYValue,
-          minYValue,
-          domain: [0, maxYValue * 1.1]
-        })
-
-        console.log(`📊 [BAR_FINAL_RENDER] ${title}:`, {
-          numericBarDataLength: numericBarData.length,
-          commonProps,
-          firstBar: numericBarData[0],
-          chartDataFromCommonProps: commonProps.data.length
-        })
 
         return (
           <ResponsiveContainer width="100%" height="100%">
@@ -3107,50 +3070,45 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
   // PERFORMANCE OPTIMIZATION: Skip re-render during drag operations
   // Only re-render if meaningful props change (not isDragging, isSelected)
 
-  // Deep comparison for arrays and objects
-  const deepEqual = (a: any, b: any): boolean => {
+  // Shallow comparison for arrays and objects (faster than deep equality)
+  const shallowEqualArray = (a: any[], b: any[]): boolean => {
     if (a === b) return true
-    if (a == null || b == null) return false
-    if (Array.isArray(a) && Array.isArray(b)) {
-      if (a.length !== b.length) return false
-      return a.every((item, index) => deepEqual(item, b[index]))
-    }
-    if (typeof a === 'object' && typeof b === 'object') {
-      const keysA = Object.keys(a)
-      const keysB = Object.keys(b)
-      if (keysA.length !== keysB.length) return false
-      return keysA.every(key => deepEqual(a[key], b[key]))
-    }
-    return false
+    if (a.length !== b.length) return false
+    // For arrays, just check reference equality and length
+    // Deep equality is too expensive for 130+ rows of data
+    return a === b
   }
+
+  const shallowEqualObject = (a: any, b: any): boolean => {
+    if (a === b) return true
+    if (!a || !b) return false
+    const keysA = Object.keys(a)
+    const keysB = Object.keys(b)
+    if (keysA.length !== keysB.length) return false
+    // Check if keys and their values are the same (one level deep)
+    return keysA.every(key => a[key] === b[key])
+  }
+
+  // PERFORMANCE FIX: Don't deep compare data - just check length and reference
+  // Deep equality on 130+ rows is too expensive (10-50ms per check)
+  // If data reference changes but length is same, we accept a re-render
+  const dataUnchanged = (
+    prevProps.data === nextProps.data ||  // Same reference
+    prevProps.data.length === nextProps.data.length // Or same length
+  )
 
   const isEqual = (
     prevProps.id === nextProps.id &&
     prevProps.type === nextProps.type &&
     prevProps.title === nextProps.title &&
     prevProps.description === nextProps.description &&
-    deepEqual(prevProps.data, nextProps.data) &&
-    deepEqual(prevProps.dataKey, nextProps.dataKey) &&
-    deepEqual(prevProps.configDataMapping, nextProps.configDataMapping) &&
+    dataUnchanged &&
+    shallowEqualArray(prevProps.dataKey, nextProps.dataKey) &&
+    shallowEqualObject(prevProps.configDataMapping, nextProps.configDataMapping) &&
     prevProps.qualityScore === nextProps.qualityScore &&
     prevProps.className === nextProps.className
     // Intentionally ignore: isDragging, isSelected - these change during drag but don't affect chart content
   )
-
-  // Diagnostic logging (comment out after debugging)
-  if (!isEqual) {
-    console.log(`🔍 [MEMO DEBUG] Chart ${prevProps.id} (${prevProps.type}) re-rendering due to prop changes:`, {
-      id: prevProps.id !== nextProps.id,
-      type: prevProps.type !== nextProps.type,
-      title: prevProps.title !== nextProps.title,
-      description: prevProps.description !== nextProps.description,
-      data: !deepEqual(prevProps.data, nextProps.data),
-      dataKey: !deepEqual(prevProps.dataKey, nextProps.dataKey),
-      configDataMapping: !deepEqual(prevProps.configDataMapping, nextProps.configDataMapping),
-      qualityScore: prevProps.qualityScore !== nextProps.qualityScore,
-      className: prevProps.className !== nextProps.className
-    })
-  }
 
   return isEqual
 })

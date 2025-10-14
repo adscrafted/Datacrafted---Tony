@@ -419,3 +419,13 @@
 .highlighted-row {
   animation: highlight-flash 1s ease-in-out;
 }
+
+/* Text wrapping utilities for chat messages */
+@layer utilities {
+  .overflow-wrap-anywhere {
+    overflow-wrap: anywhere;
+    word-wrap: anywhere;
+    word-break: break-word;
+    hyphens: auto;
+  }
+}

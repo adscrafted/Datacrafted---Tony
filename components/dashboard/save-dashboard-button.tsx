@@ -31,19 +31,32 @@ export function SaveDashboardButton() {
     chartCustomizations,
     currentLayout,
     dashboardFilters,
-    currentTheme
+    currentTheme,
+    analysisChartCount: analysis?.chartConfig?.length || 0
   })
 
   // Monitor for changes and mark as dirty
   useEffect(() => {
     const prev = prevStateRef.current
+    const currentAnalysisChartCount = analysis?.chartConfig?.length || 0
+
     const hasChanges =
       JSON.stringify(chartCustomizations) !== JSON.stringify(prev.chartCustomizations) ||
       JSON.stringify(currentLayout) !== JSON.stringify(prev.currentLayout) ||
       JSON.stringify(dashboardFilters) !== JSON.stringify(prev.dashboardFilters) ||
-      JSON.stringify(currentTheme) !== JSON.stringify(prev.currentTheme)
+      JSON.stringify(currentTheme) !== JSON.stringify(prev.currentTheme) ||
+      currentAnalysisChartCount !== prev.analysisChartCount // Detect when charts are added/removed
 
     if (hasChanges && !isDirty) {
+      console.log('🟠 [SAVE_DASHBOARD] Changes detected, marking as dirty:', {
+        chartCustomizationsChanged: JSON.stringify(chartCustomizations) !== JSON.stringify(prev.chartCustomizations),
+        layoutChanged: JSON.stringify(currentLayout) !== JSON.stringify(prev.currentLayout),
+        filtersChanged: JSON.stringify(dashboardFilters) !== JSON.stringify(prev.dashboardFilters),
+        themeChanged: JSON.stringify(currentTheme) !== JSON.stringify(prev.currentTheme),
+        chartCountChanged: currentAnalysisChartCount !== prev.analysisChartCount,
+        prevChartCount: prev.analysisChartCount,
+        currentChartCount: currentAnalysisChartCount
+      })
       markAsDirty()
     }
 
@@ -51,9 +64,10 @@ export function SaveDashboardButton() {
       chartCustomizations,
       currentLayout,
       dashboardFilters,
-      currentTheme
+      currentTheme,
+      analysisChartCount: currentAnalysisChartCount
     }
-  }, [chartCustomizations, currentLayout, dashboardFilters, currentTheme, isDirty, markAsDirty])
+  }, [chartCustomizations, currentLayout, dashboardFilters, currentTheme, analysis?.chartConfig?.length, isDirty, markAsDirty])
 
   // Keyboard shortcut handler (Cmd/Ctrl + S)
   const handleSaveRef = useRef<() => void>()

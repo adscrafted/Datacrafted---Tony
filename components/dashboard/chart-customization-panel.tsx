@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ColorPicker } from '@/components/ui/color-picker'
 import { ChartCustomization, useDataStore } from '@/lib/store'
+import { debug } from '@/lib/debug'
 
 interface ChartCustomizationPanelProps {
   chartId: string
@@ -69,27 +70,19 @@ export function ChartCustomizationPanel({
   // Only trigger once when autoOpen changes from false to true
   const prevAutoOpenRef = React.useRef<boolean | undefined>(undefined)
   React.useEffect(() => {
-    console.log('🔍 [CUSTOMIZATION_PANEL] Auto-open useEffect triggered:', {
-      chartId,
-      autoOpen,
-      prevAutoOpen: prevAutoOpenRef.current,
-      isOpen,
-      willOpen: autoOpen && !prevAutoOpenRef.current && !isOpen
-    })
-
     // Only open if autoOpen is true AND it wasn't true before (edge trigger, not level trigger)
-    if (autoOpen && !prevAutoOpenRef.current && !isOpen) {
-      console.log('📂 [CUSTOMIZATION_PANEL] Auto-opening panel for chart:', chartId)
+    // IMPORTANT: Don't include isOpen in deps to avoid infinite loops
+    if (autoOpen && !prevAutoOpenRef.current) {
       setIsOpen(true)
     }
     prevAutoOpenRef.current = autoOpen
-  }, [autoOpen, isOpen, chartId])
+  }, [autoOpen, chartId])
 
   // Allow external control of active tab via initialTab prop
   // IMPORTANT: Set tab when panel opens OR when initialTab changes
   React.useEffect(() => {
     if (initialTab && isOpen) {
-      console.log('📂 [CUSTOMIZATION_PANEL] Setting active tab to:', initialTab)
+      debug.panel('📂 [CUSTOMIZATION_PANEL] Setting active tab to:', initialTab)
       setActiveTab(initialTab)
     }
   }, [initialTab, isOpen])
@@ -102,7 +95,7 @@ export function ChartCustomizationPanel({
   // Clean up draft chart if panel is closed without committing
   const handleClose = React.useCallback(() => {
     if (isDraftChart) {
-      console.log('🗑️ [CUSTOMIZATION_PANEL] Canceling draft chart - clearing draft')
+      debug.panel('🗑️ [CUSTOMIZATION_PANEL] Canceling draft chart - clearing draft')
       setDraftChart(null)
     }
     setIsOpen(false)
@@ -255,7 +248,7 @@ export function ChartCustomizationPanel({
         customDescription: description
       })
 
-      console.log('Generated title and description:', { title, description })
+      debug.panel('Generated title and description:', { title, description })
     } catch (error) {
       console.error('Error generating title/description:', error)
       const errorMessage = error instanceof Error ? error.message : 'Failed to generate title and description'
@@ -2865,7 +2858,7 @@ export function ChartCustomizationPanel({
 
                           // CRITICAL: If this is a draft chart, commit it to the dashboard
                           if (isDraftChart) {
-                            console.log('✅ [CUSTOMIZATION_PANEL] Committing draft chart to dashboard')
+                            debug.panel('✅ [CUSTOMIZATION_PANEL] Committing draft chart to dashboard')
                             commitDraftChart()
                           }
 

@@ -39,37 +39,37 @@ export function ChartSuggestions({ suggestions, onApplySuggestion }: ChartSugges
         <BarChart3 className="h-4 w-4 text-blue-600" />
         <span className="text-sm font-medium text-blue-800">Suggested Charts</span>
       </div>
-      
+
       <div className="space-y-2">
         {suggestions.map((suggestion, index) => {
           const IconComponent = getChartIcon(suggestion.type)
           return (
             <div key={index} className="bg-white rounded-lg p-3 border border-blue-200">
-              <div className="flex items-start justify-between">
-                <div className="flex items-start space-x-2 flex-1">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                <div className="flex items-start space-x-2 flex-1 min-w-0">
                   <IconComponent className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
+                    <p className="text-sm font-medium text-gray-900 break-words">
                       {suggestion.title || 'Untitled Chart'}
                     </p>
                     {suggestion.description && (
-                      <p className="text-xs text-gray-600 mt-1">
+                      <p className="text-xs text-gray-600 mt-1 break-words">
                         {suggestion.description}
                       </p>
                     )}
                     {suggestion.reason && (
-                      <p className="text-xs text-blue-600 mt-1 italic">
+                      <p className="text-xs text-blue-600 mt-1 italic break-words">
                         {suggestion.reason}
                       </p>
                     )}
                   </div>
                 </div>
-                
+
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => onApplySuggestion(suggestion)}
-                  className="ml-2 text-xs h-7 px-2 border-blue-300 text-blue-700 hover:bg-blue-100"
+                  className="text-xs h-7 px-2 border-blue-300 text-blue-700 hover:bg-blue-100 shrink-0 w-full sm:w-auto"
                 >
                   Apply
                 </Button>

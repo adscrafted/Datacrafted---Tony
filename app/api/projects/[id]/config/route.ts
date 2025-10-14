@@ -37,11 +37,14 @@ const getHandler = withAuth(async (request, authUser, context) => {
       )
     }
 
+    // Use database user ID (CUID) not Firebase UID
+    const databaseUserId = project.users.id
+
     // Get dashboard config
     const config = await db.dashboard_configs.findFirst({
       where: {
         projectId,
-        userId: authUser.uid,
+        userId: databaseUserId,
       },
       orderBy: {
         updatedAt: 'desc',
@@ -135,15 +138,18 @@ const putHandler = withAuth(async (request, authUser, context) => {
       dashboardFilters = null,
     } = body
 
-    // Generate config ID (combination of userId and projectId)
-    const configId = `${authUser.uid}_${projectId}`
+    // Use database user ID (CUID) not Firebase UID
+    const databaseUserId = project.users.id
+
+    // Generate config ID (combination of database userId and projectId)
+    const configId = `${databaseUserId}_${projectId}`
 
     // Upsert dashboard config
     const config = await db.dashboard_configs.upsert({
       where: { id: configId },
       create: {
         id: configId,
-        userId: authUser.uid,
+        userId: databaseUserId,
         projectId,
         chartCustomizations: JSON.stringify(chartCustomizations),
         currentTheme: currentTheme ? JSON.stringify(currentTheme) : null,

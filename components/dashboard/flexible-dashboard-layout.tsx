@@ -100,6 +100,8 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
   const { currentProjectId, saveDashboardConfig, loadDashboardConfig } = useProjectStore()
 
   // Wrap filtered data in useMemo with proper dependencies
+  // PERFORMANCE FIX: Don't depend on getFilteredData function reference
+  // Instead, call it directly and depend only on the state values that affect filtering
   const filteredData = useMemo(() => {
     const result = getFilteredData()
     // IMPORTANT: If store returns empty but we have data prop, use data prop
@@ -108,7 +110,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       return data
     }
     return result
-  }, [getFilteredData, dateRange, granularity, selectedDateColumn, data.length, data])
+  }, [dateRange, granularity, selectedDateColumn, data])
 
   // Update available columns when data changes
   useEffect(() => {
@@ -140,6 +142,9 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProjectId])
 
+  // PERFORMANCE: Cache for chart validation to prevent expensive re-runs
+  const validationCache = useRef<Map<string, any>>(new Map())
+
   // Filter out invalid charts before rendering
   const validCharts = useMemo(() => {
     // CRITICAL FIX: If data is empty but we have charts, don't filter them out
@@ -148,8 +153,25 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       return analysis.chartConfig || []
     }
 
-    return filterValidCharts(analysis.chartConfig, data)
-  }, [analysis.chartConfig, data])
+    // PERFORMANCE FIX: Only re-validate if chart count or data count changes
+    // Cache key based on chart count and data length (not full arrays)
+    const cacheKey = `${analysis.chartConfig?.length || 0}-${data.length}`
+
+    if (validationCache.current.has(cacheKey)) {
+      return validationCache.current.get(cacheKey)
+    }
+
+    const result = filterValidCharts(analysis.chartConfig, data)
+    validationCache.current.set(cacheKey, result)
+
+    // Limit cache size to prevent memory leaks
+    if (validationCache.current.size > 10) {
+      const firstKey = validationCache.current.keys().next().value
+      validationCache.current.delete(firstKey)
+    }
+
+    return result
+  }, [analysis.chartConfig?.length, data.length])
 
   // Sort charts by quality score (highest first), keeping scorecards separate
   // CRITICAL: Filter out draft chart from rendering - it should NOT appear on dashboard yet
@@ -590,7 +612,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
             theme: currentTheme
           }
           saveDashboardConfig(currentProjectId, config).catch(console.error)
-        }, 2000) // Increased to 2 seconds to reduce save frequency
+        }, 5000) // PERFORMANCE: Increased to 5 seconds to significantly reduce database writes
       }
     }, 150) // 150ms throttle - balance between responsiveness and performance
   }, [batchUpdateChartCustomizations, autoSaveLayouts, showSaveDialog, validateLayout, currentProjectId, chartCustomizations, currentLayout, dashboardFilters, currentTheme, saveDashboardConfig, sortedCharts, analysis.chartConfig])
