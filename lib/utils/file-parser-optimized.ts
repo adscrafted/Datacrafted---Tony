@@ -1,5 +1,7 @@
 import { DataRow } from '@/lib/store'
 import { fileDataCache, getCacheKey } from './cache-manager'
+import { parseCSV, parseExcel } from './file-parser'
+import { parseFileStreaming } from './streaming-parser'
 
 export interface ParseProgress {
   loaded: number
@@ -186,94 +188,123 @@ class FileParserOptimized {
     file: File,
     options: ParseOptions
   ): Promise<ParseResult> {
+    console.log('[PARSER] parseOnMainThread called', {
+      fileName: file.name,
+      fileSize: file.size,
+      extension: file.name.split('.').pop()?.toLowerCase()
+    })
+
     const { onProgress } = options
     const extension = file.name.split('.').pop()?.toLowerCase()
 
-    // Use streaming parser for large CSV files
-    if (extension === 'csv' && file.size > 5 * 1024 * 1024) { // 5MB threshold
-      const { parseFileStreaming } = await import('@/lib/utils/streaming-parser')
-      
-      const result = await parseFileStreaming(file, {
-        onProgress: (streamProgress) => {
-          onProgress?.({
-            loaded: streamProgress.bytesRead,
-            total: streamProgress.totalBytes,
-            percentage: streamProgress.percentage,
-            stage: streamProgress.percentage < 30 ? 'reading' : 
-                   streamProgress.percentage < 90 ? 'parsing' : 'analyzing',
-            rowsProcessed: streamProgress.rowsProcessed
-          })
-        },
-        signal: options.signal
-      })
-
-      return {
-        data: result.data,
-        meta: {
-          fields: result.meta.fields,
-          rowCount: result.meta.totalRows,
-          parseTime: result.meta.parseTime,
-          fileSize: file.size
-        },
-        errors: result.errors
-      }
-    }
-
-    // Fallback to regular parsing for smaller files or Excel files
-    const { parseCSV, parseExcel } = await import('@/lib/utils/file-parser')
-    
-    const startTime = performance.now()
-
-    // Simulate progress reporting for main thread parsing
-    let progress = 0
-    const progressInterval = setInterval(() => {
-      progress = Math.min(progress + 10, 90)
-      onProgress?.({
-        loaded: (file.size * progress) / 100,
-        total: file.size,
-        percentage: progress,
-        stage: progress < 30 ? 'reading' : progress < 70 ? 'parsing' : 'analyzing'
-      })
-    }, 100)
-
     try {
-      let data: DataRow[]
+      // Use streaming parser for large CSV files
+      if (extension === 'csv' && file.size > 5 * 1024 * 1024) { // 5MB threshold
+        console.log('[PARSER] File qualifies for streaming parser (>5MB CSV)')
 
-      switch (extension) {
-        case 'csv':
-          data = await parseCSV(file)
-          break
-        case 'xlsx':
-        case 'xls':
-          data = await parseExcel(file)
-          break
-        default:
-          throw new Error('Unsupported file type')
-      }
+        try {
+          console.log('[PARSER] Calling parseFileStreaming...')
+          const result = await parseFileStreaming(file, {
+            onProgress: (streamProgress) => {
+              onProgress?.({
+                loaded: streamProgress.bytesRead,
+                total: streamProgress.totalBytes,
+                percentage: streamProgress.percentage,
+                stage: streamProgress.percentage < 30 ? 'reading' :
+                       streamProgress.percentage < 90 ? 'parsing' : 'analyzing',
+                rowsProcessed: streamProgress.rowsProcessed
+              })
+            },
+            signal: options.signal
+          })
+          console.log('[PARSER] Streaming parse completed', {
+            rowCount: result.data.length,
+            parseTime: result.meta.parseTime
+          })
 
-      clearInterval(progressInterval)
-      
-      const parseTime = performance.now() - startTime
-      
-      onProgress?.({
-        loaded: file.size,
-        total: file.size,
-        percentage: 100,
-        stage: 'complete',
-        rowsProcessed: data.length
-      })
-
-      return {
-        data,
-        meta: {
-          fields: Object.keys(data[0] || {}),
-          rowCount: data.length,
-          parseTime,
-          fileSize: file.size
+          return {
+            data: result.data,
+            meta: {
+              fields: result.meta.fields,
+              rowCount: result.meta.totalRows,
+              parseTime: result.meta.parseTime,
+              fileSize: file.size
+            },
+            errors: result.errors
+          }
+        } catch (streamError) {
+          console.error('[PARSER] Streaming parser failed:', streamError)
+          console.log('[PARSER] Falling back to regular parser')
+          // Fall through to regular parsing
         }
       }
+
+      // Fallback to regular parsing for smaller files or Excel files
+      console.log('[PARSER] Using regular parser for file')
+
+      const startTime = performance.now()
+
+      // Simulate progress reporting for main thread parsing
+      let progress = 0
+      const progressInterval = setInterval(() => {
+        progress = Math.min(progress + 10, 90)
+        onProgress?.({
+          loaded: (file.size * progress) / 100,
+          total: file.size,
+          percentage: progress,
+          stage: progress < 30 ? 'reading' : progress < 70 ? 'parsing' : 'analyzing'
+        })
+      }, 100)
+
+      try {
+        let data: DataRow[]
+        console.log('[PARSER] Starting file parsing based on extension:', extension)
+
+        switch (extension) {
+          case 'csv':
+            console.log('[PARSER] Calling parseCSV...')
+            data = await parseCSV(file)
+            console.log('[PARSER] parseCSV completed, rows:', data.length)
+            break
+          case 'xlsx':
+          case 'xls':
+            console.log('[PARSER] Calling parseExcel...')
+            data = await parseExcel(file)
+            console.log('[PARSER] parseExcel completed, rows:', data.length)
+            break
+          default:
+            throw new Error('Unsupported file type')
+        }
+
+        clearInterval(progressInterval)
+        console.log('[PARSER] Parse completed successfully')
+
+        const parseTime = performance.now() - startTime
+
+        onProgress?.({
+          loaded: file.size,
+          total: file.size,
+          percentage: 100,
+          stage: 'complete',
+          rowsProcessed: data.length
+        })
+
+        return {
+          data,
+          meta: {
+            fields: Object.keys(data[0] || {}),
+            rowCount: data.length,
+            parseTime,
+            fileSize: file.size
+          }
+        }
+      } catch (error) {
+        console.error('[PARSER] Parse error in try block:', error)
+        clearInterval(progressInterval)
+        throw error
+      }
     } catch (error) {
-      clearInterval(progressInterval)
+      console.error('[PARSER] parseOnMainThread error:', error)
       throw error
     }
   }
