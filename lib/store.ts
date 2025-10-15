@@ -250,24 +250,6 @@ export interface ChatMessage {
   timestamp: string
 }
 
-export interface ChatConversation {
-  id: string
-  name: string
-  projectId: string
-  messageCount: number
-  lastMessageAt?: string
-  lastMessagePreview?: string
-  isPinned: boolean
-  createdAt: string
-  updatedAt: string
-}
-
-export interface MessagePagination {
-  cursor: string | null
-  hasMore: boolean
-  isLoading: boolean
-}
-
 export interface SessionInfo {
   id: string
   name?: string
@@ -325,12 +307,6 @@ interface DataStore {
   isChatOpen: boolean
   isChatLoading: boolean
   chatError: string | null
-
-  // Conversation management state
-  conversations: ChatConversation[]
-  currentConversationId: string | null
-  isLoadingConversations: boolean
-  messagePagination: MessagePagination
 
   // Dashboard customization state
   currentTheme: DashboardTheme
@@ -419,17 +395,6 @@ interface DataStore {
   clearChatHistory: () => void
   saveChatMessage: (message: ChatMessage) => Promise<void>
 
-  // Conversation management actions
-  loadConversations: (projectId: string) => Promise<void>
-  createConversation: (projectId: string, name?: string) => Promise<string | null>
-  selectConversation: (conversationId: string | null) => Promise<void>
-  loadMoreMessages: () => Promise<void>
-  sendMessage: (content: string) => Promise<void>
-  setConversations: (conversations: ChatConversation[]) => void
-  setCurrentConversationId: (id: string | null) => void
-  setIsLoadingConversations: (isLoading: boolean) => void
-  setMessagePagination: (pagination: MessagePagination) => void
-  
   // Dashboard customization actions
   setCurrentTheme: (theme: DashboardTheme) => void
   addCustomTheme: (theme: DashboardTheme) => void
@@ -784,16 +749,6 @@ export const useDataStore = create<DataStore>()(
       isChatLoading: false,
       chatError: null,
 
-      // Conversation management state
-      conversations: [],
-      currentConversationId: null,
-      isLoadingConversations: false,
-      messagePagination: {
-        cursor: null,
-        hasMore: false,
-        isLoading: false
-      },
-      
       // Dashboard customization state
       currentTheme: defaultThemes[0],
       availableThemes: defaultThemes,
@@ -1136,258 +1091,6 @@ export const useDataStore = create<DataStore>()(
         }
       },
 
-      // Conversation management actions
-      loadConversations: async (projectId) => {
-        set({ isLoadingConversations: true, chatError: null })
-
-        try {
-          const response = await fetch(`/api/chat/conversations?projectId=${projectId}`)
-
-          if (!response.ok) {
-            throw new Error('Failed to load conversations')
-          }
-
-          const { conversations } = await response.json()
-          set({
-            conversations,
-            isLoadingConversations: false
-          })
-        } catch (error) {
-          console.error('[STORE] Failed to load conversations:', error)
-          set({
-            chatError: error instanceof Error ? error.message : 'Failed to load conversations',
-            isLoadingConversations: false
-          })
-        }
-      },
-
-      createConversation: async (projectId, name) => {
-        set({ isChatLoading: true, chatError: null })
-
-        try {
-          const response = await fetch('/api/chat/conversations', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ projectId, name }),
-          })
-
-          if (!response.ok) {
-            throw new Error('Failed to create conversation')
-          }
-
-          const { conversation } = await response.json()
-
-          // Add to conversations list
-          set(state => {
-            // CRITICAL FIX: Ensure conversations is always an array before spreading
-            // This prevents "conversations is not iterable" error during hydration
-            const currentConversations = Array.isArray(state.conversations)
-              ? state.conversations
-              : []
-
-            return {
-              conversations: [conversation, ...currentConversations],
-              currentConversationId: conversation.id,
-              chatMessages: [], // Clear messages for new conversation
-              messagePagination: {
-                cursor: null,
-                hasMore: false,
-                isLoading: false
-              },
-              isChatLoading: false
-            }
-          })
-
-          return conversation.id
-        } catch (error) {
-          console.error('[STORE] Failed to create conversation:', error)
-          set({
-            chatError: error instanceof Error ? error.message : 'Failed to create conversation',
-            isChatLoading: false
-          })
-          return null
-        }
-      },
-
-      selectConversation: async (conversationId) => {
-        if (!conversationId) {
-          set({
-            currentConversationId: null,
-            chatMessages: [],
-            messagePagination: {
-              cursor: null,
-              hasMore: false,
-              isLoading: false
-            }
-          })
-          return
-        }
-
-        set({ isChatLoading: true, chatError: null })
-
-        try {
-          // Fetch first page of messages for this conversation
-          const response = await fetch(`/api/chat/conversations/${conversationId}/messages`)
-
-          if (!response.ok) {
-            throw new Error('Failed to load messages')
-          }
-
-          const { messages, hasMore, nextCursor } = await response.json()
-
-          set({
-            currentConversationId: conversationId,
-            chatMessages: messages,
-            messagePagination: {
-              cursor: nextCursor,
-              hasMore,
-              isLoading: false
-            },
-            isChatLoading: false
-          })
-        } catch (error) {
-          console.error('[STORE] Failed to select conversation:', error)
-          set({
-            chatError: error instanceof Error ? error.message : 'Failed to load messages',
-            isChatLoading: false
-          })
-        }
-      },
-
-      loadMoreMessages: async () => {
-        const state = get()
-        if (!state.currentConversationId || !state.messagePagination.hasMore || state.messagePagination.isLoading) {
-          return
-        }
-
-        set(state => ({
-          messagePagination: {
-            ...state.messagePagination,
-            isLoading: true
-          }
-        }))
-
-        try {
-          const url = `/api/chat/conversations/${state.currentConversationId}/messages?cursor=${state.messagePagination.cursor}`
-          const response = await fetch(url)
-
-          if (!response.ok) {
-            throw new Error('Failed to load more messages')
-          }
-
-          const { messages, hasMore, nextCursor } = await response.json()
-
-          set(state => ({
-            // Prepend older messages
-            chatMessages: [...messages, ...state.chatMessages],
-            messagePagination: {
-              cursor: nextCursor,
-              hasMore,
-              isLoading: false
-            }
-          }))
-        } catch (error) {
-          console.error('[STORE] Failed to load more messages:', error)
-          set(state => ({
-            chatError: error instanceof Error ? error.message : 'Failed to load more messages',
-            messagePagination: {
-              ...state.messagePagination,
-              isLoading: false
-            }
-          }))
-        }
-      },
-
-      sendMessage: async (content) => {
-        const state = get()
-        if (!state.currentConversationId) {
-          console.error('[STORE] Cannot send message: no conversation selected')
-          return
-        }
-
-        // Optimistically add user message to UI
-        const tempUserMessage: ChatMessage = {
-          id: `temp-${Date.now()}`,
-          role: 'user',
-          content,
-          timestamp: new Date().toISOString()
-        }
-
-        set(state => ({
-          chatMessages: [...state.chatMessages, tempUserMessage],
-          isChatLoading: true
-        }))
-
-        try {
-          // Send user message to API
-          const response = await fetch(`/api/chat/conversations/${state.currentConversationId}/messages`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              role: 'user',
-              content
-            }),
-          })
-
-          if (!response.ok) {
-            throw new Error('Failed to send message')
-          }
-
-          const { message } = await response.json()
-
-          // Replace temp message with real one
-          set(state => ({
-            chatMessages: state.chatMessages.map(msg =>
-              msg.id === tempUserMessage.id ? message : msg
-            ),
-            isChatLoading: false
-          }))
-
-          // Update conversation list (move to top, update preview)
-          set(state => {
-            // CRITICAL FIX: Ensure conversations is always an array
-            const currentConversations = Array.isArray(state.conversations)
-              ? state.conversations
-              : []
-
-            return {
-              conversations: currentConversations.map(conv =>
-                conv.id === state.currentConversationId
-                  ? {
-                      ...conv,
-                      messageCount: conv.messageCount + 1,
-                      lastMessageAt: message.timestamp,
-                      lastMessagePreview: content.substring(0, 100),
-                      updatedAt: new Date().toISOString()
-                    }
-                  : conv
-              ).sort((a, b) => {
-                // Sort by last message time (most recent first)
-                return new Date(b.lastMessageAt || b.createdAt).getTime() -
-                       new Date(a.lastMessageAt || a.createdAt).getTime()
-              })
-            }
-          })
-        } catch (error) {
-          console.error('[STORE] Failed to send message:', error)
-          // Remove temp message on error
-          set(state => ({
-            chatMessages: state.chatMessages.filter(msg => msg.id !== tempUserMessage.id),
-            chatError: error instanceof Error ? error.message : 'Failed to send message',
-            isChatLoading: false
-          }))
-        }
-      },
-
-      setConversations: (conversations) => set({ conversations }),
-      setCurrentConversationId: (id) => set({ currentConversationId: id }),
-      setIsLoadingConversations: (isLoading) => set({ isLoadingConversations: isLoading }),
-      setMessagePagination: (pagination) => set({ messagePagination: pagination }),
-      
       // Dashboard customization actions
       setCurrentTheme: (theme) => {
         set({ currentTheme: theme })
@@ -2514,10 +2217,6 @@ export const useDataStore = create<DataStore>()(
         currentSession: state.currentSession,
         // Store a flag indicating data exists
         hasData: state.rawData && state.rawData.length > 0,
-        // Persist conversation state
-        // CRITICAL FIX: Always ensure conversations is an array when persisting
-        conversations: Array.isArray(state.conversations) ? state.conversations : [],
-        currentConversationId: state.currentConversationId,
       }),
       onRehydrateStorage: (state) => {
         return (rehydratedState, error) => {
@@ -2527,13 +2226,6 @@ export const useDataStore = create<DataStore>()(
           }
 
           if (rehydratedState) {
-            // CRITICAL FIX: Ensure conversations is always an array after hydration
-            // This prevents "conversations is not iterable" error
-            if (!Array.isArray(rehydratedState.conversations)) {
-              console.warn('[STORE] Hydration: conversations is not an array, resetting to []')
-              useDataStore.setState({ conversations: [] })
-            }
-
             // Load data from IndexedDB after store hydration
             if (rehydratedState.dataId && !rehydratedState.rawData?.length) {
               dataStorage.loadData(rehydratedState.dataId).then(data => {

@@ -221,7 +221,7 @@ export const ChatInterface = React.memo(function ChatInterface() {
                     addChatMessage(assistantMessage)
                     setStreamingMessage('')
                     setIsStreaming(false)
-                    
+
                     // Extract chart suggestions from the final message
                     const suggestions = extractChartSuggestions(accumulatedContent)
                     setChartSuggestions(suggestions)
@@ -249,7 +249,7 @@ export const ChatInterface = React.memo(function ChatInterface() {
       } else {
         // Handle non-streaming response (fallback)
         const data = await response.json()
-        
+
         const assistantMessage: ChatMessage = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
@@ -258,7 +258,7 @@ export const ChatInterface = React.memo(function ChatInterface() {
         }
 
         addChatMessage(assistantMessage)
-        
+
         // Extract chart suggestions from the message
         const suggestions = extractChartSuggestions(data.message)
         setChartSuggestions(suggestions)
@@ -298,20 +298,20 @@ export const ChatInterface = React.memo(function ChatInterface() {
         timestamp: new Date().toISOString()
       }
       addChatMessage(chartMessage)
-      
+
       // Clear suggestions after applying
       setChartSuggestions([])
-      
+
       // Scroll to bottom to show the confirmation
       setTimeout(scrollToBottom, 100)
     }
   }
 
   const handleExportChat = () => {
-    const chatContent = chatMessages.map(msg => 
+    const chatContent = chatMessages.map(msg =>
       `${msg.role.toUpperCase()}: ${msg.content}\n`
     ).join('\n')
-    
+
     const blob = new Blob([chatContent], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -364,7 +364,7 @@ export const ChatInterface = React.memo(function ChatInterface() {
             <div className="mt-2 p-2 bg-blue-50 rounded text-xs">
               <p className="font-medium text-blue-800">
                 Selected Chart: {
-                  analysis.chartConfig.find(c => 
+                  analysis.chartConfig.find(c =>
                     (c.id || `chart-${analysis.chartConfig.indexOf(c)}`) === selectedChartId
                   )?.title || 'Unknown'
                 }
@@ -398,14 +398,14 @@ export const ChatInterface = React.memo(function ChatInterface() {
                 ) : (
                   <ChatMessages messages={chatMessages} streamingMessage={streamingMessage} />
                 )}
-                
+
                 {isChatLoading && !isStreaming && (
                   <div className="flex items-center space-x-2 text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     <span className="text-sm">AI is thinking...</span>
                   </div>
                 )}
-                
+
                 {isStreaming && (
                   <div className="flex items-center space-x-2 text-muted-foreground">
                     <div className="flex space-x-1">
@@ -416,19 +416,19 @@ export const ChatInterface = React.memo(function ChatInterface() {
                     <span className="text-sm">AI is responding...</span>
                   </div>
                 )}
-                
+
                 {chatError && (
                   <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                     <p className="text-sm text-red-600">{chatError}</p>
                   </div>
                 )}
-                
+
                 <div ref={messagesEndRef} />
               </div>
 
               {/* Chart Suggestions */}
               {chartSuggestions.length > 0 && (
-                <ChartSuggestions 
+                <ChartSuggestions
                   suggestions={chartSuggestions}
                   onApplySuggestion={handleApplyChartSuggestion}
                 />
@@ -458,7 +458,7 @@ export const ChatInterface = React.memo(function ChatInterface() {
                     </Button>
                   </div>
                 )}
-                
+
                 {/* Chart Type Selector */}
                 <div className="mb-2">
                   <div className="relative" ref={dropdownRef}>
@@ -472,7 +472,7 @@ export const ChatInterface = React.memo(function ChatInterface() {
                       </div>
                       <ChevronDown className={`h-3 w-3 transition-transform ${showChartSelector ? 'rotate-180' : ''}`} />
                     </button>
-                    
+
                     {showChartSelector && (
                       <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-gray-300 rounded-md shadow-lg z-10 max-h-48 overflow-y-auto">
                         {chartTypes.map((type) => (

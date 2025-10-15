@@ -44,18 +44,18 @@ export function ResizableChatInterface({
 
       const deltaX = e.clientX - startXRef.current
       const newWidth = Math.max(minWidth, Math.min(maxWidth, startWidthRef.current + deltaX))
-      
+
       setWidth(newWidth)
       onWidthChange?.(newWidth)
     }
 
     const handleMouseUp = () => {
       if (!isResizing) return
-      
+
       setIsResizing(false)
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
-      
+
       // Save the width to localStorage
       if (typeof window !== 'undefined') {
         localStorage.setItem('chat-sidebar-width', width.toString())
@@ -74,7 +74,7 @@ export function ResizableChatInterface({
   }, [isResizing, minWidth, maxWidth, onWidthChange, width])
 
   return (
-    <div 
+    <div
       ref={containerRef}
       className="relative h-full flex"
       style={{ width: `${width}px` }}
@@ -93,7 +93,7 @@ export function ResizableChatInterface({
           <div className="w-1 h-8 bg-gray-400 rounded-full" />
         </div>
       </div>
-      
+
       {/* Chat Interface */}
       <div className="flex-1 overflow-hidden">
         <ChatInterface />
