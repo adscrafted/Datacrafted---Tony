@@ -395,6 +395,12 @@ interface DataStore {
   clearChatHistory: () => void
   saveChatMessage: (message: ChatMessage) => Promise<void>
 
+  // Project-based chat persistence actions
+  loadProjectChat: (projectId: string, authToken: string) => Promise<void>
+  saveProjectChatMessage: (projectId: string, message: ChatMessage, authToken: string) => Promise<ChatMessage | null>
+  clearProjectChat: (projectId: string, authToken: string) => Promise<void>
+  replaceChatMessage: (tempId: string, realMessage: ChatMessage) => void
+
   // Dashboard customization actions
   setCurrentTheme: (theme: DashboardTheme) => void
   addCustomTheme: (theme: DashboardTheme) => void
@@ -1089,6 +1095,101 @@ export const useDataStore = create<DataStore>()(
         } catch (error) {
           console.error('Failed to save chat message:', error)
         }
+      },
+
+      // Project-based chat persistence actions
+      loadProjectChat: async (projectId, authToken) => {
+        set({ isChatLoading: true, chatError: null })
+
+        try {
+          const response = await fetch(`/api/projects/${projectId}/chat`, {
+            headers: {
+              'Authorization': `Bearer ${authToken}`
+            }
+          })
+
+          if (!response.ok) {
+            throw new Error('Failed to load chat messages')
+          }
+
+          const { messages } = await response.json()
+          set({
+            chatMessages: messages || [],
+            isChatLoading: false
+          })
+        } catch (error) {
+          console.error('[STORE] Failed to load project chat:', error)
+          set({
+            chatError: error instanceof Error ? error.message : 'Failed to load chat messages',
+            isChatLoading: false
+          })
+        }
+      },
+
+      saveProjectChatMessage: async (projectId, message, authToken) => {
+        try {
+          const response = await fetch(`/api/projects/${projectId}/chat`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({
+              role: message.role,
+              content: message.content,
+              metadata: message.metadata
+            }),
+          })
+
+          if (!response.ok) {
+            throw new Error('Failed to save chat message')
+          }
+
+          const { message: savedMessage } = await response.json()
+          return savedMessage
+        } catch (error) {
+          console.error('[STORE] Failed to save project chat message:', error)
+          set({
+            chatError: error instanceof Error ? error.message : 'Failed to save chat message'
+          })
+          return null
+        }
+      },
+
+      clearProjectChat: async (projectId, authToken) => {
+        set({ isChatLoading: true, chatError: null })
+
+        try {
+          const response = await fetch(`/api/projects/${projectId}/chat`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${authToken}`
+            }
+          })
+
+          if (!response.ok) {
+            throw new Error('Failed to clear chat history')
+          }
+
+          set({
+            chatMessages: [],
+            isChatLoading: false
+          })
+        } catch (error) {
+          console.error('[STORE] Failed to clear project chat:', error)
+          set({
+            chatError: error instanceof Error ? error.message : 'Failed to clear chat history',
+            isChatLoading: false
+          })
+        }
+      },
+
+      replaceChatMessage: (tempId, realMessage) => {
+        set((state) => ({
+          chatMessages: state.chatMessages.map(msg =>
+            msg.id === tempId ? realMessage : msg
+          )
+        }))
       },
 
       // Dashboard customization actions

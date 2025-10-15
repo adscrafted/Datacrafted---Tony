@@ -23,7 +23,12 @@ export function SaveDashboardButton() {
     currentLayout,
     dashboardFilters,
     currentTheme,
-    analysis
+    dateRange,
+    granularity,
+    analysis,
+    rawData,
+    dataSchema,
+    chatMessages
   } = useDataStore()
 
   // Track previous state to detect changes
@@ -32,20 +37,27 @@ export function SaveDashboardButton() {
     currentLayout,
     dashboardFilters,
     currentTheme,
-    analysisChartCount: analysis?.chartConfig?.length || 0
+    dateRange,
+    granularity,
+    analysisChartCount: analysis?.chartConfig?.length || 0,
+    chatMessageCount: chatMessages.length
   })
 
   // Monitor for changes and mark as dirty
   useEffect(() => {
     const prev = prevStateRef.current
     const currentAnalysisChartCount = analysis?.chartConfig?.length || 0
+    const currentChatMessageCount = chatMessages.length
 
     const hasChanges =
       JSON.stringify(chartCustomizations) !== JSON.stringify(prev.chartCustomizations) ||
       JSON.stringify(currentLayout) !== JSON.stringify(prev.currentLayout) ||
       JSON.stringify(dashboardFilters) !== JSON.stringify(prev.dashboardFilters) ||
       JSON.stringify(currentTheme) !== JSON.stringify(prev.currentTheme) ||
-      currentAnalysisChartCount !== prev.analysisChartCount // Detect when charts are added/removed
+      JSON.stringify(dateRange) !== JSON.stringify(prev.dateRange) ||
+      granularity !== prev.granularity ||
+      currentAnalysisChartCount !== prev.analysisChartCount || // Detect when charts are added/removed
+      currentChatMessageCount !== prev.chatMessageCount // Detect when chat messages are added
 
     if (hasChanges && !isDirty) {
       console.log('🟠 [SAVE_DASHBOARD] Changes detected, marking as dirty:', {
@@ -53,9 +65,14 @@ export function SaveDashboardButton() {
         layoutChanged: JSON.stringify(currentLayout) !== JSON.stringify(prev.currentLayout),
         filtersChanged: JSON.stringify(dashboardFilters) !== JSON.stringify(prev.dashboardFilters),
         themeChanged: JSON.stringify(currentTheme) !== JSON.stringify(prev.currentTheme),
+        dateRangeChanged: JSON.stringify(dateRange) !== JSON.stringify(prev.dateRange),
+        granularityChanged: granularity !== prev.granularity,
         chartCountChanged: currentAnalysisChartCount !== prev.analysisChartCount,
+        chatMessageCountChanged: currentChatMessageCount !== prev.chatMessageCount,
         prevChartCount: prev.analysisChartCount,
-        currentChartCount: currentAnalysisChartCount
+        currentChartCount: currentAnalysisChartCount,
+        prevChatMessageCount: prev.chatMessageCount,
+        currentChatMessageCount: currentChatMessageCount
       })
       markAsDirty()
     }
@@ -65,9 +82,12 @@ export function SaveDashboardButton() {
       currentLayout,
       dashboardFilters,
       currentTheme,
-      analysisChartCount: currentAnalysisChartCount
+      dateRange,
+      granularity,
+      analysisChartCount: currentAnalysisChartCount,
+      chatMessageCount: currentChatMessageCount
     }
-  }, [chartCustomizations, currentLayout, dashboardFilters, currentTheme, analysis?.chartConfig?.length, isDirty, markAsDirty])
+  }, [chartCustomizations, currentLayout, dashboardFilters, currentTheme, dateRange, granularity, analysis?.chartConfig?.length, chatMessages.length, isDirty, markAsDirty])
 
   // Keyboard shortcut handler (Cmd/Ctrl + S)
   const handleSaveRef = useRef<() => void>()
@@ -104,22 +124,55 @@ export function SaveDashboardButton() {
     setIsSaving(true)
 
     try {
+      // Get current state values - avoids dependency array issues
+      const {
+        chartCustomizations: currentChartCustomizations,
+        currentLayout: currentLayoutValue,
+        dashboardFilters: currentFilters,
+        currentTheme: currentThemeValue,
+        dateRange: currentDateRange,
+        granularity: currentGranularity,
+        chatMessages: currentChatMessages,
+        analysis: currentAnalysis,
+        rawData: currentRawData,
+        dataSchema: currentDataSchema
+      } = useDataStore.getState()
+
       // Save dashboard configuration
       await saveDashboardConfig(currentProjectId, {
-        chartCustomizations,
-        currentLayout,
-        filters: dashboardFilters,
-        theme: currentTheme
+        chartCustomizations: currentChartCustomizations,
+        currentLayout: currentLayoutValue,
+        filters: currentFilters,
+        theme: currentThemeValue,
+        dateRange: currentDateRange,
+        granularity: currentGranularity,
+        chatMessages: currentChatMessages
       })
+
+      // Step 2: Save the updated analysis (includes added/removed charts)
+      if (currentAnalysis && currentRawData && currentRawData.length > 0) {
+        const { saveProjectData } = useProjectStore.getState()
+
+        await saveProjectData(
+          currentProjectId,
+          currentRawData,
+          currentAnalysis,
+          currentDataSchema || undefined
+        )
+      }
 
       markAsClean()
 
       // Update prevStateRef after successful save
       prevStateRef.current = {
-        chartCustomizations,
-        currentLayout,
-        dashboardFilters,
-        currentTheme
+        chartCustomizations: currentChartCustomizations,
+        currentLayout: currentLayoutValue,
+        dashboardFilters: currentFilters,
+        currentTheme: currentThemeValue,
+        dateRange: currentDateRange,
+        granularity: currentGranularity,
+        analysisChartCount: currentAnalysis?.chartConfig?.length || 0,
+        chatMessageCount: currentChatMessages.length
       }
 
       toast.success('Dashboard saved successfully', {
@@ -128,9 +181,9 @@ export function SaveDashboardButton() {
 
       console.log('✅ [SAVE_DASHBOARD] Dashboard saved successfully:', {
         projectId: currentProjectId,
-        chartCount: Object.keys(chartCustomizations).length,
-        filterCount: dashboardFilters.length,
-        theme: currentTheme.name
+        chartCount: Object.keys(currentChartCustomizations).length,
+        filterCount: currentFilters.length,
+        theme: currentThemeValue.name
       })
     } catch (error) {
       console.error('❌ [SAVE_DASHBOARD] Failed to save dashboard:', error)
@@ -144,10 +197,6 @@ export function SaveDashboardButton() {
     currentProjectId,
     isDirty,
     isSaving,
-    chartCustomizations,
-    currentLayout,
-    dashboardFilters,
-    currentTheme,
     saveDashboardConfig,
     markAsClean
   ])

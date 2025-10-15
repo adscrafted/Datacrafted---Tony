@@ -26,6 +26,12 @@ export function DateRangeSelector({ className }: DateRangeSelectorProps) {
   const [dateColumns, setDateColumns] = useState<string[]>([])
   const [availableGranularities, setAvailableGranularities] = useState<Granularity[]>(['day', 'week', 'month', 'quarter', 'year'])
 
+  // Sync local date state with store's dateRange
+  // CRITICAL: This ensures the UI updates when dateRange is cleared externally (e.g., via "Clear Date Filter" button)
+  useEffect(() => {
+    setDate(dateRange || undefined)
+  }, [dateRange])
+
   // Detect date columns and set defaults
   useEffect(() => {
     console.log('🔍 [DateRangeSelector] Checking for date columns:', {

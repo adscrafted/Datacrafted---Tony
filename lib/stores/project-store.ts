@@ -72,12 +72,18 @@ interface ProjectStore {
     currentLayout: any
     filters: any[]
     theme: any
+    dateRange?: any
+    granularity?: 'day' | 'week' | 'month' | 'quarter' | 'year'
+    chatMessages?: any[]
   }) => Promise<void>
   loadDashboardConfig: (projectId: string) => Promise<{
     chartCustomizations: Record<string, any>
     currentLayout: any
     filters: any[]
     theme: any
+    dateRange?: any
+    granularity?: 'day' | 'week' | 'month' | 'quarter' | 'year'
+    chatMessages?: any[]
   } | null>
 
   // Dirty state management
@@ -639,7 +645,10 @@ export const useProjectStore = create<ProjectStore>()(
                 chartCustomizations: config.chartCustomizations,
                 currentTheme: config.theme,
                 currentLayout: config.currentLayout,
-                dashboardFilters: config.filters
+                dashboardFilters: config.filters,
+                dateRange: config.dateRange,
+                granularity: config.granularity,
+                chatMessages: config.chatMessages
               })
             })
 
@@ -723,7 +732,10 @@ export const useProjectStore = create<ProjectStore>()(
                 chartCustomizations: result.chartCustomizations,
                 currentLayout: result.currentLayout,
                 filters: result.dashboardFilters,
-                theme: result.currentTheme
+                theme: result.currentTheme,
+                dateRange: result.dateRange,
+                granularity: result.granularity,
+                chatMessages: result.chatMessages
               }
             } else {
               // Log specific error status for debugging

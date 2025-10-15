@@ -75,12 +75,22 @@ const getHandler = withAuth(async (request, authUser, context) => {
     const dashboardFilters = config.dashboardFilters
       ? JSON.parse(config.dashboardFilters)
       : null
+    const dateRange = config.dateRange
+      ? JSON.parse(config.dateRange)
+      : null
+    const chatMessages = config.chatMessages
+      ? JSON.parse(config.chatMessages)
+      : []
+    const granularity = config.granularity || null
 
     return NextResponse.json({
       chartCustomizations,
       currentTheme,
       currentLayout,
       dashboardFilters,
+      dateRange,
+      granularity,
+      chatMessages,
       version: config.version,
       lastModified: config.updatedAt.toISOString(),
     })
@@ -136,6 +146,9 @@ const putHandler = withAuth(async (request, authUser, context) => {
       currentTheme = null,
       currentLayout = null,
       dashboardFilters = null,
+      dateRange = null,
+      granularity = null,
+      chatMessages = null,
     } = body
 
     // Use database user ID (CUID) not Firebase UID
@@ -155,6 +168,9 @@ const putHandler = withAuth(async (request, authUser, context) => {
         currentTheme: currentTheme ? JSON.stringify(currentTheme) : null,
         currentLayout: currentLayout ? JSON.stringify(currentLayout) : null,
         dashboardFilters: dashboardFilters ? JSON.stringify(dashboardFilters) : null,
+        dateRange: dateRange ? JSON.stringify(dateRange) : null,
+        granularity: granularity || null,
+        chatMessages: chatMessages ? JSON.stringify(chatMessages) : null,
         version: 1,
         updatedAt: new Date(),
       },
@@ -163,6 +179,9 @@ const putHandler = withAuth(async (request, authUser, context) => {
         currentTheme: currentTheme ? JSON.stringify(currentTheme) : null,
         currentLayout: currentLayout ? JSON.stringify(currentLayout) : null,
         dashboardFilters: dashboardFilters ? JSON.stringify(dashboardFilters) : null,
+        dateRange: dateRange ? JSON.stringify(dateRange) : null,
+        granularity: granularity || null,
+        chatMessages: chatMessages ? JSON.stringify(chatMessages) : null,
         updatedAt: new Date(),
       },
     })

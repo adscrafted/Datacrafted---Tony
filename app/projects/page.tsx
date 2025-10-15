@@ -29,10 +29,29 @@ function ProjectsContent() {
 
   const { setFileName, setRawData, setAnalysis, setDataSchema } = useDataStore()
 
+  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
+  // Move all state declarations to the top
+  const [isCreatingProject, setIsCreatingProject] = useState(false)
+  const [showUpload, setShowUpload] = useState(false)
+  const [hoveredProject, setHoveredProject] = useState<string | null>(null)
+  const [highlightedProject, setHighlightedProject] = useState<string | null>(newProjectId)
+
   useEffect(() => {
     loadProjects(user?.uid || 'anonymous')
   }, [user, loadProjects])
 
+  // Highlight new project for a few seconds
+  useEffect(() => {
+    if (newProjectId) {
+      setHighlightedProject(newProjectId)
+      const timer = setTimeout(() => {
+        setHighlightedProject(null)
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [newProjectId])
+
+  // NOW conditional returns are safe (all hooks have been called)
   // Show auth gate if not authenticated (unless in debug mode)
   if (!authLoading && !user && !isDebugMode) {
     return <AuthGateModal redirectPath="/projects" message="Sign in to view your projects" />
@@ -50,22 +69,6 @@ function ProjectsContent() {
       </div>
     )
   }
-
-  // Highlight new project for a few seconds
-  useEffect(() => {
-    if (newProjectId) {
-      setHighlightedProject(newProjectId)
-      const timer = setTimeout(() => {
-        setHighlightedProject(null)
-      }, 3000)
-      return () => clearTimeout(timer)
-    }
-  }, [newProjectId])
-
-  const [isCreatingProject, setIsCreatingProject] = useState(false)
-  const [showUpload, setShowUpload] = useState(false)
-  const [hoveredProject, setHoveredProject] = useState<string | null>(null)
-  const [highlightedProject, setHighlightedProject] = useState<string | null>(newProjectId)
 
   const handleFileUpload = async (data: any) => {
     if (isCreatingProject) return

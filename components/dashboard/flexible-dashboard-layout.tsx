@@ -1070,6 +1070,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
             customization={chartCustomizations[draftChart.id] || {}}
             onCustomizationChange={updateChartCustomization}
             initialTab="data"
+            configDataMapping={draftChart.dataMapping}
             autoOpen={true}
           />
         </div>

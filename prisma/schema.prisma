@@ -9,18 +9,19 @@ datasource db {
 }
 
 model User {
-  id                String              @id @default(cuid())
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  email             String?             @unique
-  emailVerified     DateTime?
-  name              String?
-  photoURL          String?
-  firebaseUid       String?             @unique
-  preferences       String?
-  dashboard_configs dashboard_configs[]
-  projects          projects[]
-  sessions          Session[]
+  id                 String             @id @default(cuid())
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  email              String?            @unique
+  emailVerified      DateTime?
+  name               String?
+  photoURL           String?
+  firebaseUid        String?            @unique
+  preferences        String?
+  dashboard_configs  dashboard_configs[]
+  projects           projects[]
+  sessions           Session[]
+  chatConversations  ChatConversation[]
 
   @@map("users")
 }
@@ -134,6 +135,9 @@ model dashboard_configs {
   currentTheme        String?
   currentLayout       String?
   dashboardFilters    String?
+  dateRange           String?
+  granularity         String?
+  chatMessages        String?
   version             Int       @default(1)
   projects            projects? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   sessions            Session?  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
@@ -147,19 +151,20 @@ model dashboard_configs {
 }
 
 model projects {
-  id                String              @id
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime
-  name              String
-  description       String?
-  color             String?
-  icon              String?
-  settings          String?
-  userId            String
-  dashboard_configs dashboard_configs[]
-  users             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sessions          Session[]
-  projectData       ProjectData[]
+  id                 String              @id
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime
+  name               String
+  description        String?
+  color              String?
+  icon               String?
+  settings           String?
+  userId             String
+  dashboard_configs  dashboard_configs[]
+  users              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions           Session[]
+  projectData        ProjectData[]
+  chatConversations  ChatConversation[]
 
   @@index([userId])
 }
@@ -222,4 +227,61 @@ model ProjectData {
   @@index([isActive, projectId])
   @@index([hasAnalysis])
   @@map("project_data")
+}
+
+// ============================================================================
+// Chat Conversations for Projects
+// ============================================================================
+
+model ChatConversation {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Conversation metadata
+  name      String // Auto-generated or user-edited conversation name
+  projectId String
+  userId    String
+
+  // Status
+  isActive Boolean @default(true)
+  isPinned Boolean @default(false)
+
+  // Message count for quick display
+  messageCount Int @default(0)
+
+  // Last message preview
+  lastMessageAt      DateTime?
+  lastMessagePreview String?
+
+  // Relationships
+  project  projects                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user     User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages ChatConversationMessage[]
+
+  @@index([projectId, userId])
+  @@index([projectId, isActive])
+  @@index([userId, isActive])
+  @@index([lastMessageAt])
+  @@map("chat_conversations")
+}
+
+model ChatConversationMessage {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  conversationId String
+
+  // Message content
+  role    String // "user" or "assistant"
+  content String @db.Text
+
+  // Optional metadata (chart suggestions, etc.)
+  metadata String? @db.Text
+
+  // Relationships
+  conversation ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([conversationId])
+  @@map("chat_conversation_messages")
 }

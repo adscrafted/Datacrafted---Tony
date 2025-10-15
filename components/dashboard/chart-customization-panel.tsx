@@ -162,15 +162,20 @@ export function ChartCustomizationPanel({
     }
   }, [dataSchema, availableColumns])
 
+  // Get the effective/current chart type (customization overrides prop)
+  const effectiveChartType = customization?.chartType || chartType
+
   const handleUpdate = (updates: Partial<ChartCustomization>) => {
     const newCustomization = {
       ...customization,
       ...updates,
       // Properly merge nested dataMapping object to preserve other fields
-      dataMapping: updates.dataMapping ? {
-        ...customization?.dataMapping,
-        ...updates.dataMapping
-      } : customization?.dataMapping,
+      // Special case: if dataMapping is explicitly null, clear it completely
+      dataMapping: updates.dataMapping === null ? {} :
+        (updates.dataMapping ? {
+          ...customization?.dataMapping,
+          ...updates.dataMapping
+        } : customization?.dataMapping),
       id: chartId
     }
     onCustomizationChange(chartId, newCustomization)
@@ -228,7 +233,7 @@ export function ChartCustomizationPanel({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          chartType: customization?.chartType || chartType,
+          chartType: effectiveChartType,
           dataMapping: effectiveDataMapping,
           sampleData,
           dataSchema: schema
@@ -343,7 +348,18 @@ export function ChartCustomizationPanel({
                     {chartTypeOptions.map(option => (
                       <button
                         key={option.value}
-                        onClick={() => handleUpdate({ chartType: option.value })}
+                        onClick={() => {
+                          const currentType = effectiveChartType
+                          // If chart type is changing, reset dataMapping to avoid field conflicts
+                          if (currentType !== option.value) {
+                            handleUpdate({
+                              chartType: option.value,
+                              dataMapping: null as any // Clear data mapping when chart type changes
+                            })
+                          } else {
+                            handleUpdate({ chartType: option.value })
+                          }
+                        }}
                         className={cn(
                           'flex items-center space-x-2 p-2 rounded border text-left text-sm transition-colors',
                           (customization?.chartType || chartType) === option.value
@@ -438,7 +454,7 @@ export function ChartCustomizationPanel({
                 ) : (
                   <>
                     {/* Standard Charts: Line, Bar, Area, Scatter, Combo */}
-                    {(chartType === 'line' || chartType === 'bar' || chartType === 'area' || chartType === 'scatter' || chartType === 'combo') && (
+                    {(effectiveChartType === 'line' || effectiveChartType === 'bar' || effectiveChartType === 'area' || effectiveChartType === 'scatter' || effectiveChartType === 'combo') && (
                       <div className="space-y-6">
                         {/* Available Fields */}
                         <div>
@@ -493,6 +509,7 @@ export function ChartCustomizationPanel({
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                 handleUpdate({
                                   dataMapping: {
+                                    ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
                                     ...customization?.dataMapping,
                                     xAxis: data.fieldName,
                                     category: data.fieldName  // Also set category for consistency with AI format
@@ -511,6 +528,7 @@ export function ChartCustomizationPanel({
                                 <button
                                   onClick={() => handleUpdate({
                                     dataMapping: {
+                                      ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
                                       ...customization?.dataMapping,
                                       xAxis: undefined,
                                       category: undefined
@@ -530,7 +548,7 @@ export function ChartCustomizationPanel({
                           </div>
 
                           {/* Dual Y-Axis Drop Zones - for combo, bar, line, area, and scatter charts */}
-                          {(chartType === 'combo' || chartType === 'bar' || chartType === 'line' || chartType === 'area' || chartType === 'scatter') ? (
+                          {(effectiveChartType === 'combo' || effectiveChartType === 'bar' || effectiveChartType === 'line' || effectiveChartType === 'area' || effectiveChartType === 'scatter') ? (
                             <>
                               {/* Left Y-Axis (Primary) */}
                               <div
@@ -547,7 +565,8 @@ export function ChartCustomizationPanel({
                                   try {
                                     const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                     if (data.fieldType === 'number') {
-                                      const currentYAxis1 = customization?.dataMapping?.yAxis1
+                                      // Support both yAxis1 and yAxis (check both sources)
+                                      const currentYAxis1 = customization?.dataMapping?.yAxis1 || customization?.dataMapping?.yAxis || effectiveDataMapping?.yAxis1 || effectiveDataMapping?.yAxis
                                       let newYAxis1: string | string[]
 
                                       if (Array.isArray(currentYAxis1)) {
@@ -568,8 +587,10 @@ export function ChartCustomizationPanel({
 
                                       handleUpdate({
                                         dataMapping: {
+                                          ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
                                           ...customization?.dataMapping,
-                                          yAxis1: newYAxis1
+                                          yAxis1: newYAxis1,
+                                          yAxis: newYAxis1 // Update both for compatibility
                                         }
                                       })
                                     }
@@ -580,48 +601,57 @@ export function ChartCustomizationPanel({
                                 className="min-h-20 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
                               >
                                 <div className="text-sm font-medium text-green-600 mb-2">Left Y-Axis (Primary)</div>
-                                {effectiveDataMapping?.yAxis1 && (Array.isArray(effectiveDataMapping.yAxis1) ? effectiveDataMapping.yAxis1.length > 0 : true) ? (
-                                  <div className="space-y-2">
-                                    {(Array.isArray(effectiveDataMapping.yAxis1) ? effectiveDataMapping.yAxis1 : [effectiveDataMapping.yAxis1]).map((field: string) => (
-                                      <div key={field} className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
-                                        <span className="text-sm text-green-800">{field}</span>
-                                        <button
-                                          onClick={() => {
-                                            const currentYAxis1 = customization?.dataMapping?.yAxis1 || effectiveDataMapping?.yAxis1
-                                            let newYAxis1: string | string[] | undefined
+                                {(() => {
+                                  // Support both yAxis1 and yAxis (AI may use either)
+                                  const leftAxisData = effectiveDataMapping?.yAxis1 || effectiveDataMapping?.yAxis
+                                  const hasData = leftAxisData && (Array.isArray(leftAxisData) ? leftAxisData.length > 0 : true)
 
-                                            if (Array.isArray(currentYAxis1)) {
-                                              const filtered = currentYAxis1.filter(f => f !== field)
-                                              if (filtered.length === 1) {
-                                                newYAxis1 = filtered[0]
-                                              } else if (filtered.length === 0) {
-                                                newYAxis1 = undefined
+                                  return hasData ? (
+                                    <div className="space-y-2">
+                                      {(Array.isArray(leftAxisData) ? leftAxisData : [leftAxisData]).map((field: string) => (
+                                        <div key={field} className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
+                                          <span className="text-sm text-green-800">{field}</span>
+                                          <button
+                                            onClick={() => {
+                                              // Get current value from either source
+                                              const currentYAxis1 = customization?.dataMapping?.yAxis1 || customization?.dataMapping?.yAxis || effectiveDataMapping?.yAxis1 || effectiveDataMapping?.yAxis
+                                              let newYAxis1: string | string[] | undefined
+
+                                              if (Array.isArray(currentYAxis1)) {
+                                                const filtered = currentYAxis1.filter(f => f !== field)
+                                                if (filtered.length === 1) {
+                                                  newYAxis1 = filtered[0]
+                                                } else if (filtered.length === 0) {
+                                                  newYAxis1 = undefined
+                                                } else {
+                                                  newYAxis1 = filtered
+                                                }
                                               } else {
-                                                newYAxis1 = filtered
+                                                newYAxis1 = undefined
                                               }
-                                            } else {
-                                              newYAxis1 = undefined
-                                            }
 
-                                            handleUpdate({
-                                              dataMapping: {
-                                                ...customization?.dataMapping,
-                                                yAxis1: newYAxis1
-                                              }
-                                            })
-                                          }}
-                                          className="text-green-600 hover:text-green-800 text-xs"
-                                        >
-                                          Remove
-                                        </button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="text-center py-4 text-gray-500 text-sm">
-                                    Drop numeric fields for left axis
-                                  </div>
-                                )}
+                                              handleUpdate({
+                                                dataMapping: {
+                                                  ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
+                                                  ...customization?.dataMapping,
+                                                  yAxis1: newYAxis1,
+                                                  yAxis: newYAxis1 // Update both for compatibility
+                                                }
+                                              })
+                                            }}
+                                            className="text-green-600 hover:text-green-800 text-xs"
+                                          >
+                                            Remove
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="text-center py-4 text-gray-500 text-sm">
+                                      Drop numeric fields for left axis
+                                    </div>
+                                  )
+                                })()}
                               </div>
 
                               {/* Right Y-Axis (Secondary) */}
@@ -639,7 +669,7 @@ export function ChartCustomizationPanel({
                                   try {
                                     const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                     if (data.fieldType === 'number') {
-                                      const currentYAxis2 = customization?.dataMapping?.yAxis2
+                                      const currentYAxis2 = customization?.dataMapping?.yAxis2 || effectiveDataMapping?.yAxis2
                                       let newYAxis2: string | string[]
 
                                       if (Array.isArray(currentYAxis2)) {
@@ -660,6 +690,7 @@ export function ChartCustomizationPanel({
 
                                       handleUpdate({
                                         dataMapping: {
+                                          ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
                                           ...customization?.dataMapping,
                                           yAxis2: newYAxis2
                                         }
@@ -697,6 +728,7 @@ export function ChartCustomizationPanel({
 
                                             handleUpdate({
                                               dataMapping: {
+                                                ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
                                                 ...customization?.dataMapping,
                                                 yAxis2: newYAxis2
                                               }
@@ -732,8 +764,9 @@ export function ChartCustomizationPanel({
                                 try {
                                   const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                   // Only allow numeric fields in Y-axis for most chart types
-                                  if (data.fieldType === 'number' || chartType === 'scatter') {
-                                    const currentYAxis = customization?.dataMapping?.yAxis
+                                  if (data.fieldType === 'number' || effectiveChartType === 'scatter') {
+                                    // Check all possible sources: yAxis, values, or yAxis1
+                                    const currentYAxis = customization?.dataMapping?.yAxis || customization?.dataMapping?.values || customization?.dataMapping?.yAxis1 || effectiveDataMapping?.yAxis || effectiveDataMapping?.values || effectiveDataMapping?.yAxis1
                                     let newYAxis: string | string[]
 
                                     // Add to existing Y-axis fields
@@ -755,6 +788,7 @@ export function ChartCustomizationPanel({
 
                                     handleUpdate({
                                       dataMapping: {
+                                        ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
                                         ...customization?.dataMapping,
                                         yAxis: newYAxis,
                                         values: Array.isArray(newYAxis) ? newYAxis : [newYAxis]  // Ensure values is always an array
@@ -769,8 +803,8 @@ export function ChartCustomizationPanel({
                             >
                               <div className="text-sm font-medium text-gray-600 mb-2">Y-Axis (Numeric Fields Only)</div>
                               {(() => {
-                                // Support both yAxis and values formats (AI uses 'values', manual uses 'yAxis')
-                                const yAxisData = effectiveDataMapping?.yAxis || effectiveDataMapping?.values
+                                // Support all Y-axis field name variants (AI may use different names)
+                                const yAxisData = effectiveDataMapping?.yAxis || effectiveDataMapping?.values || effectiveDataMapping?.yAxis1
                                 const hasData = yAxisData && (Array.isArray(yAxisData) ? yAxisData.length > 0 : true)
 
                                 return hasData ? (
@@ -780,7 +814,8 @@ export function ChartCustomizationPanel({
                                         <span className="text-sm text-green-800">{field}</span>
                                         <button
                                           onClick={() => {
-                                            const currentYAxis = customization?.dataMapping?.yAxis || customization?.dataMapping?.values || effectiveDataMapping?.yAxis || effectiveDataMapping?.values
+                                            // Check all possible sources: yAxis, values, or yAxis1
+                                            const currentYAxis = customization?.dataMapping?.yAxis || customization?.dataMapping?.values || customization?.dataMapping?.yAxis1 || effectiveDataMapping?.yAxis || effectiveDataMapping?.values || effectiveDataMapping?.yAxis1
                                             let newYAxis: string | string[] | undefined
 
                                             if (Array.isArray(currentYAxis)) {
@@ -798,6 +833,7 @@ export function ChartCustomizationPanel({
 
                                             handleUpdate({
                                               dataMapping: {
+                                                ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
                                                 ...customization?.dataMapping,
                                                 yAxis: newYAxis,
                                                 values: Array.isArray(newYAxis) ? newYAxis : (newYAxis ? [newYAxis] : undefined)
@@ -822,7 +858,7 @@ export function ChartCustomizationPanel({
                           )}
 
                           {/* Aggregation Method Selector - for bar/line/area/combo charts */}
-                          {(chartType === 'bar' || chartType === 'line' || chartType === 'area' || chartType === 'combo') && (
+                          {(effectiveChartType === 'bar' || effectiveChartType === 'line' || effectiveChartType === 'area' || effectiveChartType === 'combo') && (
                             <div className="mt-4">
                               <label className="text-sm font-medium text-gray-700 mb-2 block">
                                 Aggregation Method
@@ -853,7 +889,7 @@ export function ChartCustomizationPanel({
                           )}
 
                           {/* Bar Chart Sorting Controls */}
-                          {chartType === 'bar' && (
+                          {effectiveChartType === 'bar' && (
                             <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
                               <div className="text-sm font-medium text-gray-700 mb-3">Bar Chart Options</div>
 
@@ -948,7 +984,7 @@ export function ChartCustomizationPanel({
                         </div>
 
                         {/* Scatter Chart Advanced Fields (Size & Color) */}
-                        {chartType === 'scatter' && (
+                        {effectiveChartType === 'scatter' && (
                           <div className="grid grid-cols-1 gap-4 mt-4">
                             {/* Bubble Size Drop Zone */}
                             <div>
@@ -1055,7 +1091,7 @@ export function ChartCustomizationPanel({
                     )}
 
                     {/* Pie Chart Data Mapping */}
-                    {chartType === 'pie' && (
+                    {effectiveChartType === 'pie' && (
                       <div className="space-y-6">
                         {/* Available Fields for Pie Chart */}
                         <div>
@@ -1195,7 +1231,7 @@ export function ChartCustomizationPanel({
                     )}
 
                     {/* Scorecard Data Mapping */}
-                    {chartType === 'scorecard' && (
+                    {effectiveChartType === 'scorecard' && (
                       <div className="space-y-6">
                         {/* Available Fields for Scorecard */}
                         <div>
@@ -1282,7 +1318,7 @@ export function ChartCustomizationPanel({
                     )}
 
                     {/* Table Data Mapping */}
-                    {chartType === 'table' && (
+                    {effectiveChartType === 'table' && (
                       <div>
                         <label className="text-sm font-medium mb-2 block">Columns to Display</label>
                         <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -1325,7 +1361,7 @@ export function ChartCustomizationPanel({
                     )}
 
                     {/* Waterfall Chart Data Mapping */}
-                    {chartType === 'waterfall' && (
+                    {effectiveChartType === 'waterfall' && (
                       <div className="space-y-6">
                         {/* Available Fields for Waterfall Chart */}
                         <div>
@@ -1530,7 +1566,7 @@ export function ChartCustomizationPanel({
                     )}
 
                     {/* Funnel Chart Data Mapping */}
-                    {chartType === 'funnel' && (
+                    {effectiveChartType === 'funnel' && (
                       <div className="space-y-6">
                         <div>
                           <label className="text-sm font-medium mb-3 block">Available Fields</label>
@@ -1664,7 +1700,7 @@ export function ChartCustomizationPanel({
                     )}
 
                     {/* Heatmap Chart Data Mapping */}
-                    {chartType === 'heatmap' && (
+                    {effectiveChartType === 'heatmap' && (
                       <div className="space-y-6">
                         <div>
                           <label className="text-sm font-medium mb-3 block">Available Fields</label>
@@ -1846,7 +1882,7 @@ export function ChartCustomizationPanel({
                     )}
 
                     {/* Gauge Chart Data Mapping */}
-                    {chartType === 'gauge' && (
+                    {effectiveChartType === 'gauge' && (
                       <div className="space-y-6">
                         {/* Metric Field */}
                         <div>
@@ -1960,7 +1996,7 @@ export function ChartCustomizationPanel({
                     )}
 
                     {/* Cohort Chart Data Mapping */}
-                    {chartType === 'cohort' && (
+                    {effectiveChartType === 'cohort' && (
                       <div className="space-y-6">
                         <div>
                           <label className="text-sm font-medium mb-3 block">Available Fields</label>
@@ -2142,7 +2178,7 @@ export function ChartCustomizationPanel({
                     )}
 
                     {/* Bullet Chart Data Mapping */}
-                    {chartType === 'bullet' && (
+                    {effectiveChartType === 'bullet' && (
                       <div className="space-y-6">
                         <div>
                           <label className="text-sm font-medium mb-3 block">Available Fields</label>
@@ -2326,7 +2362,7 @@ export function ChartCustomizationPanel({
                     )}
 
                     {/* Treemap Chart Data Mapping */}
-                    {chartType === 'treemap' && (
+                    {effectiveChartType === 'treemap' && (
                       <div className="space-y-6">
                         <div>
                           <label className="text-sm font-medium mb-3 block">Available Fields</label>
@@ -2460,7 +2496,7 @@ export function ChartCustomizationPanel({
                     )}
 
                     {/* Sankey Chart Data Mapping */}
-                    {chartType === 'sankey' && (
+                    {effectiveChartType === 'sankey' && (
                       <div className="space-y-6">
                         <div>
                           <label className="text-sm font-medium mb-3 block">Available Fields</label>
@@ -2642,7 +2678,7 @@ export function ChartCustomizationPanel({
                     )}
 
                     {/* Sparkline Chart Data Mapping */}
-                    {chartType === 'sparkline' && (
+                    {effectiveChartType === 'sparkline' && (
                       <div className="space-y-6">
                         <div>
                           <label className="text-sm font-medium mb-3 block">Available Fields</label>

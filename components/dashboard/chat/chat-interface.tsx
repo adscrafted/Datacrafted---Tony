@@ -1,10 +1,11 @@
 'use client'
 
 import React, { useState, useRef, useEffect } from 'react'
-import { MessageCircle, X, Send, RotateCcw, Download, Loader2, Sparkles, BarChart3, ChevronDown, Zap, PanelLeftClose } from 'lucide-react'
+import { MessageCircle, X, Send, RotateCcw, Download, Loader2, Sparkles, BarChart3, ChevronDown, Zap, PanelLeftClose, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useDataStore, ChatMessage } from '@/lib/store'
+import { useProjectStore } from '@/lib/stores/project-store'
 import { ChatMessages } from './chat-messages'
 import { ExampleQuestions } from './example-questions'
 import { ChartSuggestions } from './chart-suggestions'
@@ -28,8 +29,14 @@ export const ChatInterface = React.memo(function ChatInterface() {
     addChatMessage,
     clearChatHistory,
     selectedChartId,
-    chartCustomizations
+    chartCustomizations,
+    loadProjectChat,
+    saveProjectChatMessage,
+    clearProjectChat,
+    replaceChatMessage
   } = useDataStore()
+
+  const { currentProjectId } = useProjectStore()
 
   const [message, setMessage] = useState('')
   const [isExpanded, setIsExpanded] = useState(false)
@@ -90,11 +97,31 @@ export const ChatInterface = React.memo(function ChatInterface() {
     }
   }, [showChartSelector])
 
+  // Auto-load chat messages when project changes
+  useEffect(() => {
+    async function loadMessages() {
+      if (!currentProjectId) return
+
+      try {
+        const currentUser = auth.currentUser
+        if (currentUser) {
+          const authToken = await currentUser.getIdToken()
+          await loadProjectChat(currentProjectId, authToken)
+          console.log('✅ [CHAT] Loaded messages for project:', currentProjectId)
+        }
+      } catch (error) {
+        console.error('❌ [CHAT] Failed to load messages:', error)
+      }
+    }
+
+    loadMessages()
+  }, [currentProjectId, loadProjectChat])
+
   const handleSendMessage = React.useCallback(async () => {
     if (!message.trim() || isChatLoading || !rawData || rawData.length === 0) return
 
     const userMessage: ChatMessage = {
-      id: Date.now().toString(),
+      id: `temp-${Date.now()}`,
       role: 'user',
       content: message.trim(),
       timestamp: new Date().toISOString()
@@ -125,6 +152,15 @@ export const ChatInterface = React.memo(function ChatInterface() {
       } catch (authError) {
         console.error('❌ [CHAT] Failed to get auth token:', authError)
         throw new Error('Authentication failed. Please sign in and try again.')
+      }
+
+      // Save user message to database
+      if (currentProjectId && authToken) {
+        const savedUserMessage = await saveProjectChatMessage(currentProjectId, userMessage, authToken)
+        if (savedUserMessage) {
+          replaceChatMessage(userMessage.id, savedUserMessage)
+          console.log('✅ [CHAT] Saved user message to database')
+        }
       }
 
       // Prepare conversation history for context
@@ -213,7 +249,7 @@ export const ChatInterface = React.memo(function ChatInterface() {
                   if (data === '[DONE]') {
                     // Streaming complete, add final message
                     const assistantMessage: ChatMessage = {
-                      id: (Date.now() + 1).toString(),
+                      id: `temp-${Date.now() + 1}`,
                       role: 'assistant',
                       content: accumulatedContent,
                       timestamp: new Date().toISOString()
@@ -221,6 +257,15 @@ export const ChatInterface = React.memo(function ChatInterface() {
                     addChatMessage(assistantMessage)
                     setStreamingMessage('')
                     setIsStreaming(false)
+
+                    // Save assistant message to database
+                    if (currentProjectId && authToken) {
+                      const savedAssistantMessage = await saveProjectChatMessage(currentProjectId, assistantMessage, authToken)
+                      if (savedAssistantMessage) {
+                        replaceChatMessage(assistantMessage.id, savedAssistantMessage)
+                        console.log('✅ [CHAT] Saved assistant message to database')
+                      }
+                    }
 
                     // Extract chart suggestions from the final message
                     const suggestions = extractChartSuggestions(accumulatedContent)
@@ -251,13 +296,22 @@ export const ChatInterface = React.memo(function ChatInterface() {
         const data = await response.json()
 
         const assistantMessage: ChatMessage = {
-          id: (Date.now() + 1).toString(),
+          id: `temp-${Date.now() + 1}`,
           role: 'assistant',
           content: data.message,
           timestamp: data.timestamp
         }
 
         addChatMessage(assistantMessage)
+
+        // Save assistant message to database
+        if (currentProjectId && authToken) {
+          const savedAssistantMessage = await saveProjectChatMessage(currentProjectId, assistantMessage, authToken)
+          if (savedAssistantMessage) {
+            replaceChatMessage(assistantMessage.id, savedAssistantMessage)
+            console.log('✅ [CHAT] Saved assistant message to database (non-streaming)')
+          }
+        }
 
         // Extract chart suggestions from the message
         const suggestions = extractChartSuggestions(data.message)
@@ -271,7 +325,7 @@ export const ChatInterface = React.memo(function ChatInterface() {
     } finally {
       setIsChatLoading(false)
     }
-  }, [message, isChatLoading, rawData, fileName, chatMessages, selectedChartType, selectedChartId, analysis, addChatMessage, setIsChatLoading, setChatError, setStreamingMessage, setIsStreaming, setChartSuggestions])
+  }, [message, isChatLoading, rawData, fileName, chatMessages, selectedChartType, selectedChartId, analysis, addChatMessage, setIsChatLoading, setChatError, setStreamingMessage, setIsStreaming, setChartSuggestions, currentProjectId, saveProjectChatMessage, replaceChatMessage])
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -437,25 +491,49 @@ export const ChatInterface = React.memo(function ChatInterface() {
               {/* Input Area */}
               <div className="border-t p-3 space-y-2 flex-shrink-0">
                 {chatMessages.length > 0 && (
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={clearChatHistory}
-                      className="text-xs h-7"
-                    >
-                      <RotateCcw className="h-3 w-3 mr-1" />
-                      Clear
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleExportChat}
-                      className="text-xs h-7"
-                    >
-                      <Download className="h-3 w-3 mr-1" />
-                      Export
-                    </Button>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                          if (!confirm('Are you sure you want to clear all chat history? This cannot be undone.')) {
+                            return
+                          }
+
+                          try {
+                            const currentUser = auth.currentUser
+                            if (currentUser && currentProjectId) {
+                              const authToken = await currentUser.getIdToken()
+                              await clearProjectChat(currentProjectId, authToken)
+                              console.log('✅ [CHAT] Cleared chat history from database')
+                            } else {
+                              // Fallback to local clear if no project
+                              clearChatHistory()
+                            }
+                          } catch (error) {
+                            console.error('❌ [CHAT] Failed to clear chat history:', error)
+                            setChatError('Failed to clear chat history')
+                          }
+                        }}
+                        className="text-xs h-7 text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-3 w-3 mr-1" />
+                        Clear History
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleExportChat}
+                        className="text-xs h-7"
+                      >
+                        <Download className="h-3 w-3 mr-1" />
+                        Export
+                      </Button>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {chatMessages.length} message{chatMessages.length !== 1 ? 's' : ''}
+                    </span>
                   </div>
                 )}
 

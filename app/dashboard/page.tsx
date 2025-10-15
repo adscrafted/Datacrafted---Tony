@@ -295,6 +295,13 @@ function DashboardContent() {
                 analysisInitiatedRef.current = true
                 console.log('✅ [DASHBOARD] Loaded saved dashboard, skipping AI analysis')
               }
+
+              // Restore chat messages if they exist in saved config
+              if (savedConfig.chatMessages && savedConfig.chatMessages.length > 0) {
+                const { setChatMessages } = useDataStore.getState()
+                setChatMessages(savedConfig.chatMessages)
+                console.log('✅ [DASHBOARD] Restored', savedConfig.chatMessages.length, 'chat messages from database')
+              }
             } else {
               console.log('ℹ️ [DASHBOARD] No saved config found, will use default analysis')
 
@@ -416,6 +423,13 @@ function DashboardContent() {
                 setAnalysis(updatedAnalysis)
                 analysisInitiatedRef.current = true
                 console.log('✅ [DASHBOARD] Loaded saved dashboard, skipping AI analysis')
+              }
+
+              // Restore chat messages if they exist in saved config
+              if (savedConfig.chatMessages && savedConfig.chatMessages.length > 0) {
+                const { setChatMessages } = useDataStore.getState()
+                setChatMessages(savedConfig.chatMessages)
+                console.log('✅ [DASHBOARD] Restored', savedConfig.chatMessages.length, 'chat messages from database')
               }
             } else {
               console.log('ℹ️ [DASHBOARD] No saved config found, will use default analysis')

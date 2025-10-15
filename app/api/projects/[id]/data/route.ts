@@ -559,8 +559,14 @@ const postHandler = withAuth(async (request, authUser, context) => {
   }
 })
 
-// Apply rate limiting (10 requests per hour for uploads - expensive operation)
-export const POST = withRateLimit(RATE_LIMITS.ANALYSIS, postHandler)
+// Apply rate limiting
+// Development: 60 requests per minute (generous for testing)
+// Production: 10 requests per hour (expensive operation)
+const POST_RATE_LIMIT = process.env.NODE_ENV === 'development'
+  ? { windowMs: 60 * 1000, maxRequests: 60 }  // 60/min in dev
+  : RATE_LIMITS.ANALYSIS                        // 10/hour in prod
+
+export const POST = withRateLimit(POST_RATE_LIMIT, postHandler)
 
 // ============================================================================
 // DELETE Handler - Delete Project Data Version (Soft Delete)
