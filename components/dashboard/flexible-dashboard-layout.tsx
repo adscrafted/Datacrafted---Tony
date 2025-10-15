@@ -104,13 +104,17 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
   // Instead, call it directly and depend only on the state values that affect filtering
   const filteredData = useMemo(() => {
     const result = getFilteredData()
-    // IMPORTANT: If store returns empty but we have data prop, use data prop
+    // CRITICAL FIX: Only use fallback when NO filters are active
+    // If a date filter is active and returns 0 results, that's intentional - don't override it!
+    const hasActiveFilter = !!(dateRange?.from || dateRange?.to)
+
+    // IMPORTANT: If store returns empty but we have data prop AND no filters active, use data prop
     // This handles the case where store isn't initialized yet
-    if (result.length === 0 && data.length > 0) {
+    if (result.length === 0 && data.length > 0 && !hasActiveFilter) {
       return data
     }
     return result
-  }, [dateRange, granularity, selectedDateColumn, data])
+  }, [dateRange, granularity, selectedDateColumn, data, getFilteredData])
 
   // Update available columns when data changes
   useEffect(() => {
@@ -685,9 +689,6 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
             Dashboard Layout
           </h2>
 
-          {/* Date Range Selector */}
-          <DateRangeSelector className="" />
-
           <div className="flex items-center space-x-2">
             <Switch
               id="layout-mode"
@@ -812,8 +813,8 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         </div>
       )}
 
-      {/* Active Date Filter Indicator */}
-      {dateRange && (dateRange.from || dateRange.to) && (
+      {/* Active Date Filter Indicator - Only show when filter is active AND has results */}
+      {dateRange && (dateRange.from || dateRange.to) && filteredData.length > 0 && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <Calendar className="h-4 w-4 text-blue-600" />
@@ -838,7 +839,38 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         </div>
       )}
 
-      {/* Dashboard Content */}
+      {/* No Data for Date Range Empty State */}
+      {filteredData.length === 0 && data.length > 0 && (dateRange?.from || dateRange?.to) ? (
+        <div className="flex items-center justify-center py-32">
+          <div className="text-center space-y-6 max-w-md">
+            <div className="w-20 h-20 mx-auto bg-orange-100 rounded-3xl flex items-center justify-center">
+              <Calendar className="w-10 h-10 text-orange-500" />
+            </div>
+            <div>
+              <h3 className="text-2xl font-semibold text-gray-900">No data for selected date range</h3>
+              <p className="text-gray-500 mt-3 text-base leading-relaxed">
+                There are no records matching your date filter:
+                <br />
+                <span className="font-medium text-gray-700">
+                  {dateRange.from && format(dateRange.from, 'MMM d, yyyy')}
+                  {dateRange.to && dateRange.from !== dateRange.to && ` - ${format(dateRange.to, 'MMM d, yyyy')}`}
+                </span>
+              </p>
+              <p className="text-sm text-gray-400 mt-2">
+                Try selecting a different date range or clear the filter to see all data.
+              </p>
+              <Button
+                onClick={() => setDateRange(undefined)}
+                className="mt-6 bg-orange-500 hover:bg-orange-600"
+              >
+                <X className="h-4 w-4 mr-2" />
+                Clear Date Filter
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Dashboard Content */
       <div className={cn(
         "dashboard-container draggable-grid-container relative",
         isLayoutMode && "layout-mode"
@@ -949,6 +981,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
           </ResponsiveGridLayout>
         )}
       </div>
+      )}
 
       {/* Customization Mode Indicator */}
       {(isLayoutMode || isCustomizing) && (
