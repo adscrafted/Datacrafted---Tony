@@ -350,11 +350,107 @@ export function ChartCustomizationPanel({
                         key={option.value}
                         onClick={() => {
                           const currentType = effectiveChartType
-                          // If chart type is changing, reset dataMapping to avoid field conflicts
+                          // If chart type is changing, intelligently map existing fields to new chart type
                           if (currentType !== option.value) {
+                            const currentMapping = effectiveDataMapping || {}
+                            let newMapping: any = {}
+
+                            // Intelligent field mapping based on new chart type
+                            switch (option.value) {
+                              case 'funnel':
+                                // Map xAxis/category → stage, yAxis/value → value
+                                newMapping = {
+                                  stage: currentMapping.xAxis || currentMapping.category || currentMapping.stage,
+                                  value: currentMapping.yAxis || currentMapping.value || currentMapping.values?.[0]
+                                }
+                                break
+
+                              case 'waterfall':
+                                // Map xAxis/category → category, yAxis/value → value
+                                newMapping = {
+                                  category: currentMapping.xAxis || currentMapping.category,
+                                  value: currentMapping.yAxis || currentMapping.value || currentMapping.values?.[0]
+                                }
+                                break
+
+                              case 'gauge':
+                                // Map metric/yAxis/value → value
+                                newMapping = {
+                                  value: currentMapping.metric || currentMapping.yAxis || currentMapping.value || currentMapping.values?.[0]
+                                }
+                                break
+
+                              case 'heatmap':
+                                // Map xAxis → xAxis, yAxis → yAxis, value → value
+                                newMapping = {
+                                  xAxis: currentMapping.xAxis || currentMapping.category,
+                                  yAxis: currentMapping.yAxis || currentMapping.metric,
+                                  value: currentMapping.value || currentMapping.values?.[0]
+                                }
+                                break
+
+                              case 'treemap':
+                                // Map xAxis/category → category, yAxis/value → value
+                                newMapping = {
+                                  category: currentMapping.xAxis || currentMapping.category,
+                                  value: currentMapping.yAxis || currentMapping.value || currentMapping.values?.[0]
+                                }
+                                break
+
+                              case 'sankey':
+                                // Try to preserve source/target if they exist
+                                newMapping = {
+                                  source: currentMapping.source || currentMapping.xAxis,
+                                  target_node: currentMapping.target_node || currentMapping.yAxis,
+                                  value: currentMapping.value || currentMapping.values?.[0]
+                                }
+                                break
+
+                              case 'bullet':
+                                // Map metrics to actual/comparative
+                                newMapping = {
+                                  actual: currentMapping.actual || currentMapping.metric || currentMapping.yAxis,
+                                  comparative: currentMapping.comparative || currentMapping.target
+                                }
+                                break
+
+                              case 'cohort':
+                                // Try to preserve cohort fields
+                                newMapping = {
+                                  cohort: currentMapping.cohort || currentMapping.xAxis,
+                                  period: currentMapping.period || currentMapping.category,
+                                  value: currentMapping.value || currentMapping.yAxis
+                                }
+                                break
+
+                              case 'sparkline':
+                                // Map xAxis/trend → trend
+                                newMapping = {
+                                  trend: currentMapping.trend || currentMapping.xAxis || currentMapping.metric
+                                }
+                                break
+
+                              default:
+                                // For standard charts (bar, line, pie, etc.), preserve existing mapping
+                                newMapping = currentMapping
+                                break
+                            }
+
+                            // Only include fields that have values
+                            const cleanedMapping = Object.entries(newMapping)
+                              .filter(([_, value]) => value !== undefined && value !== null)
+                              .reduce((acc, [key, value]) => ({ ...acc, [key]: value }), {})
+
+                            console.log('🔄 [CHART_TYPE_CHANGE] Mapping fields:', {
+                              from: currentType,
+                              to: option.value,
+                              oldMapping: currentMapping,
+                              newMapping: cleanedMapping
+                            })
+
                             handleUpdate({
                               chartType: option.value,
-                              dataMapping: null as any // Clear data mapping when chart type changes
+                              dataMapping: Object.keys(cleanedMapping).length > 0 ? cleanedMapping : null
                             })
                           } else {
                             handleUpdate({ chartType: option.value })
@@ -2793,7 +2889,16 @@ export function ChartCustomizationPanel({
                           let isValid = false
                           let missingFields = ''
 
-                          switch (chartType) {
+                          // Use effectiveChartType to account for customization changes
+                          const validationChartType = customization?.chartType || chartType
+
+                          console.log('🔍 [VALIDATION] Validating chart:', {
+                            validationChartType,
+                            mapping,
+                            hasMapping: Object.keys(mapping).length > 0
+                          })
+
+                          switch (validationChartType) {
                             case 'line':
                             case 'bar':
                               isValid = !!(mapping.xAxis || mapping.category)
@@ -2884,7 +2989,7 @@ export function ChartCustomizationPanel({
 
                           if (!isValid) {
                             // Show a more user-friendly error message
-                            console.error('❌ [CUSTOMIZATION_PANEL] Validation failed:', missingFields)
+                            console.warn('⚠️ [CUSTOMIZATION_PANEL] Validation failed:', missingFields)
 
                             // You could replace this with a toast notification in a real app
                             const errorMessage = missingFields || 'Please configure required data fields before generating the chart'

@@ -66,7 +66,15 @@ const CustomTooltip = ({ active, payload }: any) => {
 };
 
 const CustomLabel = (props: any) => {
-  const { x, y, width, height, value, name, percentage, showPercentages } = props;
+  const { x, y, width, height, value, name, payload, showPercentages } = props;
+
+  // Get percentage from payload if available
+  const percentage = payload?.percentage;
+
+  // Validate that we have all required data
+  if (!value || !name) {
+    return null;
+  }
 
   return (
     <g>
@@ -88,7 +96,9 @@ const CustomLabel = (props: any) => {
         dominantBaseline="middle"
         className="text-xs"
       >
-        {showPercentages ? `${percentage.toFixed(1)}% (${value.toLocaleString()})` : value.toLocaleString()}
+        {showPercentages && percentage !== undefined
+          ? `${percentage.toFixed(1)}% (${value.toLocaleString()})`
+          : value.toLocaleString()}
       </text>
     </g>
   );
