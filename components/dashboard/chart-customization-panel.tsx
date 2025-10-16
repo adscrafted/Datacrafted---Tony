@@ -1657,15 +1657,6 @@ export function ChartCustomizationPanel({
                             )}
                           </div>
                         </div>
-
-                        {/* Waterfall Chart Info */}
-                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                          <p className="text-xs text-blue-800 font-medium mb-1">About Waterfall Charts</p>
-                          <p className="text-xs text-blue-700">
-                            Waterfall charts show how an initial value is affected by a series of positive and negative values.
-                            The type field can specify if each value is an "increase", "decrease", or "total".
-                          </p>
-                        </div>
                       </div>
                     )}
 
