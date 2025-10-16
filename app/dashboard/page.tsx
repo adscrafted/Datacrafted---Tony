@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, Suspense, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Download, FileSpreadsheet, Loader2, Maximize2, X, BarChart3, Layout, Share2, PanelLeftClose, PanelLeft, Grid3x3, LogOut } from 'lucide-react'
+import { ArrowLeft, Download, FileSpreadsheet, Loader2, Maximize2, X, BarChart3, Layout, Share2, PanelLeftClose, PanelLeft, Grid3x3, LogOut, Plus, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useDataStore } from '@/lib/store'
@@ -109,7 +109,10 @@ function DashboardContent() {
     getFilteredData,
     setFileName,
     setRawData,
-    setDataSchema
+    setDataSchema,
+    setShowChartTemplateGallery,
+    batchUpdateChartCustomizations,
+    chartCustomizations
   } = useDataStore()
 
 
@@ -512,6 +515,11 @@ function DashboardContent() {
     reset()
     router.push('/projects')
   }
+
+  // Handle reset layout - trigger via custom event that FlexibleDashboardLayout listens to
+  const handleResetLayout = React.useCallback(() => {
+    window.dispatchEvent(new CustomEvent('reset-dashboard-layout'))
+  }, [])
   
 
 
@@ -902,6 +910,28 @@ function DashboardContent() {
             <div className="flex items-center space-x-2">
               {/* Date Range Selector - only shows if date columns detected */}
               <DateRangeSelector />
+
+              {/* Add Chart Button */}
+              <Button
+                onClick={() => setShowChartTemplateGallery(true)}
+                size="sm"
+                variant="outline"
+                className="text-blue-600 border-blue-200 hover:bg-blue-50"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Chart
+              </Button>
+
+              {/* Reset Layout Button */}
+              <Button
+                onClick={handleResetLayout}
+                size="sm"
+                variant="outline"
+                className="text-blue-600 border-blue-200 hover:bg-blue-50"
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Reset Layout
+              </Button>
 
               {/* Save Dashboard Button */}
               <SaveDashboardButton />

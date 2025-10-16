@@ -4,26 +4,8 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { Responsive, WidthProvider, Layout as GridLayout } from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
-import { Plus, Grid3x3, Layout, Save, Download, Upload, RotateCcw, Eye, EyeOff, Calendar, X } from 'lucide-react'
+import { Plus, Layout, Calendar, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { EnhancedChartWrapper } from './enhanced-chart-wrapper'
 import { ChartTemplateGallery } from './chart-template-gallery'
 import { ChartCustomizationPanel } from './chart-customization-panel'
@@ -32,7 +14,6 @@ import { useDataStore, AnalysisResult, DataRow } from '@/lib/store'
 import { useProjectStore } from '@/lib/stores/project-store'
 import { filterValidCharts } from '@/lib/utils/chart-validator'
 import { cn } from '@/lib/utils/cn'
-import { AverageQualityIndicator } from './quality-indicator'
 import type { ChartRecommendation, EnhancedAnalysisResult } from '@/lib/types/recommendation'
 import { isEnhancedAnalysisResult } from '@/lib/types/recommendation'
 import { format } from 'date-fns'
@@ -54,9 +35,6 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
 
   const [selectedChartId, setSelectedChartId] = useState<string | null>(null)
   const [newlyAddedChartId, setNewlyAddedChartId] = useState<string | null>(null) // Track newly added chart by ID
-  const [isLayoutMode, setIsLayoutMode] = useState(false)
-  const [saveLayoutName, setSaveLayoutName] = useState('')
-  const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [layoutKey, setLayoutKey] = useState(0) // Force re-render key
 
   // Refs
@@ -66,24 +44,13 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
   const {
     chartCustomizations,
     currentLayout,
-    availableLayouts,
     isCustomizing,
     setIsCustomizing,
     updateChartCustomization,
     batchUpdateChartCustomizations,
     showChartTemplateGallery,
     setShowChartTemplateGallery,
-    gridSnapping,
-    showGridLines,
-    setGridSnapping,
-    setShowGridLines,
     autoSaveLayouts,
-    setAutoSaveLayouts,
-    saveLayout,
-    loadLayout,
-    resetToDefaultLayout,
-    exportLayoutConfig,
-    importLayoutConfig,
     setAvailableColumns,
     isDragging,
     setIsDragging,
@@ -296,11 +263,6 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     return scores
   }, [analysis])
 
-  // Calculate average quality for display
-  const qualityScoreValues = useMemo(() => {
-    return Object.values(qualityScores).filter(score => score > 0)
-  }, [qualityScores])
-
   // Enhanced default dimensions for each chart type with proper 320x400px minimum sizing
   // Row height is 200px, so h: 2 = 400px, h: 3 = 600px, h: 4 = 800px
   const getFixedDimensions = useCallback((config: any, chartId?: string) => {
@@ -503,9 +465,9 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       const chartId = config.id || `chart-${originalIndex}`
       const customization = chartCustomizations[chartId]
 
-      // Skip invisible charts unless in layout mode
+      // Skip invisible charts
       const isVisible = customization?.isVisible !== false
-      if (!isVisible && !isLayoutMode) {
+      if (!isVisible) {
         return
       }
 
@@ -540,7 +502,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     })
 
     return items
-  }, [sortedCharts, chartCustomizations, analysis.chartConfig, isLayoutMode])
+  }, [sortedCharts, chartCustomizations, analysis.chartConfig])
 
   // Force layout refresh when chart count changes
   useEffect(() => {
@@ -603,7 +565,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       batchUpdateChartCustomizations(updates)
 
       // OPTIMIZATION: Debounced auto-save with cleanup
-      if (autoSaveLayouts && currentProjectId && !showSaveDialog) {
+      if (autoSaveLayouts && currentProjectId) {
         if (autoSaveTimerRef.current) {
           clearTimeout(autoSaveTimerRef.current)
         }
@@ -619,7 +581,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         }, 5000) // PERFORMANCE: Increased to 5 seconds to significantly reduce database writes
       }
     }, 150) // 150ms throttle - balance between responsiveness and performance
-  }, [batchUpdateChartCustomizations, autoSaveLayouts, showSaveDialog, validateLayout, currentProjectId, chartCustomizations, currentLayout, dashboardFilters, currentTheme, saveDashboardConfig, sortedCharts, analysis.chartConfig])
+  }, [batchUpdateChartCustomizations, autoSaveLayouts, validateLayout, currentProjectId, chartCustomizations, currentLayout, dashboardFilters, currentTheme, saveDashboardConfig, sortedCharts, analysis.chartConfig])
 
   // Auto-clear newly added chart flag after 5 seconds (safety net)
   useEffect(() => {
@@ -630,6 +592,19 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       return () => clearTimeout(timer)
     }
   }, [newlyAddedChartId])
+
+  // Listen for reset layout event from parent dashboard
+  useEffect(() => {
+    const handleResetLayoutEvent = () => {
+      performLayoutReset()
+    }
+
+    window.addEventListener('reset-dashboard-layout', handleResetLayoutEvent)
+
+    return () => {
+      window.removeEventListener('reset-dashboard-layout', handleResetLayoutEvent)
+    }
+  }, [performLayoutReset])
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -658,160 +633,12 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     setIsDragging(false)
   }, [setIsDragging])
 
-  // Handle layout save
-  const handleSaveLayout = useCallback(() => {
-    if (saveLayoutName.trim()) {
-      saveLayout(saveLayoutName.trim())
-      setSaveLayoutName('')
-      setShowSaveDialog(false)
-    }
-  }, [saveLayoutName, saveLayout])
-
-  // Handle layout import
-  const handleLayoutImport = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      importLayoutConfig(file)
-      event.target.value = '' // Reset input
-    }
-  }, [importLayoutConfig])
-
   // Breakpoints for responsive design
   const breakpoints = { lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }
   const cols = { lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }
 
   return (
     <div className={cn('relative', className)}>
-      {/* Dashboard Toolbar */}
-      <div className="flex items-center justify-between mb-6 p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-        <div className="flex items-center space-x-4">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Dashboard Layout
-          </h2>
-
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="layout-mode"
-              checked={isLayoutMode}
-              onCheckedChange={setIsLayoutMode}
-            />
-            <Label htmlFor="layout-mode" className="text-sm">
-              Layout Mode
-            </Label>
-          </div>
-          {qualityScoreValues.length > 0 && (
-            <AverageQualityIndicator scores={qualityScoreValues} />
-          )}
-        </div>
-
-        <div className="flex items-center space-x-2">
-          {/* Grid Options */}
-          <div className="flex items-center space-x-2 px-3 py-1 bg-gray-50 rounded-md">
-            <Grid3x3 className="h-4 w-4 text-gray-500" />
-            <Switch
-              id="grid-snap"
-              checked={gridSnapping}
-              onCheckedChange={setGridSnapping}
-              size="sm"
-            />
-            <Label htmlFor="grid-snap" className="text-xs">
-              Snap
-            </Label>
-            <Switch
-              id="grid-lines"
-              checked={showGridLines}
-              onCheckedChange={setShowGridLines}
-              size="sm"
-            />
-            <Label htmlFor="grid-lines" className="text-xs">
-              Grid
-            </Label>
-          </div>
-
-          {/* Add Chart Button */}
-          <Button
-            onClick={() => setShowChartTemplateGallery(true)}
-            size="sm"
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Chart
-          </Button>
-
-          {/* Reset Layout Button */}
-          <Button
-            onClick={performLayoutReset}
-            size="sm"
-            variant="outline"
-            className="text-blue-600 border-blue-200 hover:bg-blue-50"
-          >
-            <RotateCcw className="h-4 w-4 mr-2" />
-            Reset Layout
-          </Button>
-
-          {/* Layout Actions Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Layout className="h-4 w-4 mr-2" />
-                Layout
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => setShowSaveDialog(true)}>
-                <Save className="h-4 w-4 mr-2" />
-                Save Layout
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {availableLayouts.map(layout => (
-                <DropdownMenuItem
-                  key={layout.id}
-                  onClick={() => loadLayout(layout.id)}
-                  className={cn(
-                    currentLayout.id === layout.id && "bg-blue-50 text-blue-700"
-                  )}
-                >
-                  <Layout className="h-4 w-4 mr-2" />
-                  {layout.name}
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={resetToDefaultLayout}>
-                <RotateCcw className="h-4 w-4 mr-2" />
-                Reset to Default
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={exportLayoutConfig}>
-                <Download className="h-4 w-4 mr-2" />
-                Export Config
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <label className="flex items-center cursor-pointer">
-                  <Upload className="h-4 w-4 mr-2" />
-                  Import Config
-                  <input
-                    type="file"
-                    accept=".json"
-                    onChange={handleLayoutImport}
-                    className="hidden"
-                  />
-                </label>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-
-      {/* Grid Background (when enabled) */}
-      {showGridLines && (
-        <div className="absolute inset-0 pointer-events-none opacity-10">
-          <div className="grid grid-cols-12 h-full">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="border-r border-gray-300" />
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Active Date Filter Indicator - Only show when filter is active AND has results */}
       {dateRange && (dateRange.from || dateRange.to) && filteredData.length > 0 && (
@@ -871,10 +698,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         </div>
       ) : (
         /* Dashboard Content */
-      <div className={cn(
-        "dashboard-container draggable-grid-container relative",
-        isLayoutMode && "layout-mode"
-      )}>
+      <div className="dashboard-container draggable-grid-container relative">
         {sortedCharts.length === 0 ? (
             <div className="flex items-center justify-center py-32">
               <div className="text-center space-y-6 max-w-md">
@@ -934,7 +758,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
               // But we need to ensure this is working correctly
               const isVisible = customization?.isVisible !== false
 
-              if (!isVisible && !isLayoutMode) {
+              if (!isVisible) {
                 return null
               }
 
@@ -942,11 +766,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
               // Stabilize array and object references
               const dataKey = config.dataKey || []
               const configDataMapping = config.dataMapping
-              const chartClassName = cn(
-                "h-full",
-                "cursor-move",
-                isLayoutMode && "ring-2 ring-blue-400"
-              )
+              const chartClassName = "h-full cursor-move"
               const chartTitle = config.title || `Chart ${index + 1}`
               const chartDescription = config.description || ''
 
@@ -984,18 +804,17 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       )}
 
       {/* Customization Mode Indicator */}
-      {(isLayoutMode || isCustomizing) && (
+      {isCustomizing && (
         <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50">
           <div className="bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center space-x-2">
             <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
             <span className="text-sm font-medium">
-              {isLayoutMode ? 'Layout Mode Active' : 'Customizing Dashboard'}
+              Customizing Dashboard
             </span>
             <Button
               size="sm"
               variant="secondary"
               onClick={() => {
-                setIsLayoutMode(false)
                 setIsCustomizing(false)
                 setSelectedChartId(null)
               }}
@@ -1006,38 +825,6 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
           </div>
         </div>
       )}
-
-      {/* Save Layout Dialog */}
-      <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Save Layout</DialogTitle>
-            <DialogDescription>
-              Give your layout a name to save it for future use
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="layout-name">Layout Name</Label>
-              <Input
-                id="layout-name"
-                value={saveLayoutName}
-                onChange={(e) => setSaveLayoutName(e.target.value)}
-                placeholder="e.g., Executive Dashboard"
-                className="mt-1"
-              />
-            </div>
-            <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setShowSaveDialog(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleSaveLayout} disabled={!saveLayoutName.trim()}>
-                Save Layout
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Chart Template Gallery */}
       <ChartTemplateGallery
