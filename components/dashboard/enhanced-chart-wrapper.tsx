@@ -912,8 +912,14 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
   }, [id, duplicateChart, setContextMenu])
 
   const handleDelete = useCallback(() => {
-    removeChart(id)
+    // Close dropdown menu immediately
+    setIsDropdownOpen(false)
+    // Clear hover state
+    setIsHovered(false)
+    // Close context menu
     setContextMenu(null)
+    // Remove the chart
+    removeChart(id)
   }, [id, removeChart, setContextMenu])
 
   const handleChangeType = useCallback((newType: ChartTemplate['type']) => {
@@ -2679,6 +2685,12 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
       default:
         return <div className="flex items-center justify-center h-64 text-gray-400">Unsupported chart type</div>
     }
+  }
+
+  // CRITICAL FIX: If chart has no customization AND no data, it was likely deleted
+  // Return null to properly unmount the component and prevent orphaned toolbar
+  if (!customization && (!chartData || chartData.length === 0)) {
+    return null
   }
 
   // For scorecards, render with minimal wrapper - scorecard handles its own styling
