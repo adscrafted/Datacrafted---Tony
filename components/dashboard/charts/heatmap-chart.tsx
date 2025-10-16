@@ -219,76 +219,85 @@ export const HeatmapChart = React.memo<HeatmapChartProps>(function HeatmapChart(
 
   return (
     <HeatmapErrorBoundary>
-      <ResponsiveContainer width="100%" height="100%" minHeight={400}>
-        <ScatterChart
-          margin={{ top: 20, right: 20, bottom: 60, left: 80 }}
-        >
-          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-          <XAxis
-            type="number"
-            dataKey="x"
-            name={dataMapping.xAxis}
-            domain={[-0.5, xCategories.length - 0.5]}
-            tickCount={xCategories.length}
-            tick={{ fontSize: 11 }}
-            angle={-45}
-            textAnchor="end"
-            height={60}
-            tickFormatter={(value) => {
-              const index = Math.round(value)
-              return xCategories[index] || ''
-            }}
-          />
-          <YAxis
-            type="number"
-            dataKey="y"
-            name={dataMapping.yAxis}
-            domain={[-0.5, yCategories.length - 0.5]}
-            tickCount={yCategories.length}
-            tick={{ fontSize: 11 }}
-            width={80}
-            tickFormatter={(value) => {
-              const index = Math.round(value)
-              const label = yCategories[index] || ''
-              return label.length > 15 ? label.substring(0, 12) + '...' : label
-            }}
-          />
-          <Tooltip content={<CustomTooltip />} cursor={false} />
-          <Scatter
-            data={chartData}
-            shape={(props: any) => (
-              <HeatmapCell
-                {...props}
-                width={cellWidth}
-                height={cellHeight}
-                fill={getColor(props.payload.normalizedValue)}
-                showValue={showValues}
+      <div className="flex flex-col h-full w-full">
+        {/* Chart Container - takes most space */}
+        <div className="flex-1 min-h-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <ScatterChart
+              margin={{ top: 20, right: 20, bottom: 80, left: 80 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis
+                type="number"
+                dataKey="x"
+                name={dataMapping.xAxis}
+                domain={[-0.5, xCategories.length - 0.5]}
+                tickCount={xCategories.length}
+                tick={{ fontSize: 11 }}
+                angle={-45}
+                textAnchor="end"
+                height={60}
+                tickFormatter={(value) => {
+                  const index = Math.round(value)
+                  return xCategories[index] || ''
+                }}
               />
-            )}
-          >
-            {chartData.map((entry, index) => (
-              <Cell
-                key={`cell-${index}`}
-                fill={getColor(entry.normalizedValue)}
+              <YAxis
+                type="number"
+                dataKey="y"
+                name={dataMapping.yAxis}
+                domain={[-0.5, yCategories.length - 0.5]}
+                tickCount={yCategories.length}
+                tick={{ fontSize: 11 }}
+                width={80}
+                tickFormatter={(value) => {
+                  const index = Math.round(value)
+                  const label = yCategories[index] || ''
+                  return label.length > 15 ? label.substring(0, 12) + '...' : label
+                }}
               />
-            ))}
-          </Scatter>
-        </ScatterChart>
-      </ResponsiveContainer>
-
-      {/* Color Legend */}
-      <div className="flex items-center justify-center mt-4 gap-2">
-        <span className="text-xs text-gray-600">{minValue.toLocaleString()}</span>
-        <div className="flex gap-1">
-          {COLOR_SCALES[colorScale].map((color, index) => (
-            <div
-              key={index}
-              className="w-8 h-4 border border-gray-200"
-              style={{ backgroundColor: color }}
-            />
-          ))}
+              <Tooltip content={<CustomTooltip />} cursor={false} />
+              <Scatter
+                data={chartData}
+                shape={(props: any) => (
+                  <HeatmapCell
+                    {...props}
+                    width={cellWidth}
+                    height={cellHeight}
+                    fill={getColor(props.payload.normalizedValue)}
+                    showValue={showValues}
+                  />
+                )}
+              >
+                {chartData.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={getColor(entry.normalizedValue)}
+                  />
+                ))}
+              </Scatter>
+            </ScatterChart>
+          </ResponsiveContainer>
         </div>
-        <span className="text-xs text-gray-600">{maxValue.toLocaleString()}</span>
+
+        {/* Color Legend - fixed at bottom */}
+        <div className="flex-shrink-0 flex items-center justify-center py-3 px-4 bg-white border-t border-gray-100">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-medium text-gray-700">Low</span>
+            <span className="text-xs text-gray-600">{minValue.toLocaleString()}</span>
+            <div className="flex gap-0.5 shadow-sm">
+              {COLOR_SCALES[colorScale].map((color, index) => (
+                <div
+                  key={index}
+                  className="w-10 h-5 first:rounded-l last:rounded-r border-y border-gray-200 first:border-l last:border-r"
+                  style={{ backgroundColor: color }}
+                />
+              ))}
+            </div>
+            <span className="text-xs text-gray-600">{maxValue.toLocaleString()}</span>
+            <span className="text-xs font-medium text-gray-700">High</span>
+          </div>
+        </div>
       </div>
     </HeatmapErrorBoundary>
   )

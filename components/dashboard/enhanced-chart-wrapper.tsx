@@ -300,7 +300,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
       case 'heatmap':
         return !!(effectiveMapping.xAxis && effectiveMapping.yAxis && effectiveMapping.value)
       case 'gauge':
-        return !!effectiveMapping.value
+        return !!effectiveMapping.metric
       case 'cohort':
         return !!(effectiveMapping.cohort && effectiveMapping.period && effectiveMapping.value)
       case 'bullet':
@@ -2496,7 +2496,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
             <GaugeChart
               data={chartData}
               dataMapping={{
-                metric: effectiveDataMapping?.value || safeDataKey[0] || 'value',
+                metric: effectiveDataMapping?.metric || safeDataKey[0] || 'value',
                 aggregation: (effectiveDataMapping as any)?.aggregation || 'sum'
               }}
               customization={{

@@ -2214,16 +2214,31 @@ export const useDataStore = create<DataStore>()(
 
         console.log('✅ [COMMIT_DRAFT] Committing draft chart to dashboard:', state.draftChart)
 
+        // CRITICAL FIX: Merge the customization data (including dataMapping) into the chart
+        const chartId = state.draftChart.id
+        const customization = state.chartCustomizations[chartId]
+
+        // Create the final chart config with customization data
+        const finalChart = {
+          ...state.draftChart,
+          // Merge in the dataMapping from customization
+          dataMapping: customization?.dataMapping || state.draftChart.dataMapping || {},
+          // Also preserve the full customization for later use
+          customization: customization
+        }
+
+        console.log('✅ [COMMIT_DRAFT] Final chart with customization:', finalChart)
+
         // Add the draft chart to analysis.chartConfig
         set(state => ({
           analysis: state.analysis ? {
             ...state.analysis,
-            chartConfig: [...state.analysis.chartConfig, state.draftChart!]
+            chartConfig: [...state.analysis.chartConfig, finalChart]
           } : null,
           draftChart: null // Clear the draft
         }))
 
-        get().addToHistory('chart_add', { chartId: state.draftChart.id, template: state.draftChart })
+        get().addToHistory('chart_add', { chartId: finalChart.id, template: finalChart })
       },
 
       // Upload status actions

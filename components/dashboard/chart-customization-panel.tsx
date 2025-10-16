@@ -3054,8 +3054,8 @@ export function ChartCustomizationPanel({
                               else if (!mapping.value) missingFields = 'Please select a value field'
                               break
                             case 'gauge':
-                              isValid = !!mapping.value
-                              if (!isValid) missingFields = 'Please select a value field'
+                              isValid = !!mapping.metric
+                              if (!isValid) missingFields = 'Please select a metric field'
                               break
                             case 'cohort':
                               isValid = !!(mapping.cohort && mapping.period && mapping.value)
