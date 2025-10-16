@@ -2155,6 +2155,7 @@ export function ChartCustomizationPanel({
                             The minimum value for the gauge (0% mark). Default: 0
                           </p>
                         </div>
+                        </div>
                       </div>
                     )}
 
