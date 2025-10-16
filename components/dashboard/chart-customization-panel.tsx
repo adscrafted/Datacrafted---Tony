@@ -298,8 +298,8 @@ export function ChartCustomizationPanel({
           />
           
           {/* Settings Panel */}
-          <Card 
-            className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-[500px] max-h-[80vh] overflow-hidden shadow-xl bg-white"
+          <Card
+            className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-[950px] max-h-[85vh] overflow-hidden shadow-xl bg-white"
             onClick={(e) => e.stopPropagation()}
           >
           <CardHeader className="pb-3">
@@ -551,11 +551,11 @@ export function ChartCustomizationPanel({
                   <>
                     {/* Standard Charts: Line, Bar, Area, Scatter, Combo */}
                     {(effectiveChartType === 'line' || effectiveChartType === 'bar' || effectiveChartType === 'area' || effectiveChartType === 'scatter' || effectiveChartType === 'combo') && (
-                      <div className="space-y-6">
+                      <div className="flex gap-6">
                         {/* Available Fields */}
-                        <div>
+                        <div className="w-1/3 flex-shrink-0">
                           <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-40 overflow-y-auto">
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
                             <div className="grid grid-cols-1 gap-2">
                               {columnsByType.all.map((col, index) => {
                                 const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
@@ -583,12 +583,12 @@ export function ChartCustomizationPanel({
                           </div>
                           <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
                             <span className="mr-1">💡</span>
-                            Tip: Drag fields to X-axis and Y-axis zones below
+                            Tip: Drag fields to the right →
                           </p>
                         </div>
 
                         {/* Drop Zones */}
-                        <div className="grid grid-cols-1 gap-4">
+                        <div className="flex-1 space-y-4">
                           {/* X-Axis Drop Zone */}
                           <div
                             onDragOver={(e) => {
@@ -637,8 +637,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">⬇️</span>
-                                Drop a field here for X-axis
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a field from the left
                               </div>
                             )}
                           </div>
@@ -744,7 +744,8 @@ export function ChartCustomizationPanel({
                                     </div>
                                   ) : (
                                     <div className="text-center py-4 text-gray-500 text-sm">
-                                      Drop numeric fields for left axis
+                                      <span className="block text-lg mb-1">👈</span>
+                                      Drag numeric fields from the left
                                     </div>
                                   )
                                 })()}
@@ -839,7 +840,8 @@ export function ChartCustomizationPanel({
                                   </div>
                                 ) : (
                                   <div className="text-center py-4 text-gray-500 text-sm">
-                                    Drop numeric fields for right axis
+                                    <span className="block text-lg mb-1">👈</span>
+                                    Drag numeric fields from the left
                                   </div>
                                 )}
                               </div>
@@ -945,8 +947,8 @@ export function ChartCustomizationPanel({
                                   </div>
                                 ) : (
                                   <div className="text-center py-4 text-gray-500 text-sm">
-                                    <span className="block text-lg mb-1">⬇️</span>
-                                    Drop numeric fields here for Y-axis
+                                    <span className="block text-lg mb-1">👈</span>
+                                    Drag numeric fields from the left
                                   </div>
                                 )
                               })()}
@@ -1081,7 +1083,7 @@ export function ChartCustomizationPanel({
 
                         {/* Scatter Chart Advanced Fields (Size & Color) */}
                         {effectiveChartType === 'scatter' && (
-                          <div className="grid grid-cols-1 gap-4 mt-4">
+                          <div className="space-y-4">
                             {/* Bubble Size Drop Zone */}
                             <div>
                               <div
@@ -1188,11 +1190,11 @@ export function ChartCustomizationPanel({
 
                     {/* Pie Chart Data Mapping */}
                     {effectiveChartType === 'pie' && (
-                      <div className="space-y-6">
+                      <div className="flex gap-6">
                         {/* Available Fields for Pie Chart */}
-                        <div>
+                        <div className="w-1/3 flex-shrink-0">
                           <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-40 overflow-y-auto">
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
                             <div className="grid grid-cols-1 gap-2">
                               {columnsByType.all.map((col, index) => {
                                 const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
@@ -1218,10 +1220,14 @@ export function ChartCustomizationPanel({
                               })}
                             </div>
                           </div>
+                          <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
+                            <span className="mr-1">💡</span>
+                            Tip: Drag fields to the right →
+                          </p>
                         </div>
 
                         {/* Pie Chart Drop Zones */}
-                        <div className="grid grid-cols-1 gap-4">
+                        <div className="flex-1 space-y-4">
                           {/* Category Drop Zone */}
                           <div
                             onDragOver={(e) => {
@@ -1266,7 +1272,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                Drop a field here for categories
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a field from the left
                               </div>
                             )}
                           </div>
@@ -1318,7 +1325,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                Drop numeric field here (optional - counts occurrences if empty)
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a field from the left (optional - counts occurrences if empty)
                               </div>
                             )}
                           </div>
@@ -1458,11 +1466,11 @@ export function ChartCustomizationPanel({
 
                     {/* Waterfall Chart Data Mapping */}
                     {effectiveChartType === 'waterfall' && (
-                      <div className="space-y-6">
+                      <div className="flex gap-6">
                         {/* Available Fields for Waterfall Chart */}
-                        <div>
+                        <div className="w-1/3 flex-shrink-0">
                           <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-40 overflow-y-auto">
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
                             <div className="grid grid-cols-1 gap-2">
                               {columnsByType.all.map((col, index) => {
                                 const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
@@ -1490,12 +1498,12 @@ export function ChartCustomizationPanel({
                           </div>
                           <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
                             <span className="mr-1">💡</span>
-                            Tip: Drag fields to the zones below to configure your waterfall chart
+                            Tip: Drag fields to the right →
                           </p>
                         </div>
 
                         {/* Waterfall Chart Drop Zones */}
-                        <div className="grid grid-cols-1 gap-4">
+                        <div className="flex-1 space-y-4">
                           {/* Category Drop Zone */}
                           <div
                             onDragOver={(e) => {
@@ -1540,8 +1548,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">⬇️</span>
-                                Drop a field here for categories (X-axis)
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a field from the left for categories (X-axis)
                               </div>
                             )}
                           </div>
@@ -1593,8 +1601,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">⬇️</span>
-                                Drop a numeric field here for values
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a numeric field from the left for values
                               </div>
                             )}
                           </div>
@@ -1643,8 +1651,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">⬇️</span>
-                                Drop a field to indicate increase/decrease/total (optional)
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a field from the left to indicate increase/decrease/total (optional)
                               </div>
                             )}
                           </div>
@@ -1663,10 +1671,10 @@ export function ChartCustomizationPanel({
 
                     {/* Funnel Chart Data Mapping */}
                     {effectiveChartType === 'funnel' && (
-                      <div className="space-y-6">
-                        <div>
+                      <div className="flex gap-6">
+                        <div className="w-1/3 flex-shrink-0">
                           <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-40 overflow-y-auto">
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
                             <div className="grid grid-cols-1 gap-2">
                               {columnsByType.all.map((col) => {
                                 const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
@@ -1691,9 +1699,13 @@ export function ChartCustomizationPanel({
                               })}
                             </div>
                           </div>
+                          <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
+                            <span className="mr-1">💡</span>
+                            Tip: Drag fields to the right →
+                          </p>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-4">
+                        <div className="flex-1 space-y-4">
                           <div
                             onDragOver={(e) => {
                               e.preventDefault()
@@ -1737,7 +1749,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                Drop a field for funnel stages
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a field from the left for funnel stages
                               </div>
                             )}
                           </div>
@@ -1787,7 +1800,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                Drop a numeric field for values
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a numeric field from the left for values
                               </div>
                             )}
                           </div>
@@ -1797,10 +1811,10 @@ export function ChartCustomizationPanel({
 
                     {/* Heatmap Chart Data Mapping */}
                     {effectiveChartType === 'heatmap' && (
-                      <div className="space-y-6">
-                        <div>
+                      <div className="flex gap-6">
+                        <div className="w-1/3 flex-shrink-0">
                           <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-40 overflow-y-auto">
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
                             <div className="grid grid-cols-1 gap-2">
                               {columnsByType.all.map((col) => {
                                 const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
@@ -1825,9 +1839,13 @@ export function ChartCustomizationPanel({
                               })}
                             </div>
                           </div>
+                          <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
+                            <span className="mr-1">💡</span>
+                            Tip: Drag fields to the right →
+                          </p>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-4">
+                        <div className="flex-1 space-y-4">
                           <div
                             onDragOver={(e) => {
                               e.preventDefault()
@@ -1871,7 +1889,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                Drop a field for X-axis
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a field from the left for X-axis
                               </div>
                             )}
                           </div>
@@ -1919,7 +1938,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                Drop a field for Y-axis
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a field from the left for Y-axis
                               </div>
                             )}
                           </div>
@@ -1969,7 +1989,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                Drop a numeric field for intensity values
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a numeric field from the left for intensity values
                               </div>
                             )}
                           </div>
@@ -2459,10 +2480,10 @@ export function ChartCustomizationPanel({
 
                     {/* Treemap Chart Data Mapping */}
                     {effectiveChartType === 'treemap' && (
-                      <div className="space-y-6">
-                        <div>
+                      <div className="flex gap-6">
+                        <div className="w-1/3 flex-shrink-0">
                           <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-40 overflow-y-auto">
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
                             <div className="grid grid-cols-1 gap-2">
                               {columnsByType.all.map((col) => {
                                 const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
@@ -2487,9 +2508,13 @@ export function ChartCustomizationPanel({
                               })}
                             </div>
                           </div>
+                          <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
+                            <span className="mr-1">💡</span>
+                            Tip: Drag fields to the right →
+                          </p>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-4">
+                        <div className="flex-1 space-y-4">
                           <div
                             onDragOver={(e) => {
                               e.preventDefault()
@@ -2533,7 +2558,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                Drop a field for categories
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a field from the left for categories
                               </div>
                             )}
                           </div>
@@ -2583,7 +2609,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                Drop a numeric field for size values
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a numeric field from the left for size values
                               </div>
                             )}
                           </div>
@@ -2593,10 +2620,10 @@ export function ChartCustomizationPanel({
 
                     {/* Sankey Chart Data Mapping */}
                     {effectiveChartType === 'sankey' && (
-                      <div className="space-y-6">
-                        <div>
+                      <div className="flex gap-6">
+                        <div className="w-1/3 flex-shrink-0">
                           <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-40 overflow-y-auto">
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
                             <div className="grid grid-cols-1 gap-2">
                               {columnsByType.all.map((col) => {
                                 const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
@@ -2621,9 +2648,13 @@ export function ChartCustomizationPanel({
                               })}
                             </div>
                           </div>
+                          <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
+                            <span className="mr-1">💡</span>
+                            Tip: Drag fields to the right →
+                          </p>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-4">
+                        <div className="flex-1 space-y-4">
                           <div
                             onDragOver={(e) => {
                               e.preventDefault()
@@ -2667,7 +2698,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                Drop a field for source nodes
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a field from the left for source nodes
                               </div>
                             )}
                           </div>
@@ -2715,7 +2747,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                Drop a field for target nodes
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a field from the left for target nodes
                               </div>
                             )}
                           </div>
@@ -2765,7 +2798,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                Drop a numeric field for flow values
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a numeric field from the left for flow values
                               </div>
                             )}
                           </div>
