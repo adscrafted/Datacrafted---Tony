@@ -2105,10 +2105,10 @@ export function ChartCustomizationPanel({
 
                     {/* Cohort Chart Data Mapping */}
                     {effectiveChartType === 'cohort' && (
-                      <div className="space-y-6">
-                        <div>
+                      <div className="flex gap-6">
+                        <div className="w-1/3 flex-shrink-0">
                           <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-40 overflow-y-auto">
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
                             <div className="grid grid-cols-1 gap-2">
                               {columnsByType.all.map((col) => {
                                 const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
@@ -2133,9 +2133,13 @@ export function ChartCustomizationPanel({
                               })}
                             </div>
                           </div>
+                          <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
+                            <span className="mr-1">💡</span>
+                            Tip: Drag fields to the right →
+                          </p>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-4">
+                        <div className="flex-1 space-y-4">
                           <div
                             onDragOver={(e) => {
                               e.preventDefault()
@@ -2179,7 +2183,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                Drop a field for cohort identifier
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a field from the left for cohort identifier
                               </div>
                             )}
                           </div>
@@ -2227,7 +2232,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                Drop a field for time period
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a field from the left for time period
                               </div>
                             )}
                           </div>
@@ -2277,7 +2283,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                Drop a numeric field for retention percentage
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a numeric field from the left for retention percentage
                               </div>
                             )}
                           </div>
