@@ -1336,11 +1336,11 @@ export function ChartCustomizationPanel({
 
                     {/* Scorecard Data Mapping */}
                     {effectiveChartType === 'scorecard' && (
-                      <div className="space-y-6">
+                      <div className="flex gap-6">
                         {/* Available Fields for Scorecard */}
-                        <div>
+                        <div className="w-1/3 flex-shrink-0">
                           <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-40 overflow-y-auto">
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
                             <div className="grid grid-cols-1 gap-2">
                               {columnsByType.numeric.map((col, index) => {
                                 const columnType = 'number'
@@ -1366,57 +1366,64 @@ export function ChartCustomizationPanel({
                               })}
                             </div>
                           </div>
+                          <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
+                            <span className="mr-1">💡</span>
+                            Tip: Drag fields to the right →
+                          </p>
                         </div>
 
-                        {/* Metric Drop Zone */}
-                        <div
-                          onDragOver={(e) => {
-                            e.preventDefault()
-                            e.currentTarget.classList.add('border-indigo-400', 'bg-indigo-50')
-                          }}
-                          onDragLeave={(e) => {
-                            e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50')
-                          }}
-                          onDrop={(e) => {
-                            e.preventDefault()
-                            e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50')
-                            try {
-                              const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                              if (data.fieldType === 'number') {
-                                handleUpdate({
-                                  dataMapping: {
-                                    ...customization?.dataMapping,
-                                    metric: data.fieldName
-                                  }
-                                })
+                        <div className="flex-1 space-y-4">
+                          {/* Metric Drop Zone */}
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-indigo-400', 'bg-indigo-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                if (data.fieldType === 'number') {
+                                  handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      metric: data.fieldName
+                                    }
+                                  })
+                                }
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
                               }
-                            } catch (error) {
-                              console.error('Failed to parse drop data:', error)
-                            }
-                          }}
-                          className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
-                        >
-                          <div className="text-sm font-medium text-gray-600 mb-2">Metric Field</div>
-                          {effectiveDataMapping?.metric ? (
-                            <div className="flex items-center justify-between p-2 bg-indigo-100 border border-indigo-300 rounded">
-                              <span className="text-sm text-indigo-800">{effectiveDataMapping.metric}</span>
-                              <button
-                                onClick={() => handleUpdate({
-                                  dataMapping: {
-                                    ...customization?.dataMapping,
-                                    metric: undefined
-                                  }
-                                })}
-                                className="text-indigo-600 hover:text-indigo-800 text-xs"
-                              >
-                                Remove
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="text-center py-3 text-gray-500 text-sm">
-                              Drop a numeric field here for the metric
-                            </div>
-                          )}
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">Metric Field</div>
+                            {effectiveDataMapping?.metric ? (
+                              <div className="flex items-center justify-between p-2 bg-indigo-100 border border-indigo-300 rounded">
+                                <span className="text-sm text-indigo-800">{effectiveDataMapping.metric}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      metric: undefined
+                                    }
+                                  })}
+                                  className="text-indigo-600 hover:text-indigo-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a numeric field from the left for the metric
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     )}
@@ -2807,10 +2814,10 @@ export function ChartCustomizationPanel({
 
                     {/* Sparkline Chart Data Mapping */}
                     {effectiveChartType === 'sparkline' && (
-                      <div className="space-y-6">
-                        <div>
+                      <div className="flex gap-6">
+                        <div className="w-1/3 flex-shrink-0">
                           <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-40 overflow-y-auto">
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
                             <div className="grid grid-cols-1 gap-2">
                               {columnsByType.all.map((col) => {
                                 const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
@@ -2835,9 +2842,13 @@ export function ChartCustomizationPanel({
                               })}
                             </div>
                           </div>
+                          <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
+                            <span className="mr-1">💡</span>
+                            Tip: Drag fields to the right →
+                          </p>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-4">
+                        <div className="flex-1 space-y-4">
                           <div
                             onDragOver={(e) => {
                               e.preventDefault()
@@ -2883,7 +2894,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                Drop a numeric field for sparkline trend
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a numeric field from the left for sparkline trend
                               </div>
                             )}
                           </div>
