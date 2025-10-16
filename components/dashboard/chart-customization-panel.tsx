@@ -1998,53 +1998,101 @@ export function ChartCustomizationPanel({
 
                     {/* Gauge Chart Data Mapping */}
                     {effectiveChartType === 'gauge' && (
-                      <div className="space-y-6">
-                        {/* Metric Field */}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Metric Field (Required)
-                          </label>
-                          <div
-                            className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 min-h-[60px] bg-gray-50 dark:bg-gray-800"
-                            onDragOver={(e) => e.preventDefault()}
-                            onDrop={(e) => {
-                              e.preventDefault()
-                              const fieldName = e.dataTransfer.getData('text/plain')
-                              if (fieldName) {
-                                handleUpdate({
-                                  dataMapping: {
-                                    ...customization?.dataMapping,
-                                    metric: fieldName
-                                  }
-                                })
-                              }
-                            }}
-                          >
-                            {effectiveDataMapping?.metric ? (
-                              <div className="flex items-center justify-between bg-white dark:bg-gray-700 px-3 py-2 rounded">
-                                <span className="text-sm font-medium">{effectiveDataMapping.metric}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      metric: undefined
-                                    }
-                                  })}
-                                  className="text-gray-400 hover:text-red-500"
-                                >
-                                  ×
-                                </button>
-                              </div>
-                            ) : (
-                              <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
-                                Drag a numeric field here
-                              </p>
-                            )}
+                      <div className="flex gap-6">
+                        {/* Available Fields for Gauge */}
+                        <div className="w-1/3 flex-shrink-0">
+                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
+                            <div className="grid grid-cols-1 gap-2">
+                              {columnsByType.numeric.map((col) => {
+                                const columnType = 'number'
+                                const icon = '🔢'
+                                return (
+                                  <div
+                                    key={col}
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.setData('application/json', JSON.stringify({
+                                        fieldName: col,
+                                        fieldType: columnType
+                                      }))
+                                    }}
+                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                  >
+                                    <span className="text-xs">{icon}</span>
+                                    <span className="text-sm font-medium text-gray-700">{col}</span>
+                                    <span className="text-xs text-gray-500 ml-auto">{columnType}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
                           </div>
+                          <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
+                            <span className="mr-1">💡</span>
+                            Tip: Drag fields to the right →
+                          </p>
                         </div>
 
-                        {/* Aggregation Type */}
-                        <div>
+                        {/* Right Panel with Drop Zone and Settings */}
+                        <div className="flex-1 space-y-4">
+                          {/* Metric Field */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                              Metric Field (Required)
+                            </label>
+                            <div
+                              className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-3 min-h-16 bg-gray-50 dark:bg-gray-800 transition-all"
+                              onDragOver={(e) => {
+                                e.preventDefault()
+                                e.currentTarget.classList.add('border-indigo-400', 'bg-indigo-50')
+                              }}
+                              onDragLeave={(e) => {
+                                e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50')
+                              }}
+                              onDrop={(e) => {
+                                e.preventDefault()
+                                e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50')
+                                try {
+                                  const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                  if (data.fieldType === 'number') {
+                                    handleUpdate({
+                                      dataMapping: {
+                                        ...customization?.dataMapping,
+                                        metric: data.fieldName
+                                      }
+                                    })
+                                  }
+                                } catch (error) {
+                                  console.error('Failed to parse drop data:', error)
+                                }
+                              }}
+                            >
+                              {effectiveDataMapping?.metric ? (
+                                <div className="flex items-center justify-between p-2 bg-indigo-100 border border-indigo-300 rounded">
+                                  <span className="text-sm text-indigo-800">{effectiveDataMapping.metric}</span>
+                                  <button
+                                    onClick={() => handleUpdate({
+                                      dataMapping: {
+                                        ...customization?.dataMapping,
+                                        metric: undefined
+                                      }
+                                    })}
+                                    className="text-indigo-600 hover:text-indigo-800 text-xs"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="text-center py-3 text-gray-500 text-sm">
+                                  <span className="block text-lg mb-1">👈</span>
+                                  Drag a numeric field from the left
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Aggregation Type */}
+                          <div>
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             Aggregation (Required)
                           </label>
@@ -2106,6 +2154,7 @@ export function ChartCustomizationPanel({
                           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                             The minimum value for the gauge (0% mark). Default: 0
                           </p>
+                        </div>
                         </div>
                       </div>
                     )}
@@ -2301,10 +2350,10 @@ export function ChartCustomizationPanel({
 
                     {/* Bullet Chart Data Mapping */}
                     {effectiveChartType === 'bullet' && (
-                      <div className="space-y-6">
-                        <div>
+                      <div className="flex gap-6">
+                        <div className="w-1/3 flex-shrink-0">
                           <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-40 overflow-y-auto">
+                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
                             <div className="grid grid-cols-1 gap-2">
                               {columnsByType.all.map((col) => {
                                 const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
@@ -2329,9 +2378,13 @@ export function ChartCustomizationPanel({
                               })}
                             </div>
                           </div>
+                          <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
+                            <span className="mr-1">💡</span>
+                            Tip: Drag fields to the right →
+                          </p>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-4">
+                        <div className="flex-1 space-y-4">
                           <div
                             onDragOver={(e) => {
                               e.preventDefault()
@@ -2375,7 +2428,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                Drop a field for categories (optional)
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a field from the left for categories (optional)
                               </div>
                             )}
                           </div>
@@ -2425,7 +2479,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                Drop a numeric field for actual value
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a numeric field from the left for actual value
                               </div>
                             )}
                           </div>
@@ -2475,7 +2530,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                Drop a numeric field for comparative/target value
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a numeric field from the left for comparative/target value
                               </div>
                             )}
                           </div>
