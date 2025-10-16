@@ -1079,112 +1079,112 @@ export function ChartCustomizationPanel({
                               </div>
                             </div>
                           )}
-                        </div>
 
-                        {/* Scatter Chart Advanced Fields (Size & Color) */}
-                        {effectiveChartType === 'scatter' && (
-                          <div className="space-y-4">
-                            {/* Bubble Size Drop Zone */}
-                            <div>
-                              <div
-                                onDragOver={(e) => e.preventDefault()}
-                                onDrop={(e) => {
-                                  e.preventDefault()
-                                  try {
-                                    const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                    if (data.fieldType === 'number') {
+                          {/* Scatter Chart Advanced Fields (Size & Color) */}
+                          {effectiveChartType === 'scatter' && (
+                            <div className="space-y-4">
+                              {/* Bubble Size Drop Zone */}
+                              <div>
+                                <div
+                                  onDragOver={(e) => e.preventDefault()}
+                                  onDrop={(e) => {
+                                    e.preventDefault()
+                                    try {
+                                      const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                      if (data.fieldType === 'number') {
+                                        handleUpdate({
+                                          dataMapping: {
+                                            ...customization?.dataMapping,
+                                            size: data.fieldName
+                                          }
+                                        })
+                                      }
+                                    } catch (error) {
+                                      console.error('Failed to parse drop data:', error)
+                                    }
+                                  }}
+                                  className="min-h-16 border-2 border-dashed border-purple-300 rounded-lg p-3 transition-all"
+                                >
+                                  <div className="text-sm font-medium text-purple-600 mb-2 flex items-center">
+                                    Bubble Size (Optional)
+                                    <span className="ml-1 text-xs text-gray-500">- Numeric only</span>
+                                  </div>
+                                  {effectiveDataMapping?.size ? (
+                                    <div className="flex items-center justify-between p-2 bg-purple-100 border border-purple-300 rounded">
+                                      <span className="text-sm text-purple-800">{effectiveDataMapping.size}</span>
+                                      <button
+                                        onClick={() => {
+                                          handleUpdate({
+                                            dataMapping: {
+                                              ...customization?.dataMapping,
+                                              size: undefined
+                                            }
+                                          })
+                                        }}
+                                        className="text-purple-600 hover:text-purple-800 text-xs"
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="text-center py-2 text-gray-500 text-sm">
+                                      Drop a numeric field to create bubble chart
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Color Grouping Drop Zone */}
+                              <div>
+                                <div
+                                  onDragOver={(e) => e.preventDefault()}
+                                  onDrop={(e) => {
+                                    e.preventDefault()
+                                    try {
+                                      const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                       handleUpdate({
                                         dataMapping: {
                                           ...customization?.dataMapping,
-                                          size: data.fieldName
+                                          color: data.fieldName
                                         }
                                       })
+                                    } catch (error) {
+                                      console.error('Failed to parse drop data:', error)
                                     }
-                                  } catch (error) {
-                                    console.error('Failed to parse drop data:', error)
-                                  }
-                                }}
-                                className="min-h-16 border-2 border-dashed border-purple-300 rounded-lg p-3 transition-all"
-                              >
-                                <div className="text-sm font-medium text-purple-600 mb-2 flex items-center">
-                                  Bubble Size (Optional)
-                                  <span className="ml-1 text-xs text-gray-500">- Numeric only</span>
+                                  }}
+                                  className="min-h-16 border-2 border-dashed border-orange-300 rounded-lg p-3 transition-all"
+                                >
+                                  <div className="text-sm font-medium text-orange-600 mb-2 flex items-center">
+                                    Color Grouping (Optional)
+                                    <span className="ml-1 text-xs text-gray-500">- Any field</span>
+                                  </div>
+                                  {effectiveDataMapping?.color ? (
+                                    <div className="flex items-center justify-between p-2 bg-orange-100 border border-orange-300 rounded">
+                                      <span className="text-sm text-orange-800">{effectiveDataMapping.color}</span>
+                                      <button
+                                        onClick={() => {
+                                          handleUpdate({
+                                            dataMapping: {
+                                              ...customization?.dataMapping,
+                                              color: undefined
+                                            }
+                                          })
+                                        }}
+                                        className="text-orange-600 hover:text-orange-800 text-xs"
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="text-center py-2 text-gray-500 text-sm">
+                                      Drop a field to group by color
+                                    </div>
+                                  )}
                                 </div>
-                                {effectiveDataMapping?.size ? (
-                                  <div className="flex items-center justify-between p-2 bg-purple-100 border border-purple-300 rounded">
-                                    <span className="text-sm text-purple-800">{effectiveDataMapping.size}</span>
-                                    <button
-                                      onClick={() => {
-                                        handleUpdate({
-                                          dataMapping: {
-                                            ...customization?.dataMapping,
-                                            size: undefined
-                                          }
-                                        })
-                                      }}
-                                      className="text-purple-600 hover:text-purple-800 text-xs"
-                                    >
-                                      Remove
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="text-center py-2 text-gray-500 text-sm">
-                                    Drop a numeric field to create bubble chart
-                                  </div>
-                                )}
                               </div>
                             </div>
-
-                            {/* Color Grouping Drop Zone */}
-                            <div>
-                              <div
-                                onDragOver={(e) => e.preventDefault()}
-                                onDrop={(e) => {
-                                  e.preventDefault()
-                                  try {
-                                    const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                    handleUpdate({
-                                      dataMapping: {
-                                        ...customization?.dataMapping,
-                                        color: data.fieldName
-                                      }
-                                    })
-                                  } catch (error) {
-                                    console.error('Failed to parse drop data:', error)
-                                  }
-                                }}
-                                className="min-h-16 border-2 border-dashed border-orange-300 rounded-lg p-3 transition-all"
-                              >
-                                <div className="text-sm font-medium text-orange-600 mb-2 flex items-center">
-                                  Color Grouping (Optional)
-                                  <span className="ml-1 text-xs text-gray-500">- Any field</span>
-                                </div>
-                                {effectiveDataMapping?.color ? (
-                                  <div className="flex items-center justify-between p-2 bg-orange-100 border border-orange-300 rounded">
-                                    <span className="text-sm text-orange-800">{effectiveDataMapping.color}</span>
-                                    <button
-                                      onClick={() => {
-                                        handleUpdate({
-                                          dataMapping: {
-                                            ...customization?.dataMapping,
-                                            color: undefined
-                                          }
-                                        })
-                                      }}
-                                      className="text-orange-600 hover:text-orange-800 text-xs"
-                                    >
-                                      Remove
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="text-center py-2 text-gray-500 text-sm">
-                                    Drop a field to group by color
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     )}
 
@@ -2154,7 +2154,6 @@ export function ChartCustomizationPanel({
                           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                             The minimum value for the gauge (0% mark). Default: 0
                           </p>
-                        </div>
                         </div>
                       </div>
                     )}
