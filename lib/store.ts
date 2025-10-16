@@ -525,7 +525,7 @@ const defaultChartTemplates: ChartTemplate[] = [
     description: 'Display key metrics and KPIs',
     category: 'summary',
     icon: 'Gauge',
-    defaultPosition: { w: 3, h: 3 },
+    defaultPosition: { w: 2, h: 1 },
     requiredDataTypes: ['number'],
     minColumns: 1,
     maxColumns: 1,
