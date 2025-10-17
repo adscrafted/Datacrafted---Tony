@@ -150,7 +150,7 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
 
           return (
             <Line
-              key={key}
+              key={`${key}-${index}`}
               yAxisId={yAxisId}
               type="monotone"
               dataKey={key}
