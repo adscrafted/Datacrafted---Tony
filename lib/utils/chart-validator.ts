@@ -79,18 +79,6 @@ export function validateChartConfig(config: ChartConfig): ChartValidationResult 
       }
       break
 
-    case 'sankey':
-      if (!dm.source) {
-        return { isValid: false, errors: ['Sankey diagram requires source field in dataMapping'] }
-      }
-      if (!dm.target) {
-        return { isValid: false, errors: ['Sankey diagram requires target field in dataMapping'] }
-      }
-      if (!dm.flow && !dm.value) {
-        return { isValid: false, errors: ['Sankey diagram requires flow or value field in dataMapping'] }
-      }
-      break
-
     case 'sparkline':
       if (!dm.xAxis) {
         return { isValid: false, errors: ['Sparkline requires xAxis field in dataMapping'] }
@@ -195,12 +183,6 @@ export function validateChartData(
         break
       case 'treemap':
         if (dm.category) dataKeys.push(dm.category)
-        if (dm.value) dataKeys.push(dm.value)
-        break
-      case 'sankey':
-        if (dm.source) dataKeys.push(dm.source)
-        if (dm.target) dataKeys.push(dm.target)
-        if (dm.flow) dataKeys.push(dm.flow)
         if (dm.value) dataKeys.push(dm.value)
         break
       case 'sparkline':

@@ -153,7 +153,7 @@ export const AreaRenderer: React.FC<AreaRendererProps> = ({
 
           return (
             <Area
-              key={key}
+              key={`${key}-${index}`}
               yAxisId={yAxisId}
               stackId={stackId}
               type="monotone"

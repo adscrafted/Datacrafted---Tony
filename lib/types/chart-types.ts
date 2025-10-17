@@ -39,7 +39,6 @@ export type ExtendedChartType =
   | 'cohort'
   | 'bullet'
   | 'treemap'
-  | 'sankey'
   | 'sparkline'
   | 'stacked100'
 
@@ -512,92 +511,7 @@ export interface TreemapChartConfig {
 }
 
 // ============================================================================
-// 8. Sankey Diagram Types
-// ============================================================================
-
-/**
- * Node in a Sankey diagram
- */
-export interface SankeyNode {
-  /** Unique node identifier */
-  readonly id: string
-  /** Display name */
-  readonly name: string
-  /** Optional category */
-  readonly category?: string
-  /** Optional color */
-  readonly color?: string
-}
-
-/**
- * Link in a Sankey diagram
- */
-export interface SankeyLink {
-  /** Source node ID */
-  readonly source: string
-  /** Target node ID */
-  readonly target: string
-  /** Flow value */
-  readonly value: number
-  /** Optional color */
-  readonly color?: string
-  /** Optional label */
-  readonly label?: string
-}
-
-/**
- * Complete Sankey diagram data
- */
-export interface SankeyData {
-  /** All nodes in the diagram */
-  readonly nodes: ReadonlyArray<SankeyNode>
-  /** All links between nodes */
-  readonly links: ReadonlyArray<SankeyLink>
-}
-
-/**
- * Configuration for Sankey diagram data mapping
- */
-export interface SankeyDataMapping {
-  /** Column containing source nodes */
-  readonly source: string
-  /** Column containing target nodes */
-  readonly target: string
-  /** Column containing flow values */
-  readonly value: string
-  /** Optional column for link categories */
-  readonly category?: string
-}
-
-/**
- * Configuration options for Sankey diagrams
- */
-export interface SankeyChartConfig {
-  readonly chartType: 'sankey'
-  /** Node alignment */
-  readonly nodeAlignment?: 'left' | 'right' | 'center' | 'justify'
-  /** Node width */
-  readonly nodeWidth?: number
-  /** Padding between nodes */
-  readonly nodePadding?: number
-  /** Show node labels */
-  readonly showNodeLabels?: boolean
-  /** Node label position */
-  readonly nodeLabelPosition?: 'inside' | 'outside'
-  /** Show link values */
-  readonly showLinkValues?: boolean
-  /** Link opacity */
-  readonly linkOpacity?: number
-  /** Link color mode */
-  readonly linkColorMode?: 'source' | 'target' | 'gradient' | 'custom'
-  /** Allow node dragging */
-  readonly enableNodeDragging?: boolean
-  /** Number of iterations for layout algorithm */
-  readonly iterations?: number
-}
-
-// ============================================================================
-// 9. Sparkline Chart Types
+// 8. Sparkline Chart Types
 // ============================================================================
 
 /**
@@ -731,7 +645,6 @@ export type ChartConfig =
   | CohortChartConfig
   | BulletChartConfig
   | TreemapChartConfig
-  | SankeyChartConfig
   | SparklineChartConfig
   | Stacked100ChartConfig
 
@@ -746,7 +659,6 @@ export type ChartDataMapping =
   | CohortDataMapping
   | BulletDataMapping
   | TreemapDataMapping
-  | SankeyDataMapping
   | SparklineDataMapping
   | Stacked100DataMapping
 
@@ -761,7 +673,6 @@ export type ChartDataPoint =
   | CohortDataPoint
   | BulletDataPoint
   | TreemapDataPoint
-  | SankeyLink
   | SparklineDataPoint
   | Stacked100DataPoint
 
@@ -883,13 +794,6 @@ export function isTreemapConfig(config: ChartConfig): config is TreemapChartConf
 }
 
 /**
- * Type guard for sankey chart config
- */
-export function isSankeyConfig(config: ChartConfig): config is SankeyChartConfig {
-  return config.chartType === 'sankey'
-}
-
-/**
  * Type guard for sparkline chart config
  */
 export function isSparklineConfig(config: ChartConfig): config is SparklineChartConfig {
@@ -918,7 +822,6 @@ export type ChartConfigForType<T extends ExtendedChartType> =
   T extends 'cohort' ? CohortChartConfig :
   T extends 'bullet' ? BulletChartConfig :
   T extends 'treemap' ? TreemapChartConfig :
-  T extends 'sankey' ? SankeyChartConfig :
   T extends 'sparkline' ? SparklineChartConfig :
   T extends 'stacked100' ? Stacked100ChartConfig :
   never
@@ -934,7 +837,6 @@ export type DataMappingForType<T extends ExtendedChartType> =
   T extends 'cohort' ? CohortDataMapping :
   T extends 'bullet' ? BulletDataMapping :
   T extends 'treemap' ? TreemapDataMapping :
-  T extends 'sankey' ? SankeyDataMapping :
   T extends 'sparkline' ? SparklineDataMapping :
   T extends 'stacked100' ? Stacked100DataMapping :
   never
@@ -950,7 +852,6 @@ export type DataPointForType<T extends ExtendedChartType> =
   T extends 'cohort' ? CohortDataPoint :
   T extends 'bullet' ? BulletDataPoint :
   T extends 'treemap' ? TreemapDataPoint :
-  T extends 'sankey' ? SankeyLink :
   T extends 'sparkline' ? SparklineDataPoint :
   T extends 'stacked100' ? Stacked100DataPoint :
   never

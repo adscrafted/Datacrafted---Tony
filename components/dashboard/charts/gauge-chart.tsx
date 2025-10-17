@@ -12,7 +12,7 @@ interface GaugeChartProps {
   data: any[];
   dataMapping: {
     metric: string;
-    aggregation?: 'sum' | 'average' | 'median' | 'min' | 'max' | 'count';
+    aggregation?: 'sum' | 'average' | 'avg' | 'median' | 'min' | 'max' | 'count';
   };
   customization?: {
     min?: number;
@@ -44,6 +44,22 @@ const GaugeChart = React.memo(function GaugeChart({
     thresholds = DEFAULT_THRESHOLDS,
   } = customization;
 
+  // DEBUG: Log what customization values we're receiving
+  console.log('🎯 [GaugeChart] Received props:', {
+    customization,
+    min,
+    customMax,
+    dataMapping
+  });
+
+  // CRITICAL: Log actual values inline for debugging
+  console.log('🎯 [GaugeChart] EXACT VALUES:',
+    'customMax =', customMax,
+    'min =', min,
+    'customization.min =', customization?.min,
+    'customization.max =', customization?.max
+  );
+
   // Transform and calculate gauge data
   const gaugeData = useMemo(() => {
     if (!data || data.length === 0) {
@@ -70,6 +86,7 @@ const GaugeChart = React.memo(function GaugeChart({
           metricValue = values.reduce((acc, val) => acc + val, 0);
           break;
         case 'average':
+        case 'avg': // Support both 'average' and 'avg' for compatibility
           metricValue = values.reduce((acc, val) => acc + val, 0) / values.length;
           break;
         case 'median':
@@ -96,6 +113,16 @@ const GaugeChart = React.memo(function GaugeChart({
       // Priority: 1. Custom max (required now), 2. Fallback to 100
       const max = customMax !== undefined && customMax !== null ? customMax : 100;
 
+      // DEBUG: Log calculation values
+      console.log('🎯 [GaugeChart] Calculation:', {
+        metricValue,
+        min,
+        max,
+        customMax,
+        aggregation: dataMapping.aggregation,
+        formula: `((${metricValue} - ${min}) / (${max} - ${min})) * 100`
+      });
+
       // Validate values
       if (isNaN(metricValue) || metricValue < 0) {
         console.warn('GaugeChart: Invalid metric value');
@@ -104,6 +131,11 @@ const GaugeChart = React.memo(function GaugeChart({
 
       // Calculate percentage
       const percentage = Math.min(Math.max(((metricValue - min) / (max - min)) * 100, 0), 100);
+
+      console.log('🎯 [GaugeChart] Result:', {
+        percentage: percentage.toFixed(2) + '%',
+        displayValue: metricValue.toLocaleString()
+      });
 
       // Determine color based on thresholds
       const sortedThresholds = [...thresholds].sort((a, b) => a.value - b.value);

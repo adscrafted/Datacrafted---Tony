@@ -64,7 +64,6 @@ import { GaugeRenderer } from './renderers/GaugeRenderer'
 import { CohortRenderer } from './renderers/CohortRenderer'
 import { BulletRenderer } from './renderers/BulletRenderer'
 import { TreemapRenderer } from './renderers/TreemapRenderer'
-import { SankeyRenderer } from './renderers/SankeyRenderer'
 import { SparklineRenderer } from './renderers/SparklineRenderer'
 import { WaterfallRenderer } from './renderers/WaterfallRenderer'
 
@@ -582,17 +581,6 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
       case 'treemap':
         return (
           <TreemapRenderer
-            chartData={chartData}
-            safeDataKey={safeDataKey}
-            customization={customization}
-            configDataMapping={configDataMapping}
-            colors={colors}
-          />
-        )
-
-      case 'sankey':
-        return (
-          <SankeyRenderer
             chartData={chartData}
             safeDataKey={safeDataKey}
             customization={customization}

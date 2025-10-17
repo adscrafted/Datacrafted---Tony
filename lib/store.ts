@@ -62,7 +62,7 @@ export interface ChartCustomization {
   customDescription?: string
   axisLabels?: { x?: string; y?: string }
   isVisible?: boolean
-  chartType?: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo' | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline'
+  chartType?: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo' | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sparkline'
   animate?: boolean
   interactive?: boolean
   stacked?: boolean
@@ -130,7 +130,7 @@ export interface ChartCustomization {
 
 export type ChartType =
   | 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo'
-  | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline'
+  | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sparkline'
 
 export interface ChartTemplate {
   id: string
@@ -621,17 +621,6 @@ const defaultChartTemplates: ChartTemplate[] = [
     defaultPosition: { w: 8, h: 6 },
     requiredDataTypes: ['string', 'number'],
     minColumns: 2,
-  },
-  {
-    id: 'sankey-flow',
-    name: 'Sankey Diagram',
-    type: 'sankey',
-    description: 'Show flow and connections between entities',
-    category: 'relationship',
-    icon: 'GitBranch',
-    defaultPosition: { w: 10, h: 6 },
-    requiredDataTypes: ['string', 'number'],
-    minColumns: 3,
   },
   {
     id: 'sparkline-trend',
@@ -2217,11 +2206,61 @@ export const useDataStore = create<DataStore>()(
         const chartId = state.draftChart.id
         const customization = state.chartCustomizations[chartId]
 
+        // Merge dataMapping
+        const effectiveDataMapping = customization?.dataMapping || state.draftChart.dataMapping || {}
+
+        // CRITICAL FIX: Generate dataKey from dataMapping based on chart type
+        let dataKey: string[] = []
+        const chartType = customization?.chartType || state.draftChart.type
+
+        switch (chartType) {
+          case 'pie':
+            console.log('🥧 [COMMIT_DRAFT_PIE] Pie chart dataMapping:', {
+              effectiveDataMapping,
+              category: effectiveDataMapping.category,
+              value: effectiveDataMapping.value
+            })
+            if (effectiveDataMapping.category) {
+              dataKey = effectiveDataMapping.value
+                ? [effectiveDataMapping.category, effectiveDataMapping.value]
+                : [effectiveDataMapping.category]
+            }
+            console.log('🥧 [COMMIT_DRAFT_PIE] Generated dataKey:', dataKey)
+            break
+          case 'scorecard':
+            if (effectiveDataMapping.metric) {
+              dataKey = [effectiveDataMapping.metric]
+            } else if (effectiveDataMapping.formulaAlias) {
+              dataKey = [effectiveDataMapping.formulaAlias]
+            }
+            break
+          case 'line':
+          case 'bar':
+          case 'area':
+            if (effectiveDataMapping.xAxis || effectiveDataMapping.category) {
+              const xKey = effectiveDataMapping.xAxis || effectiveDataMapping.category
+              const yKeys = effectiveDataMapping.yAxis || effectiveDataMapping.values || []
+              dataKey = [xKey, ...(Array.isArray(yKeys) ? yKeys : [yKeys])]
+            }
+            break
+          case 'table':
+            dataKey = effectiveDataMapping.columns || []
+            break
+          default:
+            // For other chart types, try to infer from dataMapping
+            const mappingValues = Object.values(effectiveDataMapping).filter(v => v)
+            dataKey = Array.isArray(mappingValues) ? mappingValues.flat() : mappingValues as string[]
+        }
+
         // Create the final chart config with customization data
         const finalChart = {
           ...state.draftChart,
+          // Populate dataKey from dataMapping
+          dataKey: dataKey,
           // Merge in the dataMapping from customization
-          dataMapping: customization?.dataMapping || state.draftChart.dataMapping || {},
+          dataMapping: effectiveDataMapping,
+          // Use custom title if available
+          title: customization?.customTitle || state.draftChart.title,
           // Also preserve the full customization for later use
           customization: customization
         }

@@ -68,8 +68,6 @@ export function useChartValidation({
         return !!(effectiveMapping.actual && effectiveMapping.comparative)
       case 'treemap':
         return !!(effectiveMapping.category && effectiveMapping.value)
-      case 'sankey':
-        return !!(effectiveMapping.source && effectiveMapping.target_node && effectiveMapping.value)
       case 'sparkline':
         return !!effectiveMapping.trend
       default:

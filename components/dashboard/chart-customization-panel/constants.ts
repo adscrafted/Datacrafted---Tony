@@ -18,7 +18,6 @@ export const chartTypeOptions = [
   { value: 'cohort', label: 'Cohort Analysis', icon: '👥' },
   { value: 'bullet', label: 'Bullet Chart', icon: '🎯' },
   { value: 'treemap', label: 'Treemap', icon: '🗺️' },
-  { value: 'sankey', label: 'Sankey Diagram', icon: '🌊' },
   { value: 'sparkline', label: 'Sparkline', icon: '✨' }
 ] as const
 

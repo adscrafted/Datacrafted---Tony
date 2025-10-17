@@ -18,6 +18,16 @@ export const GaugeRenderer: React.FC<GaugeRendererProps> = ({
 }) => {
   const effectiveDataMapping = customization?.dataMapping || configDataMapping
 
+  // DEBUG: Log what we're passing to gauge
+  console.log('🎯 [GaugeRenderer] Rendering gauge with:', {
+    'effectiveDataMapping.max': effectiveDataMapping?.max,
+    'effectiveDataMapping.min': effectiveDataMapping?.min,
+    'customization.max': customization?.max,
+    'customization.min': customization?.min,
+    'Will use max': effectiveDataMapping?.max ?? 100,
+    'Will use min': effectiveDataMapping?.min ?? 0
+  })
+
   return (
     <React.Suspense fallback={
       <div className="flex items-center justify-center h-64">
@@ -31,8 +41,8 @@ export const GaugeRenderer: React.FC<GaugeRendererProps> = ({
           aggregation: (effectiveDataMapping as any)?.aggregation || 'sum'
         }}
         customization={{
-          min: customization?.min || 0,
-          max: customization?.max || 100
+          min: effectiveDataMapping?.min ?? 0,
+          max: effectiveDataMapping?.max ?? 100
         }}
       />
     </React.Suspense>

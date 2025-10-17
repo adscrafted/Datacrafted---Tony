@@ -178,6 +178,30 @@ export function ChartCustomizationPanel({
         } : customization?.dataMapping),
       id: chartId
     }
+
+    // DEBUG: Log what we're saving
+    console.log('💾 [CUSTOMIZATION_PANEL] handleUpdate called:', {
+      updates,
+      newCustomization,
+      dataMappingBefore: customization?.dataMapping,
+      dataMappingAfter: newCustomization.dataMapping
+    });
+
+    // CRITICAL DEBUG: Log exact values for gauge charts
+    if (updates.dataMapping?.max !== undefined || updates.dataMapping?.min !== undefined) {
+      console.log('🎯 [CUSTOMIZATION_PANEL] GAUGE UPDATE - Before merge:', {
+        'updates.dataMapping.max': updates.dataMapping?.max,
+        'updates.dataMapping.min': updates.dataMapping?.min,
+        'customization.dataMapping.max': customization?.dataMapping?.max,
+        'customization.dataMapping.min': customization?.dataMapping?.min
+      });
+      console.log('🎯 [CUSTOMIZATION_PANEL] GAUGE UPDATE - After merge:', {
+        'newCustomization.dataMapping.max': newCustomization.dataMapping?.max,
+        'newCustomization.dataMapping.min': newCustomization.dataMapping?.min,
+        'Full newCustomization': JSON.stringify(newCustomization, null, 2)
+      });
+    }
+
     onCustomizationChange(chartId, newCustomization)
     addToHistory('chart_customize', { chartId, updates })
   }
@@ -301,6 +325,10 @@ export function ChartCustomizationPanel({
           <Card
             className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-[950px] max-h-[85vh] overflow-hidden shadow-xl bg-white"
             onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
           >
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center justify-between">
@@ -2100,7 +2128,6 @@ export function ChartCustomizationPanel({
                             value={effectiveDataMapping?.aggregation || 'sum'}
                             onChange={(e) => handleUpdate({
                               dataMapping: {
-                                ...customization?.dataMapping,
                                 aggregation: e.target.value as 'sum' | 'avg' | 'median' | 'min' | 'max' | 'count'
                               }
                             })}
@@ -2128,7 +2155,6 @@ export function ChartCustomizationPanel({
                             value={effectiveDataMapping?.max || ''}
                             onChange={(e) => handleUpdate({
                               dataMapping: {
-                                ...customization?.dataMapping,
                                 max: e.target.value ? Number(e.target.value) : undefined
                               }
                             })}
@@ -2150,7 +2176,6 @@ export function ChartCustomizationPanel({
                             value={effectiveDataMapping?.min !== undefined ? effectiveDataMapping?.min : 0}
                             onChange={(e) => handleUpdate({
                               dataMapping: {
-                                ...customization?.dataMapping,
                                 min: e.target.value ? Number(e.target.value) : 0
                               }
                             })}

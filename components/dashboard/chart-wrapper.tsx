@@ -148,6 +148,18 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
     (state) => state.chartCustomizations[chartId]
   )
 
+  // DEBUG: Log when customization changes (especially for gauge charts)
+  useEffect(() => {
+    if (type === 'gauge') {
+      console.log('🎯 [ChartWrapper] Customization updated for gauge:', {
+        chartId,
+        customization,
+        dataMapping: customization?.dataMapping,
+        max: customization?.dataMapping?.max
+      })
+    }
+  }, [customization, type, chartId])
+
   const currentTheme = useDataStore((state) => state.currentTheme)
   const updateChartCustomization = useDataStore((state) => state.updateChartCustomization)
   const setFullScreen = useDataStore((state) => state.setFullScreen)
@@ -782,6 +794,23 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
         )
 
       case 'gauge':
+        // DEBUG: Log what we're passing to the gauge
+        console.log('🎯 [ChartWrapper] Passing to GaugeChart:', {
+          dataMapping: customization?.dataMapping,
+          extractedMin: customization?.dataMapping?.min,
+          extractedMax: customization?.dataMapping?.max,
+          willUseMin: customization?.dataMapping?.min ?? 0,
+          willUseMax: customization?.dataMapping?.max ?? 100
+        });
+
+        // CRITICAL: Log exact inline values
+        console.log('🎯 [ChartWrapper] EXACT GAUGE VALUES:',
+          'customization?.dataMapping?.max =', customization?.dataMapping?.max,
+          'customization?.dataMapping?.min =', customization?.dataMapping?.min,
+          'Fallback max will be:', customization?.dataMapping?.max ?? 100,
+          'Fallback min will be:', customization?.dataMapping?.min ?? 0
+        );
+
         return (
           <React.Suspense fallback={<ChartSkeleton />}>
             <GaugeChart
@@ -1004,7 +1033,15 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
         )
     }
     */
-  }, [chartType, chartData, safeDataKey, customization, pieData, renderSimpleChart])
+  }, [
+    chartType,
+    chartData,
+    safeDataKey,
+    customization,
+    JSON.stringify(customization?.dataMapping), // Force re-render when dataMapping changes
+    pieData,
+    renderSimpleChart
+  ])
 
   // Handle delete confirmation
   const handleDelete = () => {

@@ -388,7 +388,7 @@ export const ChartTemplateGallery: React.FC<ChartTemplateGalleryProps> = ({
                 <div
                   key={template.id}
                   className={cn(
-                    "relative border rounded-lg p-4 transition-all duration-200 hover:shadow-md",
+                    "relative border rounded-lg p-4 transition-all duration-200 hover:shadow-md h-[280px] flex flex-col",
                     isCompatible
                       ? "border-gray-200 hover:border-gray-300 cursor-pointer"
                       : "border-gray-100 bg-gray-50 cursor-not-allowed opacity-60"
@@ -429,9 +429,9 @@ export const ChartTemplateGallery: React.FC<ChartTemplateGalleryProps> = ({
                   </div>
 
                   {/* Template Content */}
-                  <div className="space-y-2">
+                  <div className="flex-1 flex flex-col space-y-2">
                     <h3 className="font-semibold text-gray-900">{template.name}</h3>
-                    <p className="text-sm text-gray-600 leading-relaxed">
+                    <p className="text-sm text-gray-600 leading-relaxed line-clamp-2">
                       {template.description}
                     </p>
 
@@ -455,17 +455,20 @@ export const ChartTemplateGallery: React.FC<ChartTemplateGalleryProps> = ({
 
                     {/* Compatibility Status */}
                     {compatibilityMessage && (
-                      <p className="text-xs text-red-500 mt-2">
+                      <p className="text-xs text-red-500">
                         {compatibilityMessage}
                       </p>
                     )}
+
+                    {/* Spacer to push button to bottom */}
+                    <div className="flex-1"></div>
                   </div>
 
                   {/* Add Button */}
                   {isCompatible && (
                     <Button
                       size="sm"
-                      className="w-full mt-4"
+                      className="w-full mt-auto"
                       onClick={(e) => {
                         e.stopPropagation()
                         handleAddChart(template)

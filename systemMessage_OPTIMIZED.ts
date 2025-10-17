@@ -37,7 +37,6 @@ Use advanced charts when data patterns match:
 - gauge/bullet: actual+target pairs, KPI tracking, performance vs quota
 - cohort: cohort+period+metric dimensions, retention analysis
 - treemap: hierarchical categories, 10+ items, portfolio composition
-- sankey: source+target+flow, journey data, multi-step transitions
 - sparkline: compact trends, embedded visualization, table cells
 
 Default to core charts (bar/line/scatter/combo/pie/table) for standard analysis.

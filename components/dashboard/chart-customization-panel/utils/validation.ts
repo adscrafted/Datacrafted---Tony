@@ -111,13 +111,6 @@ export function validateChartMapping(
       else if (!mapping.value) missingFields = 'Please select a value field'
       break
 
-    case 'sankey':
-      isValid = !!(mapping.source && mapping.target_node && mapping.value)
-      if (!mapping.source) missingFields = 'Please select a source field'
-      else if (!mapping.target_node) missingFields = 'Please select a target field'
-      else if (!mapping.value) missingFields = 'Please select a value field'
-      break
-
     case 'sparkline':
       isValid = !!mapping.trend
       if (!isValid) missingFields = 'Please select a trend field'
@@ -157,7 +150,6 @@ export function getRequiredFields(chartType: ChartType): string[] {
     cohort: ['cohort', 'period', 'value'],
     bullet: ['actual', 'comparative'],
     treemap: ['category', 'value'],
-    sankey: ['source', 'target_node', 'value'],
     sparkline: ['trend']
   }
 
@@ -184,7 +176,6 @@ export function getOptionalFields(chartType: ChartType): string[] {
     cohort: [],
     bullet: ['category'],
     treemap: [],
-    sankey: [],
     sparkline: []
   }
 

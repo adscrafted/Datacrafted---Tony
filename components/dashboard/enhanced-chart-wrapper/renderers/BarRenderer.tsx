@@ -182,7 +182,7 @@ export const BarRenderer: React.FC<BarRendererProps> = ({
 
           return (
             <Bar
-              key={key}
+              key={`${key}-${index}`}
               yAxisId={yAxisId}
               stackId={stackId}
               dataKey={key}

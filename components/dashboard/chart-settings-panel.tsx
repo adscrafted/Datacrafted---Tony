@@ -200,9 +200,13 @@ export function ChartSettingsPanel({ chartId, isOpen, onClose, chartConfig, onCo
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50" onClick={onClose}>
-      <div 
+      <div
         className="fixed right-0 top-0 h-full w-[480px] bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onMouseUp={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
       >
         <div className="flex flex-col h-full">
           {/* Header */}

@@ -56,15 +56,6 @@ export function mapFieldsForChartType(
       }
       break
 
-    case 'sankey':
-      // Try to preserve source/target if they exist
-      newMapping = {
-        source: currentMapping.source || currentMapping.xAxis,
-        target_node: currentMapping.target_node || currentMapping.yAxis,
-        value: currentMapping.value || currentMapping.values?.[0]
-      }
-      break
-
     case 'bullet':
       // Map metrics to actual/comparative
       newMapping = {
