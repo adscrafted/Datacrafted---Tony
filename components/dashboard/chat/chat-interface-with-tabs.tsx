@@ -132,11 +132,11 @@ export const ChatInterfaceWithTabs = React.memo(function ChatInterfaceWithTabs({
       }))
 
       // Get selected chart details if any
-      let selectedChart = null
+      let selectedChart: any = null
       if (selectedChartId && analysis) {
-        selectedChart = analysis.chartConfig.find(c => 
+        selectedChart = analysis.chartConfig.find((c: any) =>
           (c.id || `chart-${analysis.chartConfig.indexOf(c)}`) === selectedChartId
-        )
+        ) as any
       }
 
       // Try streaming first
@@ -155,7 +155,7 @@ export const ChatInterfaceWithTabs = React.memo(function ChatInterfaceWithTabs({
           selectedChart: selectedChart ? {
             id: selectedChartId,
             title: selectedChart.title,
-            type: selectedChart.type,
+            type: selectedChart.type as any,  // Type assertion for compatibility with all chart types
             dataKey: selectedChart.dataKey,
             description: selectedChart.description
           } : null

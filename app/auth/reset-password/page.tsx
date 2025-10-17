@@ -43,7 +43,7 @@ export default function ResetPasswordPage() {
           </div>
           <CardTitle className="text-2xl text-center">Reset your password</CardTitle>
           <CardDescription className="text-center">
-            Enter your email address and we'll send you a link to reset your password
+            Enter your email address and we&apos;ll send you a link to reset your password
           </CardDescription>
           {isDebugMode && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mt-4">
@@ -118,7 +118,7 @@ export default function ResetPasswordPage() {
               <div className="space-y-2">
                 <h3 className="text-lg font-semibold">Check your email</h3>
                 <p className="text-sm text-muted-foreground">
-                  We've sent a password reset link to:
+                  We&apos;ve sent a password reset link to:
                 </p>
                 <p className="text-sm font-medium">{email}</p>
               </div>
@@ -140,7 +140,7 @@ export default function ResetPasswordPage() {
                 </Button>
                 
                 <p className="text-xs text-muted-foreground">
-                  Didn't receive the email? Check your spam folder or{' '}
+                  Didn&apos;t receive the email? Check your spam folder or{' '}
                   <button
                     onClick={() => setIsSuccess(false)}
                     className="text-primary hover:underline"

@@ -37,7 +37,7 @@ export interface ChartRecommendation {
   };
 
   /** Chart type to render */
-  type: 'scorecard' | 'bar' | 'line' | 'pie' | 'area' | 'scatter' | 'table';
+  type: 'scorecard' | 'bar' | 'line' | 'pie' | 'area' | 'scatter' | 'table' | 'combo' | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline';
 
   /** Display title for the chart */
   title: string;
@@ -178,7 +178,7 @@ export interface EnhancedAnalysisResult {
   /** Chart configurations (alias for recommendations for backward compatibility) */
   chartConfig: Array<{
     id?: string
-    type: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table'
+    type: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo' | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline'
     title: string
     description: string
     dataMapping?: {
@@ -192,12 +192,12 @@ export interface EnhancedAnalysisResult {
       size?: string
       color?: string
       columns?: string[]
-      aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct'
+      aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct' | 'median' | 'mode' | 'std' | 'variance' | 'percentile'
     }
     dataKey?: string[]
     xAxis?: string | string[]
     yAxis?: string | string[]
-    aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct'
+    aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct' | 'median' | 'mode' | 'std' | 'variance' | 'percentile'
     confidence?: number
     reasoning?: string
     qualityScore?: number

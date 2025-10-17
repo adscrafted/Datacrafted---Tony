@@ -1044,7 +1044,7 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
         </div>
         
         <p className="text-gray-600 mb-6">
-          Are you sure you want to delete <strong>"{displayTitle}"</strong>? This action cannot be undone.
+          Are you sure you want to delete <strong>&quot;{displayTitle}&quot;</strong>? This action cannot be undone.
         </p>
         
         <div className="flex justify-end space-x-3">

@@ -1,13 +1,13 @@
 import { useEffect, useRef } from 'react'
 import { useDataStore } from '@/lib/store'
-import { shallow } from 'zustand/shallow'
+import { useShallow } from 'zustand/react/shallow'
 
 // Optimized hook that only subscribes to specific store slices
 export function useDataStoreOptimized<T>(
   selector: (state: any) => T,
   deps: string[] = []
 ) {
-  const store = useDataStore(selector, shallow)
+  const store = useDataStore(useShallow(selector))
   
   // Track dependencies to prevent unnecessary subscriptions
   const depsRef = useRef(deps)
@@ -21,7 +21,7 @@ export function useDataStoreOptimized<T>(
 
 // Batch update hook
 export function useBatchUpdate() {
-  return useDataStore(state => state.batchUpdate || ((updates: Record<string, any>) => {
+  return useDataStore(state => (state as any).batchUpdate || ((updates: Record<string, any>) => {
     // Default implementation if batchUpdate doesn't exist
     const storeState = useDataStore.getState()
     Object.entries(updates).forEach(([key, value]) => {

@@ -326,7 +326,7 @@ export function useThrottledCallback<T extends (...args: any[]) => any>(
   callback: T,
   delay: number
 ): T {
-  const timeoutRef = useRef<NodeJS.Timeout>()
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
   const callbackRef = useRef(callback)
   const lastRan = useRef(Date.now())
 
@@ -497,7 +497,7 @@ export function ProgressiveDataChart({ largeDataset }: { largeDataset: DataRow[]
 
 export function useAdaptiveResolution(
   data: any[],
-  containerRef: React.RefObject<HTMLElement>
+  containerRef: React.RefObject<HTMLElement | null>
 ) {
   const [resolution, setResolution] = useState(500)
 
@@ -523,7 +523,7 @@ export function useAdaptiveResolution(
 // Usage
 export function AdaptiveResolutionChart({ data }: { data: Point[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const targetResolution = useAdaptiveResolution(data, containerRef)
+  const targetResolution = useAdaptiveResolution(data, containerRef as React.RefObject<HTMLElement | null>)
 
   const adaptiveData = useMemo(() => {
     if (data.length <= targetResolution) {

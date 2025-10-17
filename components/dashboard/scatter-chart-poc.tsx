@@ -79,7 +79,7 @@ interface GroupedData {
 }
 
 // Custom tooltip to show all dimensions
-const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
+const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload as DataPoint;
     return (

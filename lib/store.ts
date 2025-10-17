@@ -211,13 +211,13 @@ export interface AnalysisResult {
       // Table
       columns?: string[]
       // Common
-      aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct'
+      aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct' | 'median' | 'mode' | 'std' | 'variance' | 'percentile'
     }
     // Legacy fields for backward compatibility
     dataKey?: string[]
     xAxis?: string | string[]
     yAxis?: string | string[]
-    aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct'
+    aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct' | 'median' | 'mode' | 'std' | 'variance' | 'percentile'
     // Customization settings
     customization?: any
     // Quality metrics
@@ -343,7 +343,7 @@ interface DataStore {
   gridSnapping: boolean
   showGridLines: boolean
   autoSaveLayouts: boolean
-  draftChart: { id: string; type: string; title: string; description: string } | null // Chart being configured before adding to dashboard
+  draftChart: { id: string; type: ChartType; title: string; description: string; dataKey?: any[]; dataMapping?: any } | null // Chart being configured before adding to dashboard
 
   // Upload status state
   uploadProgress: number
@@ -441,7 +441,7 @@ interface DataStore {
   resetToDefaultLayout: () => void
   exportLayoutConfig: () => Promise<void>
   importLayoutConfig: (configFile: File) => Promise<void>
-  setDraftChart: (chart: { id: string; type: string; title: string; description: string } | null) => void
+  setDraftChart: (chart: { id: string; type: ChartType; title: string; description: string; dataKey?: any[]; dataMapping?: any } | null) => void
   commitDraftChart: () => void
 
   // Upload status actions
@@ -1136,8 +1136,7 @@ export const useDataStore = create<DataStore>()(
             },
             body: JSON.stringify({
               role: message.role,
-              content: message.content,
-              metadata: message.metadata
+              content: message.content
             }),
           })
 
@@ -1592,7 +1591,7 @@ export const useDataStore = create<DataStore>()(
               
               pdf.setFontSize(10)
               let yPos = margin + 48
-              pdf.text(`Total Rows: ${state.analysis.summary.totalRows.toLocaleString()}`, margin, yPos)
+              pdf.text(`Total Rows: ${state.analysis.summary.rowCount.toLocaleString()}`, margin, yPos)
               pdf.text(`Total Columns: ${state.analysis.summary.columns.length}`, margin + 60, yPos)
               
               yPos += 8
@@ -2029,8 +2028,8 @@ export const useDataStore = create<DataStore>()(
         set(state => ({
           analysis: state.analysis ? {
             ...state.analysis,
-            chartConfig: state.analysis.chartConfig.filter(chart =>
-              (chart.id || `chart-${state.analysis!.chartConfig.indexOf(chart)}`) !== chartId
+            chartConfig: (state.analysis.chartConfig as any[]).filter((chart: any) =>
+              (chart.id || `chart-${(state.analysis!.chartConfig as any[]).indexOf(chart)}`) !== chartId
             )
           } : null
         }))
@@ -2045,8 +2044,8 @@ export const useDataStore = create<DataStore>()(
         if (!state.analysis) return
 
         // Find the original chart
-        const originalChart = state.analysis.chartConfig.find(chart =>
-          (chart.id || `chart-${state.analysis!.chartConfig.indexOf(chart)}`) === chartId
+        const originalChart = (state.analysis.chartConfig as any[]).find((chart: any) =>
+          (chart.id || `chart-${(state.analysis!.chartConfig as any[]).indexOf(chart)}`) === chartId
         )
         if (!originalChart) return
 
@@ -2092,8 +2091,8 @@ export const useDataStore = create<DataStore>()(
         set(state => ({
           analysis: state.analysis ? {
             ...state.analysis,
-            chartConfig: state.analysis.chartConfig.map(chart => {
-              const id = chart.id || `chart-${state.analysis!.chartConfig.indexOf(chart)}`
+            chartConfig: (state.analysis.chartConfig as any[]).map((chart: any) => {
+              const id = chart.id || `chart-${(state.analysis!.chartConfig as any[]).indexOf(chart)}`
               return id === chartId ? { ...chart, type } : chart
             })
           } : null
@@ -2378,6 +2377,7 @@ export function convertLegacyToEnhancedAnalysis(
 ): EnhancedAnalysisResult {
   return {
     insights: legacy.insights,
+    chartConfig: legacy.chartConfig, // Preserve original chartConfig for backward compatibility
     recommendations: legacy.chartConfig.map((chart, index) => ({
       id: chart.id || `chart-${index}`,
       priority: index + 1,
@@ -2388,8 +2388,8 @@ export function convertLegacyToEnhancedAnalysis(
       reasoning: chart.description,
       businessValue: 'Provides insights from your data',
       dataMapping: {
-        yAxis: chart.dataKey,
-        xAxis: chart.dataKey[0],
+        yAxis: chart.dataKey || [],
+        xAxis: chart.dataKey?.[0] || '',
       },
       chartConfig: {
         aggregation: chart.aggregation,
@@ -2422,7 +2422,7 @@ export function convertEnhancedToLegacyAnalysis(
 ): AnalysisResult {
   return {
     insights: enhanced.insights,
-    chartConfig: enhanced.recommendations.map((rec) => ({
+    chartConfig: (enhanced.recommendations || []).map((rec) => ({
       id: rec.id,
       type: rec.type,
       title: rec.title,
@@ -2437,7 +2437,7 @@ export function convertEnhancedToLegacyAnalysis(
       dataQuality: enhanced.summary.dataQuality,
       keyFindings: enhanced.summary.keyFindings,
       recommendations: enhanced.summary.recommendations,
-      businessContext: enhanced.dataContext.description,
+      businessContext: enhanced.dataContext?.description || '',
     },
   }
 }

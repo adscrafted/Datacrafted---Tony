@@ -276,10 +276,11 @@ function DashboardContent() {
 
               // Apply saved config to the analysis
               if (projectData.analysis) {
+                const analysis = projectData.analysis // Save to local variable for TypeScript
                 const updatedAnalysis = {
-                  ...projectData.analysis,
-                  chartConfig: projectData.analysis.chartConfig.map((chart: any) => {
-                    const chartId = chart.id || `chart-${projectData.analysis.chartConfig.indexOf(chart)}`
+                  ...analysis,
+                  chartConfig: analysis.chartConfig.map((chart: any) => {
+                    const chartId = chart.id || `chart-${analysis.chartConfig.indexOf(chart)}`
                     const customization = savedConfig.chartCustomizations[chartId]
 
                     if (customization) {
@@ -407,10 +408,11 @@ function DashboardContent() {
 
               // Apply saved config to the analysis
               if (projectData.analysis) {
+                const analysis = projectData.analysis // Save to local variable for TypeScript
                 const updatedAnalysis = {
-                  ...projectData.analysis,
-                  chartConfig: projectData.analysis.chartConfig.map((chart: any) => {
-                    const chartId = chart.id || `chart-${projectData.analysis.chartConfig.indexOf(chart)}`
+                  ...analysis,
+                  chartConfig: analysis.chartConfig.map((chart: any) => {
+                    const chartId = chart.id || `chart-${analysis.chartConfig.indexOf(chart)}`
                     const customization = savedConfig.chartCustomizations[chartId]
 
                     if (customization) {

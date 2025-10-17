@@ -21,6 +21,7 @@ interface TreeNode {
   size?: number;
   children?: TreeNode[];
   color?: string;
+  [key: string]: any;  // Index signature for recharts compatibility
 }
 
 const DEFAULT_COLORS = [

@@ -244,7 +244,7 @@ class CacheManager<T = any> {
     let lruTime = Date.now()
     let lruHits = Infinity
 
-    for (const [key, entry] of this.cache) {
+    for (const [key, entry] of Array.from(this.cache.entries())) {
       // Prioritize by hits first, then by time
       if (entry.hits < lruHits || (entry.hits === lruHits && entry.timestamp < lruTime)) {
         lruKey = key
@@ -265,7 +265,7 @@ class CacheManager<T = any> {
     const now = Date.now()
     const toDelete: string[] = []
 
-    for (const [key, entry] of this.cache) {
+    for (const [key, entry] of Array.from(this.cache.entries())) {
       if (now - entry.timestamp > this.options.maxAge) {
         toDelete.push(key)
       }
@@ -293,7 +293,7 @@ class CacheManager<T = any> {
     let oldestTime = Date.now()
     let newestTime = 0
 
-    for (const entry of this.cache.values()) {
+    for (const entry of Array.from(this.cache.values())) {
       totalHits += entry.hits
       totalRequests += entry.hits + 1 // +1 for the initial set
       oldestTime = Math.min(oldestTime, entry.timestamp)

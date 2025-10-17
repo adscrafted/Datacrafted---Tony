@@ -70,8 +70,8 @@ export async function parseFileEnhanced(
 
   // Check cache first
   const cacheKey = getCacheKey(file)
-  const cachedResult = fileDataCache.get(cacheKey)
-  
+  const cachedResult = fileDataCache.get(cacheKey) as any
+
   if (cachedResult && cachedResult.sheets && !signal?.aborted) {
     // Simulate progress for cached results
     onProgress?.({
@@ -159,7 +159,7 @@ export async function parseFileEnhanced(
           fileSize: file.size,
           parseTime: performance.now() - startTime,
           totalSheets: multiSheetResult.sheets.length,
-          fileType: extension
+          fileType: extension || 'unknown'
         }
       }
     }
@@ -175,7 +175,7 @@ export async function parseFileEnhanced(
 
     // Cache the result
     if (result.sheets.length > 0) {
-      fileDataCache.set(cacheKey, result)
+      fileDataCache.set(cacheKey, result as any)
     }
 
     return result

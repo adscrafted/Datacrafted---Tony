@@ -181,7 +181,10 @@ export function EditableSchemaViewer({ onAIUpdateComplete }: EditableSchemaViewe
       // Update the dataSchema if AI provided additional insights
       if (result.schema) {
         setDataSchema({
-          ...dataSchema,
+          fileName: dataSchema?.fileName || 'data.csv',
+          rowCount: dataSchema?.rowCount || rawData.length,
+          columnCount: dataSchema?.columnCount || result.schema.columns.length,
+          uploadedAt: dataSchema?.uploadedAt || new Date().toISOString(),
           columns: result.schema.columns,
           businessContext: result.businessContext,
           relationships: result.relationships
@@ -230,11 +233,11 @@ export function EditableSchemaViewer({ onAIUpdateComplete }: EditableSchemaViewe
     if (!confidence) return null
 
     if (confidence >= 80) {
-      return <CheckCircle2 className="h-3 w-3 text-green-500" title={`${confidence}% confidence`} />
+      return <span title={`${confidence}% confidence`}><CheckCircle2 className="h-3 w-3 text-green-500" /></span>
     } else if (confidence >= 60) {
-      return <AlertCircle className="h-3 w-3 text-yellow-500" title={`${confidence}% confidence`} />
+      return <span title={`${confidence}% confidence`}><AlertCircle className="h-3 w-3 text-yellow-500" /></span>
     } else {
-      return <AlertCircle className="h-3 w-3 text-red-500" title={`${confidence}% confidence`} />
+      return <span title={`${confidence}% confidence`}><AlertCircle className="h-3 w-3 text-red-500" /></span>
     }
   }
 

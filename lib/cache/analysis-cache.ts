@@ -206,7 +206,7 @@ function evictOldestEntry(): void {
   let oldestKey: string | null = null
   let oldestTimestamp = Infinity
 
-  for (const [key, entry] of cache.entries()) {
+  for (const [key, entry] of Array.from(cache.entries())) {
     if (entry.timestamp < oldestTimestamp) {
       oldestTimestamp = entry.timestamp
       oldestKey = key
@@ -225,7 +225,7 @@ function evictOldestEntry(): void {
 function estimateMemoryUsage(): string {
   let totalBytes = 0
 
-  for (const entry of cache.values()) {
+  for (const entry of Array.from(cache.values())) {
     // Rough estimation: JSON size + metadata overhead
     const jsonSize = JSON.stringify(entry.result).length
     totalBytes += jsonSize + entry.dataSize + 100 // 100 bytes metadata overhead
@@ -248,7 +248,7 @@ function cleanupExpiredEntries(): void {
   const now = Date.now()
   let removed = 0
 
-  for (const [key, entry] of cache.entries()) {
+  for (const [key, entry] of Array.from(cache.entries())) {
     if (now - entry.timestamp > CACHE_TTL) {
       cache.delete(key)
       removed++

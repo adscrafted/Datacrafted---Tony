@@ -30,11 +30,12 @@ export interface AuthenticatedRequest extends NextRequest {
 /**
  * Route handler that requires authentication
  * Takes request and authenticated user, returns a Response
+ * Next.js 15: params is now a Promise (not the Promise itself is optional, but params field is optional)
  */
-export type AuthenticatedRouteHandler<P = {}> = (
+export type AuthenticatedRouteHandler<P = any> = (
   request: NextRequest,
   user: AuthUser,
-  context?: { params: P }
+  context: { params: Promise<P> }
 ) => Promise<Response>
 
 /**

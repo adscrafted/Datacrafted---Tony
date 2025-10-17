@@ -236,11 +236,11 @@ class PerformanceMonitor {
   // Generate performance report
   generateReport(): PerformanceReport {
     const completedMetrics = Array.from(this.metrics.values()).filter(m => m.duration !== undefined)
-    
+
     return {
       metrics: completedMetrics,
-      memoryUsage: this.getMemoryUsage(),
-      networkInfo: this.getNetworkInfo(),
+      memoryUsage: this.getMemoryUsage() || undefined,
+      networkInfo: this.getNetworkInfo() || undefined,
       deviceInfo: this.getDeviceInfo(),
       timestamp: Date.now()
     }
@@ -265,7 +265,7 @@ class PerformanceMonitor {
     const cutoff = Date.now() - maxAge
     const toDelete: string[] = []
 
-    for (const [key, metric] of this.metrics) {
+    for (const [key, metric] of Array.from(this.metrics.entries())) {
       if (metric.startTime < cutoff) {
         toDelete.push(key)
       }

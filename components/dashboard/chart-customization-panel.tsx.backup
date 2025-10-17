@@ -20,6 +20,7 @@ interface ChartCustomizationPanelProps {
   className?: string
   initialTab?: 'general' | 'data' | 'style' | 'axes' | 'actions' // New prop to control initial tab
   configDataMapping?: any // Original chart config dataMapping for fallback display
+  configDataKey?: string[] // Original chart config dataKey for fallback when dataMapping is missing
   autoOpen?: boolean // Auto-open the panel
 }
 
@@ -53,6 +54,7 @@ export function ChartCustomizationPanel({
   className,
   initialTab,
   configDataMapping,
+  configDataKey,
   autoOpen
 }: ChartCustomizationPanelProps) {
   const [isOpen, setIsOpen] = useState(false)
@@ -115,10 +117,160 @@ export function ChartCustomizationPanel({
     }
   }, [isOpen, handleClose])
 
+  // CRITICAL FIX: Calculate effective chart type (customization overrides original)
+  // This is used throughout the component to render the correct UI based on user's type changes
+  const effectiveChartType = React.useMemo(() => {
+    const result = customization?.chartType || chartType
+    console.log('🔄 [CHART_SETTINGS] effectiveChartType calculated:', {
+      chartId,
+      originalType: chartType,
+      customizationType: customization?.chartType,
+      effectiveType: result
+    })
+    return result
+  }, [customization?.chartType, chartType, chartId])
+
   // Merged dataMapping: prefer customization, fallback to original config
+  // CRITICAL FIX: When dataMapping is empty/missing/incomplete, infer it from chart type and configDataKey
   const effectiveDataMapping = React.useMemo(() => {
-    return customization?.dataMapping || configDataMapping || {}
-  }, [customization?.dataMapping, configDataMapping])
+    const mapping = customization?.dataMapping || configDataMapping || {}
+
+    // Use the effective chart type for inference
+    const inferenceChartType = effectiveChartType
+
+    console.log('🔍 [CHART_SETTINGS] Checking dataMapping:', {
+      chartId,
+      chartType: inferenceChartType,
+      currentMapping: mapping,
+      hasConfigDataKey: !!configDataKey,
+      configDataKey: configDataKey,
+      mappingKeys: Object.keys(mapping),
+      mappingValues: Object.values(mapping)
+    })
+
+    // Helper: Check if mapping is incomplete (empty or has empty arrays)
+    const isIncompleteMapping = () => {
+      if (Object.keys(mapping).length === 0) return true
+
+      // Check for empty array values (e.g., { xAxis: 'Date', yAxis: [] })
+      return Object.values(mapping).some(val =>
+        Array.isArray(val) && val.length === 0
+      )
+    }
+
+    const incomplete = isIncompleteMapping()
+    const hasDataKey = configDataKey && Array.isArray(configDataKey) && configDataKey.length > 0
+
+    console.log('🧪 [CHART_SETTINGS] Inference check:', {
+      chartId,
+      isIncomplete: incomplete,
+      hasDataKey: hasDataKey,
+      configDataKeyLength: configDataKey?.length,
+      willInfer: incomplete && hasDataKey
+    })
+
+    // If dataMapping is empty/incomplete but we have a dataKey array from props, infer the mapping
+    if (incomplete && hasDataKey) {
+      console.log('📊 [CHART_SETTINGS] Inferring dataMapping from dataKey:', {
+        originalChartType: chartType,
+        effectiveChartType: inferenceChartType,
+        dataKey: configDataKey,
+        currentMapping: mapping
+      })
+
+      // Infer data mapping based on the EFFECTIVE chart type (respects user's type changes)
+      switch (inferenceChartType) {
+        case 'bar':
+          return {
+            category: configDataKey[0],
+            values: configDataKey.slice(1)
+          }
+        case 'line':
+        case 'area':
+          return {
+            xAxis: configDataKey[0],
+            yAxis: configDataKey.slice(1)
+          }
+        case 'pie':
+          return {
+            category: configDataKey[0],
+            value: configDataKey[1] || configDataKey[0]
+          }
+        case 'scatter':
+          return {
+            xAxis: configDataKey[0],
+            yAxis: configDataKey[1] || configDataKey[0],
+            size: configDataKey[2], // Optional bubble size
+            color: configDataKey[3] // Optional color grouping
+          }
+        case 'scorecard':
+          return {
+            metric: configDataKey[0]
+          }
+        case 'table':
+          return {
+            columns: configDataKey
+          }
+        case 'combo':
+          return {
+            xAxis: configDataKey[0],
+            yAxis1: [configDataKey[1]],
+            yAxis2: configDataKey[2] ? [configDataKey[2]] : undefined
+          }
+        // Advanced chart types
+        case 'waterfall':
+          return {
+            category: configDataKey[0],
+            value: configDataKey[1] || configDataKey[0]
+          }
+        case 'funnel':
+          return {
+            stage: configDataKey[0],
+            value: configDataKey[1] || configDataKey[0]
+          }
+        case 'heatmap':
+          return {
+            xAxis: configDataKey[0],
+            yAxis: configDataKey[1] || configDataKey[0],
+            value: configDataKey[2] || configDataKey[1]
+          }
+        case 'gauge':
+          return {
+            metric: configDataKey[0]
+          }
+        case 'cohort':
+          return {
+            cohort: configDataKey[0],
+            period: configDataKey[1] || configDataKey[0],
+            value: configDataKey[2] || configDataKey[1]
+          }
+        case 'bullet':
+          return {
+            category: configDataKey[0],
+            actual: configDataKey[1] || configDataKey[0],
+            comparative: configDataKey[2] || configDataKey[1]
+          }
+        case 'treemap':
+          return {
+            category: configDataKey[0],
+            value: configDataKey[1] || configDataKey[0],
+            parent: configDataKey[2] // Optional hierarchy parent
+          }
+        case 'sankey':
+          return {
+            source: configDataKey[0],
+            target_node: configDataKey[1] || configDataKey[0],
+            value: configDataKey[2] || configDataKey[1]
+          }
+        case 'sparkline':
+          return {
+            trend: configDataKey[0]
+          }
+      }
+    }
+
+    return mapping
+  }, [customization?.dataMapping, configDataMapping, configDataKey, effectiveChartType])
 
   // Get available columns from data schema or raw data
   const availableColumns = React.useMemo(() => {
@@ -162,20 +314,15 @@ export function ChartCustomizationPanel({
     }
   }, [dataSchema, availableColumns])
 
-  // Get the effective/current chart type (customization overrides prop)
-  const effectiveChartType = customization?.chartType || chartType
-
   const handleUpdate = (updates: Partial<ChartCustomization>) => {
     const newCustomization = {
       ...customization,
       ...updates,
       // Properly merge nested dataMapping object to preserve other fields
-      // Special case: if dataMapping is explicitly null, clear it completely
-      dataMapping: updates.dataMapping === null ? {} :
-        (updates.dataMapping ? {
-          ...customization?.dataMapping,
-          ...updates.dataMapping
-        } : customization?.dataMapping),
+      dataMapping: updates.dataMapping ? {
+        ...customization?.dataMapping,
+        ...updates.dataMapping
+      } : customization?.dataMapping,
       id: chartId
     }
     onCustomizationChange(chartId, newCustomization)
@@ -233,7 +380,7 @@ export function ChartCustomizationPanel({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          chartType: effectiveChartType,
+          chartType: customization?.chartType || chartType,
           dataMapping: effectiveDataMapping,
           sampleData,
           dataSchema: schema
@@ -299,7 +446,7 @@ export function ChartCustomizationPanel({
           
           {/* Settings Panel */}
           <Card
-            className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-[950px] max-h-[85vh] overflow-hidden shadow-xl bg-white"
+            className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-[900px] max-w-[95vw] max-h-[85vh] overflow-hidden shadow-xl bg-white"
             onClick={(e) => e.stopPropagation()}
           >
           <CardHeader className="pb-3">
@@ -338,7 +485,7 @@ export function ChartCustomizationPanel({
             </div>
           </CardHeader>
           
-          <CardContent className="space-y-4 overflow-y-auto max-h-[calc(80vh-10rem)]">
+          <CardContent className="space-y-4 overflow-y-auto max-h-[calc(85vh-10rem)] pb-24">
             {activeTab === 'general' && (
               <div className="space-y-4">
                 {/* Chart Type */}
@@ -349,112 +496,18 @@ export function ChartCustomizationPanel({
                       <button
                         key={option.value}
                         onClick={() => {
-                          const currentType = effectiveChartType
-                          // If chart type is changing, intelligently map existing fields to new chart type
-                          if (currentType !== option.value) {
-                            const currentMapping = effectiveDataMapping || {}
-                            let newMapping: any = {}
-
-                            // Intelligent field mapping based on new chart type
-                            switch (option.value) {
-                              case 'funnel':
-                                // Map xAxis/category → stage, yAxis/value → value
-                                newMapping = {
-                                  stage: currentMapping.xAxis || currentMapping.category || currentMapping.stage,
-                                  value: currentMapping.yAxis || currentMapping.value || currentMapping.values?.[0]
-                                }
-                                break
-
-                              case 'waterfall':
-                                // Map xAxis/category → category, yAxis/value → value
-                                newMapping = {
-                                  category: currentMapping.xAxis || currentMapping.category,
-                                  value: currentMapping.yAxis || currentMapping.value || currentMapping.values?.[0]
-                                }
-                                break
-
-                              case 'gauge':
-                                // Map metric/yAxis/value → value
-                                newMapping = {
-                                  value: currentMapping.metric || currentMapping.yAxis || currentMapping.value || currentMapping.values?.[0]
-                                }
-                                break
-
-                              case 'heatmap':
-                                // Map xAxis → xAxis, yAxis → yAxis, value → value
-                                newMapping = {
-                                  xAxis: currentMapping.xAxis || currentMapping.category,
-                                  yAxis: currentMapping.yAxis || currentMapping.metric,
-                                  value: currentMapping.value || currentMapping.values?.[0]
-                                }
-                                break
-
-                              case 'treemap':
-                                // Map xAxis/category → category, yAxis/value → value
-                                newMapping = {
-                                  category: currentMapping.xAxis || currentMapping.category,
-                                  value: currentMapping.yAxis || currentMapping.value || currentMapping.values?.[0]
-                                }
-                                break
-
-                              case 'sankey':
-                                // Try to preserve source/target if they exist
-                                newMapping = {
-                                  source: currentMapping.source || currentMapping.xAxis,
-                                  target_node: currentMapping.target_node || currentMapping.yAxis,
-                                  value: currentMapping.value || currentMapping.values?.[0]
-                                }
-                                break
-
-                              case 'bullet':
-                                // Map metrics to actual/comparative
-                                newMapping = {
-                                  actual: currentMapping.actual || currentMapping.metric || currentMapping.yAxis,
-                                  comparative: currentMapping.comparative || currentMapping.target
-                                }
-                                break
-
-                              case 'cohort':
-                                // Try to preserve cohort fields
-                                newMapping = {
-                                  cohort: currentMapping.cohort || currentMapping.xAxis,
-                                  period: currentMapping.period || currentMapping.category,
-                                  value: currentMapping.value || currentMapping.yAxis
-                                }
-                                break
-
-                              case 'sparkline':
-                                // Map xAxis/trend → trend
-                                newMapping = {
-                                  trend: currentMapping.trend || currentMapping.xAxis || currentMapping.metric
-                                }
-                                break
-
-                              default:
-                                // For standard charts (bar, line, pie, etc.), preserve existing mapping
-                                newMapping = currentMapping
-                                break
-                            }
-
-                            // Only include fields that have values
-                            const cleanedMapping = Object.entries(newMapping)
-                              .filter(([_, value]) => value !== undefined && value !== null)
-                              .reduce((acc, [key, value]) => ({ ...acc, [key]: value }), {})
-
-                            console.log('🔄 [CHART_TYPE_CHANGE] Mapping fields:', {
-                              from: currentType,
-                              to: option.value,
-                              oldMapping: currentMapping,
-                              newMapping: cleanedMapping
-                            })
-
-                            handleUpdate({
-                              chartType: option.value,
-                              dataMapping: Object.keys(cleanedMapping).length > 0 ? cleanedMapping : undefined
-                            })
-                          } else {
-                            handleUpdate({ chartType: option.value })
-                          }
+                          console.log('🎯 [CHART_SETTINGS] Chart type button clicked:', {
+                            chartId,
+                            oldType: customization?.chartType || chartType,
+                            newType: option.value
+                          })
+                          handleUpdate({
+                            chartType: option.value,
+                            // CRITICAL FIX: Clear data mapping when chart type changes
+                            // This ensures fields reset to match the new chart type's requirements
+                            // Inference logic will automatically populate based on configDataKey if available
+                            dataMapping: {}
+                          })
                         }}
                         className={cn(
                           'flex items-center space-x-2 p-2 rounded border text-left text-sm transition-colors',
@@ -538,6 +591,13 @@ export function ChartCustomizationPanel({
 
             {activeTab === 'data' && (
               <div className="space-y-4">
+                {/* Debug: Log current chart type being used for rendering */}
+                {console.log('📊 [CHART_SETTINGS] Rendering Data tab:', {
+                  chartId,
+                  effectiveChartType,
+                  originalChartType: chartType,
+                  customizationChartType: customization?.chartType
+                })}
                 {availableColumns.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
                     <Database className="h-12 w-12 mx-auto mb-3 opacity-40" />
@@ -551,12 +611,12 @@ export function ChartCustomizationPanel({
                   <>
                     {/* Standard Charts: Line, Bar, Area, Scatter, Combo */}
                     {(effectiveChartType === 'line' || effectiveChartType === 'bar' || effectiveChartType === 'area' || effectiveChartType === 'scatter' || effectiveChartType === 'combo') && (
-                      <div className="flex gap-6">
-                        {/* Available Fields */}
-                        <div className="w-1/3 flex-shrink-0">
-                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
-                            <div className="grid grid-cols-1 gap-2">
+                      <div className="grid grid-cols-[2fr_3fr] gap-8">
+                        {/* Available Fields - Left Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Data Sources</label>
+                          <div className="border-2 border-gray-300 rounded-lg p-4 bg-gradient-to-br from-gray-50 to-white max-h-[500px] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100 shadow-inner">
+                            <div className="grid grid-cols-1 gap-2.5">
                               {columnsByType.all.map((col, index) => {
                                 const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
                                 const icon = columnType === 'number' ? '🔢' : columnType === 'date' ? '📅' : '📝'
@@ -571,7 +631,7 @@ export function ChartCustomizationPanel({
                                         fieldType: columnType
                                       }))
                                     }}
-                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                    className="flex items-center space-x-3 p-3 bg-white border border-gray-200 rounded-md cursor-move hover:bg-blue-50 hover:border-blue-400 hover:shadow-sm transition-all select-none"
                                   >
                                     <span className="text-xs">{icon}</span>
                                     <span className="text-sm font-medium text-gray-700">{col}</span>
@@ -583,12 +643,14 @@ export function ChartCustomizationPanel({
                           </div>
                           <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
                             <span className="mr-1">💡</span>
-                            Tip: Drag fields to the right →
+                            Tip: Drag fields from left to right into mapping slots
                           </p>
                         </div>
 
-                        {/* Drop Zones */}
-                        <div className="flex-1 space-y-4">
+                        {/* Mapping Slots - Right Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Field Mappings</label>
+                          <div className="space-y-4">
                           {/* X-Axis Drop Zone */}
                           <div
                             onDragOver={(e) => {
@@ -605,7 +667,6 @@ export function ChartCustomizationPanel({
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                 handleUpdate({
                                   dataMapping: {
-                                    ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
                                     ...customization?.dataMapping,
                                     xAxis: data.fieldName,
                                     category: data.fieldName  // Also set category for consistency with AI format
@@ -624,7 +685,6 @@ export function ChartCustomizationPanel({
                                 <button
                                   onClick={() => handleUpdate({
                                     dataMapping: {
-                                      ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
                                       ...customization?.dataMapping,
                                       xAxis: undefined,
                                       category: undefined
@@ -637,8 +697,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a field from the left
+                                <span className="block text-lg mb-1">⬇️</span>
+                                Drop a field here for X-axis
                               </div>
                             )}
                           </div>
@@ -661,32 +721,33 @@ export function ChartCustomizationPanel({
                                   try {
                                     const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                     if (data.fieldType === 'number') {
-                                      // Support both yAxis1 and yAxis (check both sources)
-                                      const currentYAxis1 = customization?.dataMapping?.yAxis1 || customization?.dataMapping?.yAxis || effectiveDataMapping?.yAxis1 || effectiveDataMapping?.yAxis
-                                      let newYAxis1: string | string[]
+                                      // Determine which field to update based on chart type
+                                      const fieldName = effectiveChartType === 'bar' ? 'values' :
+                                                       effectiveChartType === 'combo' ? 'yAxis1' : 'yAxis'
 
-                                      if (Array.isArray(currentYAxis1)) {
-                                        if (!currentYAxis1.includes(data.fieldName)) {
-                                          newYAxis1 = [...currentYAxis1, data.fieldName]
+                                      const currentValue = customization?.dataMapping?.[fieldName]
+                                      let newValue: string | string[]
+
+                                      if (Array.isArray(currentValue)) {
+                                        if (!currentValue.includes(data.fieldName)) {
+                                          newValue = [...currentValue, data.fieldName]
                                         } else {
-                                          newYAxis1 = currentYAxis1
+                                          newValue = currentValue
                                         }
-                                      } else if (currentYAxis1) {
-                                        if (currentYAxis1 !== data.fieldName) {
-                                          newYAxis1 = [currentYAxis1, data.fieldName]
+                                      } else if (currentValue) {
+                                        if (currentValue !== data.fieldName) {
+                                          newValue = [currentValue, data.fieldName]
                                         } else {
-                                          newYAxis1 = currentYAxis1
+                                          newValue = currentValue
                                         }
                                       } else {
-                                        newYAxis1 = [data.fieldName]
+                                        newValue = [data.fieldName]
                                       }
 
                                       handleUpdate({
                                         dataMapping: {
-                                          ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
                                           ...customization?.dataMapping,
-                                          yAxis1: newYAxis1,
-                                          yAxis: newYAxis1 // Update both for compatibility
+                                          [fieldName]: newValue
                                         }
                                       })
                                     }
@@ -698,140 +759,53 @@ export function ChartCustomizationPanel({
                               >
                                 <div className="text-sm font-medium text-green-600 mb-2">Left Y-Axis (Primary)</div>
                                 {(() => {
-                                  // Support both yAxis1 and yAxis (AI may use either)
-                                  const leftAxisData = effectiveDataMapping?.yAxis1 || effectiveDataMapping?.yAxis
-                                  const hasData = leftAxisData && (Array.isArray(leftAxisData) ? leftAxisData.length > 0 : true)
-
-                                  return hasData ? (
-                                    <div className="space-y-2">
-                                      {(Array.isArray(leftAxisData) ? leftAxisData : [leftAxisData]).map((field: string) => (
-                                        <div key={field} className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
-                                          <span className="text-sm text-green-800">{field}</span>
-                                          <button
-                                            onClick={() => {
-                                              // Get current value from either source
-                                              const currentYAxis1 = customization?.dataMapping?.yAxis1 || customization?.dataMapping?.yAxis || effectiveDataMapping?.yAxis1 || effectiveDataMapping?.yAxis
-                                              let newYAxis1: string | string[] | undefined
-
-                                              if (Array.isArray(currentYAxis1)) {
-                                                const filtered = currentYAxis1.filter(f => f !== field)
-                                                if (filtered.length === 1) {
-                                                  newYAxis1 = filtered[0]
-                                                } else if (filtered.length === 0) {
-                                                  newYAxis1 = undefined
-                                                } else {
-                                                  newYAxis1 = filtered
-                                                }
-                                              } else {
-                                                newYAxis1 = undefined
-                                              }
-
-                                              handleUpdate({
-                                                dataMapping: {
-                                                  ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
-                                                  ...customization?.dataMapping,
-                                                  yAxis1: newYAxis1,
-                                                  yAxis: newYAxis1 // Update both for compatibility
-                                                }
-                                              })
-                                            }}
-                                            className="text-green-600 hover:text-green-800 text-xs"
-                                          >
-                                            Remove
-                                          </button>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <div className="text-center py-4 text-gray-500 text-sm">
-                                      <span className="block text-lg mb-1">👈</span>
-                                      Drag numeric fields from the left
-                                    </div>
-                                  )
-                                })()}
-                              </div>
-
-                              {/* Right Y-Axis (Secondary) */}
-                              <div
-                                onDragOver={(e) => {
-                                  e.preventDefault()
-                                  e.currentTarget.classList.add('border-purple-400', 'bg-purple-50')
-                                }}
-                                onDragLeave={(e) => {
-                                  e.currentTarget.classList.remove('border-purple-400', 'bg-purple-50')
-                                }}
-                                onDrop={(e) => {
-                                  e.preventDefault()
-                                  e.currentTarget.classList.remove('border-purple-400', 'bg-purple-50')
-                                  try {
-                                    const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                    if (data.fieldType === 'number') {
-                                      const currentYAxis2 = customization?.dataMapping?.yAxis2 || effectiveDataMapping?.yAxis2
-                                      let newYAxis2: string | string[]
-
-                                      if (Array.isArray(currentYAxis2)) {
-                                        if (!currentYAxis2.includes(data.fieldName)) {
-                                          newYAxis2 = [...currentYAxis2, data.fieldName]
-                                        } else {
-                                          newYAxis2 = currentYAxis2
-                                        }
-                                      } else if (currentYAxis2) {
-                                        if (currentYAxis2 !== data.fieldName) {
-                                          newYAxis2 = [currentYAxis2, data.fieldName]
-                                        } else {
-                                          newYAxis2 = currentYAxis2
-                                        }
-                                      } else {
-                                        newYAxis2 = [data.fieldName]
-                                      }
-
-                                      handleUpdate({
-                                        dataMapping: {
-                                          ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
-                                          ...customization?.dataMapping,
-                                          yAxis2: newYAxis2
-                                        }
-                                      })
-                                    }
-                                  } catch (error) {
-                                    console.error('Failed to parse drop data:', error)
-                                  }
-                                }}
-                                className="min-h-20 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
-                              >
-                                <div className="text-sm font-medium text-purple-600 mb-2">Right Y-Axis (Secondary)</div>
-                                {effectiveDataMapping?.yAxis2 && (Array.isArray(effectiveDataMapping.yAxis2) ? effectiveDataMapping.yAxis2.length > 0 : true) ? (
+                                  // Get the appropriate field based on chart type
+                                  const yAxisField = effectiveChartType === 'bar' ? effectiveDataMapping?.values :
+                                                    effectiveChartType === 'combo' ? effectiveDataMapping?.yAxis1 :
+                                                    effectiveDataMapping?.yAxis
+                                  return yAxisField && (Array.isArray(yAxisField) ? yAxisField.length > 0 : true)
+                                })() ? (
                                   <div className="space-y-2">
-                                    {(Array.isArray(effectiveDataMapping.yAxis2) ? effectiveDataMapping.yAxis2 : [effectiveDataMapping.yAxis2]).map((field: string) => (
-                                      <div key={field} className="flex items-center justify-between p-2 bg-purple-100 border border-purple-300 rounded">
-                                        <span className="text-sm text-purple-800">{field}</span>
+                                    {(() => {
+                                      // Get the correct field array based on chart type
+                                      const yAxisField = effectiveChartType === 'bar' ? effectiveDataMapping?.values :
+                                                        effectiveChartType === 'combo' ? effectiveDataMapping?.yAxis1 :
+                                                        effectiveDataMapping?.yAxis
+                                      const fieldArray = Array.isArray(yAxisField) ? yAxisField : [yAxisField]
+                                      return fieldArray
+                                    })().map((field: string) => (
+                                      <div key={field} className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
+                                        <span className="text-sm text-green-800">{field}</span>
                                         <button
                                           onClick={() => {
-                                            const currentYAxis2 = customization?.dataMapping?.yAxis2 || effectiveDataMapping?.yAxis2
-                                            let newYAxis2: string | string[] | undefined
+                                            // Determine which field to update based on chart type
+                                            const fieldName = effectiveChartType === 'bar' ? 'values' :
+                                                             effectiveChartType === 'combo' ? 'yAxis1' : 'yAxis'
 
-                                            if (Array.isArray(currentYAxis2)) {
-                                              const filtered = currentYAxis2.filter(f => f !== field)
+                                            const currentValue = customization?.dataMapping?.[fieldName] || effectiveDataMapping?.[fieldName]
+                                            let newValue: string | string[] | undefined
+
+                                            if (Array.isArray(currentValue)) {
+                                              const filtered = currentValue.filter(f => f !== field)
                                               if (filtered.length === 1) {
-                                                newYAxis2 = filtered[0]
+                                                newValue = filtered[0]
                                               } else if (filtered.length === 0) {
-                                                newYAxis2 = undefined
+                                                newValue = undefined
                                               } else {
-                                                newYAxis2 = filtered
+                                                newValue = filtered
                                               }
                                             } else {
-                                              newYAxis2 = undefined
+                                              newValue = undefined
                                             }
 
                                             handleUpdate({
                                               dataMapping: {
-                                                ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
                                                 ...customization?.dataMapping,
-                                                yAxis2: newYAxis2
+                                                [fieldName]: newValue
                                               }
                                             })
                                           }}
-                                          className="text-purple-600 hover:text-purple-800 text-xs"
+                                          className="text-green-600 hover:text-green-800 text-xs"
                                         >
                                           Remove
                                         </button>
@@ -840,11 +814,104 @@ export function ChartCustomizationPanel({
                                   </div>
                                 ) : (
                                   <div className="text-center py-4 text-gray-500 text-sm">
-                                    <span className="block text-lg mb-1">👈</span>
-                                    Drag numeric fields from the left
+                                    Drop numeric fields for left axis
                                   </div>
                                 )}
                               </div>
+
+                              {/* Right Y-Axis (Secondary) - ONLY for combo charts */}
+                              {effectiveChartType === 'combo' && (
+                                <div
+                                  onDragOver={(e) => {
+                                    e.preventDefault()
+                                    e.currentTarget.classList.add('border-purple-400', 'bg-purple-50')
+                                  }}
+                                  onDragLeave={(e) => {
+                                    e.currentTarget.classList.remove('border-purple-400', 'bg-purple-50')
+                                  }}
+                                  onDrop={(e) => {
+                                    e.preventDefault()
+                                    e.currentTarget.classList.remove('border-purple-400', 'bg-purple-50')
+                                    try {
+                                      const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                      if (data.fieldType === 'number') {
+                                        const currentYAxis2 = customization?.dataMapping?.yAxis2
+                                        let newYAxis2: string | string[]
+
+                                        if (Array.isArray(currentYAxis2)) {
+                                          if (!currentYAxis2.includes(data.fieldName)) {
+                                            newYAxis2 = [...currentYAxis2, data.fieldName]
+                                          } else {
+                                            newYAxis2 = currentYAxis2
+                                          }
+                                        } else if (currentYAxis2) {
+                                          if (currentYAxis2 !== data.fieldName) {
+                                            newYAxis2 = [currentYAxis2, data.fieldName]
+                                          } else {
+                                            newYAxis2 = currentYAxis2
+                                          }
+                                        } else {
+                                          newYAxis2 = [data.fieldName]
+                                        }
+
+                                        handleUpdate({
+                                          dataMapping: {
+                                            ...customization?.dataMapping,
+                                            yAxis2: newYAxis2
+                                          }
+                                        })
+                                      }
+                                    } catch (error) {
+                                      console.error('Failed to parse drop data:', error)
+                                    }
+                                  }}
+                                  className="min-h-20 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                                >
+                                  <div className="text-sm font-medium text-purple-600 mb-2">Right Y-Axis (Secondary)</div>
+                                  {effectiveDataMapping?.yAxis2 && (Array.isArray(effectiveDataMapping.yAxis2) ? effectiveDataMapping.yAxis2.length > 0 : true) ? (
+                                    <div className="space-y-2">
+                                      {(Array.isArray(effectiveDataMapping.yAxis2) ? effectiveDataMapping.yAxis2 : [effectiveDataMapping.yAxis2]).map((field: string) => (
+                                        <div key={field} className="flex items-center justify-between p-2 bg-purple-100 border border-purple-300 rounded">
+                                          <span className="text-sm text-purple-800">{field}</span>
+                                          <button
+                                            onClick={() => {
+                                              const currentYAxis2 = customization?.dataMapping?.yAxis2 || effectiveDataMapping?.yAxis2
+                                              let newYAxis2: string | string[] | undefined
+
+                                              if (Array.isArray(currentYAxis2)) {
+                                                const filtered = currentYAxis2.filter(f => f !== field)
+                                                if (filtered.length === 1) {
+                                                  newYAxis2 = filtered[0]
+                                                } else if (filtered.length === 0) {
+                                                  newYAxis2 = undefined
+                                                } else {
+                                                  newYAxis2 = filtered
+                                                }
+                                              } else {
+                                                newYAxis2 = undefined
+                                              }
+
+                                              handleUpdate({
+                                                dataMapping: {
+                                                  ...customization?.dataMapping,
+                                                  yAxis2: newYAxis2
+                                                }
+                                              })
+                                            }}
+                                            className="text-purple-600 hover:text-purple-800 text-xs"
+                                          >
+                                            Remove
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="text-center py-4 text-gray-500 text-sm">
+                                      Drop numeric fields for right axis
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </>
                           ) : (
                             /* Standard Y-Axis Drop Zone for non-combo charts */
@@ -863,8 +930,7 @@ export function ChartCustomizationPanel({
                                   const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                   // Only allow numeric fields in Y-axis for most chart types
                                   if (data.fieldType === 'number' || effectiveChartType === 'scatter') {
-                                    // Check all possible sources: yAxis, values, or yAxis1
-                                    const currentYAxis = customization?.dataMapping?.yAxis || customization?.dataMapping?.values || customization?.dataMapping?.yAxis1 || effectiveDataMapping?.yAxis || effectiveDataMapping?.values || effectiveDataMapping?.yAxis1
+                                    const currentYAxis = customization?.dataMapping?.yAxis
                                     let newYAxis: string | string[]
 
                                     // Add to existing Y-axis fields
@@ -886,7 +952,6 @@ export function ChartCustomizationPanel({
 
                                     handleUpdate({
                                       dataMapping: {
-                                        ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
                                         ...customization?.dataMapping,
                                         yAxis: newYAxis,
                                         values: Array.isArray(newYAxis) ? newYAxis : [newYAxis]  // Ensure values is always an array
@@ -901,8 +966,8 @@ export function ChartCustomizationPanel({
                             >
                               <div className="text-sm font-medium text-gray-600 mb-2">Y-Axis (Numeric Fields Only)</div>
                               {(() => {
-                                // Support all Y-axis field name variants (AI may use different names)
-                                const yAxisData = effectiveDataMapping?.yAxis || effectiveDataMapping?.values || effectiveDataMapping?.yAxis1
+                                // Support both yAxis and values formats (AI uses 'values', manual uses 'yAxis')
+                                const yAxisData = effectiveDataMapping?.yAxis || effectiveDataMapping?.values
                                 const hasData = yAxisData && (Array.isArray(yAxisData) ? yAxisData.length > 0 : true)
 
                                 return hasData ? (
@@ -912,8 +977,7 @@ export function ChartCustomizationPanel({
                                         <span className="text-sm text-green-800">{field}</span>
                                         <button
                                           onClick={() => {
-                                            // Check all possible sources: yAxis, values, or yAxis1
-                                            const currentYAxis = customization?.dataMapping?.yAxis || customization?.dataMapping?.values || customization?.dataMapping?.yAxis1 || effectiveDataMapping?.yAxis || effectiveDataMapping?.values || effectiveDataMapping?.yAxis1
+                                            const currentYAxis = customization?.dataMapping?.yAxis || customization?.dataMapping?.values || effectiveDataMapping?.yAxis || effectiveDataMapping?.values
                                             let newYAxis: string | string[] | undefined
 
                                             if (Array.isArray(currentYAxis)) {
@@ -931,7 +995,6 @@ export function ChartCustomizationPanel({
 
                                             handleUpdate({
                                               dataMapping: {
-                                                ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
                                                 ...customization?.dataMapping,
                                                 yAxis: newYAxis,
                                                 values: Array.isArray(newYAxis) ? newYAxis : (newYAxis ? [newYAxis] : undefined)
@@ -947,8 +1010,8 @@ export function ChartCustomizationPanel({
                                   </div>
                                 ) : (
                                   <div className="text-center py-4 text-gray-500 text-sm">
-                                    <span className="block text-lg mb-1">👈</span>
-                                    Drag numeric fields from the left
+                                    <span className="block text-lg mb-1">⬇️</span>
+                                    Drop numeric fields here for Y-axis
                                   </div>
                                 )
                               })()}
@@ -1079,123 +1142,125 @@ export function ChartCustomizationPanel({
                               </div>
                             </div>
                           )}
+                        </div>
 
-                          {/* Scatter Chart Advanced Fields (Size & Color) */}
-                          {effectiveChartType === 'scatter' && (
-                            <div className="space-y-4">
-                              {/* Bubble Size Drop Zone */}
-                              <div>
-                                <div
-                                  onDragOver={(e) => e.preventDefault()}
-                                  onDrop={(e) => {
-                                    e.preventDefault()
-                                    try {
-                                      const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                      if (data.fieldType === 'number') {
-                                        handleUpdate({
-                                          dataMapping: {
-                                            ...customization?.dataMapping,
-                                            size: data.fieldName
-                                          }
-                                        })
-                                      }
-                                    } catch (error) {
-                                      console.error('Failed to parse drop data:', error)
-                                    }
-                                  }}
-                                  className="min-h-16 border-2 border-dashed border-purple-300 rounded-lg p-3 transition-all"
-                                >
-                                  <div className="text-sm font-medium text-purple-600 mb-2 flex items-center">
-                                    Bubble Size (Optional)
-                                    <span className="ml-1 text-xs text-gray-500">- Numeric only</span>
-                                  </div>
-                                  {effectiveDataMapping?.size ? (
-                                    <div className="flex items-center justify-between p-2 bg-purple-100 border border-purple-300 rounded">
-                                      <span className="text-sm text-purple-800">{effectiveDataMapping.size}</span>
-                                      <button
-                                        onClick={() => {
-                                          handleUpdate({
-                                            dataMapping: {
-                                              ...customization?.dataMapping,
-                                              size: undefined
-                                            }
-                                          })
-                                        }}
-                                        className="text-purple-600 hover:text-purple-800 text-xs"
-                                      >
-                                        Remove
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <div className="text-center py-2 text-gray-500 text-sm">
-                                      Drop a numeric field to create bubble chart
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Color Grouping Drop Zone */}
-                              <div>
-                                <div
-                                  onDragOver={(e) => e.preventDefault()}
-                                  onDrop={(e) => {
-                                    e.preventDefault()
-                                    try {
-                                      const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                        {/* Scatter Chart Advanced Fields (Size & Color) */}
+                        {effectiveChartType === 'scatter' && (
+                          <div className="grid grid-cols-1 gap-4 mt-4">
+                            {/* Bubble Size Drop Zone */}
+                            <div>
+                              <div
+                                onDragOver={(e) => e.preventDefault()}
+                                onDrop={(e) => {
+                                  e.preventDefault()
+                                  try {
+                                    const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                    if (data.fieldType === 'number') {
                                       handleUpdate({
                                         dataMapping: {
                                           ...customization?.dataMapping,
-                                          color: data.fieldName
+                                          size: data.fieldName
                                         }
                                       })
-                                    } catch (error) {
-                                      console.error('Failed to parse drop data:', error)
                                     }
-                                  }}
-                                  className="min-h-16 border-2 border-dashed border-orange-300 rounded-lg p-3 transition-all"
-                                >
-                                  <div className="text-sm font-medium text-orange-600 mb-2 flex items-center">
-                                    Color Grouping (Optional)
-                                    <span className="ml-1 text-xs text-gray-500">- Any field</span>
-                                  </div>
-                                  {effectiveDataMapping?.color ? (
-                                    <div className="flex items-center justify-between p-2 bg-orange-100 border border-orange-300 rounded">
-                                      <span className="text-sm text-orange-800">{effectiveDataMapping.color}</span>
-                                      <button
-                                        onClick={() => {
-                                          handleUpdate({
-                                            dataMapping: {
-                                              ...customization?.dataMapping,
-                                              color: undefined
-                                            }
-                                          })
-                                        }}
-                                        className="text-orange-600 hover:text-orange-800 text-xs"
-                                      >
-                                        Remove
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <div className="text-center py-2 text-gray-500 text-sm">
-                                      Drop a field to group by color
-                                    </div>
-                                  )}
+                                  } catch (error) {
+                                    console.error('Failed to parse drop data:', error)
+                                  }
+                                }}
+                                className="min-h-16 border-2 border-dashed border-purple-300 rounded-lg p-3 transition-all"
+                              >
+                                <div className="text-sm font-medium text-purple-600 mb-2 flex items-center">
+                                  Bubble Size (Optional)
+                                  <span className="ml-1 text-xs text-gray-500">- Numeric only</span>
                                 </div>
+                                {effectiveDataMapping?.size ? (
+                                  <div className="flex items-center justify-between p-2 bg-purple-100 border border-purple-300 rounded">
+                                    <span className="text-sm text-purple-800">{effectiveDataMapping.size}</span>
+                                    <button
+                                      onClick={() => {
+                                        handleUpdate({
+                                          dataMapping: {
+                                            ...customization?.dataMapping,
+                                            size: undefined
+                                          }
+                                        })
+                                      }}
+                                      className="text-purple-600 hover:text-purple-800 text-xs"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="text-center py-2 text-gray-500 text-sm">
+                                    Drop a numeric field to create bubble chart
+                                  </div>
+                                )}
                               </div>
                             </div>
-                          )}
+
+                            {/* Color Grouping Drop Zone */}
+                            <div>
+                              <div
+                                onDragOver={(e) => e.preventDefault()}
+                                onDrop={(e) => {
+                                  e.preventDefault()
+                                  try {
+                                    const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                    handleUpdate({
+                                      dataMapping: {
+                                        ...customization?.dataMapping,
+                                        color: data.fieldName
+                                      }
+                                    })
+                                  } catch (error) {
+                                    console.error('Failed to parse drop data:', error)
+                                  }
+                                }}
+                                className="min-h-16 border-2 border-dashed border-orange-300 rounded-lg p-3 transition-all"
+                              >
+                                <div className="text-sm font-medium text-orange-600 mb-2 flex items-center">
+                                  Color Grouping (Optional)
+                                  <span className="ml-1 text-xs text-gray-500">- Any field</span>
+                                </div>
+                                {effectiveDataMapping?.color ? (
+                                  <div className="flex items-center justify-between p-2 bg-orange-100 border border-orange-300 rounded">
+                                    <span className="text-sm text-orange-800">{effectiveDataMapping.color}</span>
+                                    <button
+                                      onClick={() => {
+                                        handleUpdate({
+                                          dataMapping: {
+                                            ...customization?.dataMapping,
+                                            color: undefined
+                                          }
+                                        })
+                                      }}
+                                      className="text-orange-600 hover:text-orange-800 text-xs"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="text-center py-2 text-gray-500 text-sm">
+                                    Drop a field to group by color
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                          </div>
                         </div>
                       </div>
                     )}
 
                     {/* Pie Chart Data Mapping */}
                     {effectiveChartType === 'pie' && (
-                      <div className="flex gap-6">
-                        {/* Available Fields for Pie Chart */}
-                        <div className="w-1/3 flex-shrink-0">
-                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
-                            <div className="grid grid-cols-1 gap-2">
+                      <div className="grid grid-cols-[2fr_3fr] gap-8">
+                        {/* Available Fields - Left Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Data Sources</label>
+                          <div className="border-2 border-gray-300 rounded-lg p-4 bg-gradient-to-br from-gray-50 to-white max-h-[500px] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100 shadow-inner">
+                            <div className="grid grid-cols-1 gap-2.5">
                               {columnsByType.all.map((col, index) => {
                                 const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
                                 const icon = columnType === 'number' ? '🔢' : columnType === 'date' ? '📅' : '📝'
@@ -1210,7 +1275,7 @@ export function ChartCustomizationPanel({
                                         fieldType: columnType
                                       }))
                                     }}
-                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                    className="flex items-center space-x-3 p-3 bg-white border border-gray-200 rounded-md cursor-move hover:bg-blue-50 hover:border-blue-400 hover:shadow-sm transition-all select-none"
                                   >
                                     <span className="text-xs">{icon}</span>
                                     <span className="text-sm font-medium text-gray-700">{col}</span>
@@ -1222,12 +1287,14 @@ export function ChartCustomizationPanel({
                           </div>
                           <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
                             <span className="mr-1">💡</span>
-                            Tip: Drag fields to the right →
+                            Tip: Drag fields from left to right into mapping slots
                           </p>
                         </div>
 
-                        {/* Pie Chart Drop Zones */}
-                        <div className="flex-1 space-y-4">
+                        {/* Mapping Slots - Right Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Field Mappings</label>
+                          <div className="space-y-4">
                           {/* Category Drop Zone */}
                           <div
                             onDragOver={(e) => {
@@ -1272,8 +1339,7 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a field from the left
+                                Drop a field here for categories
                               </div>
                             )}
                           </div>
@@ -1325,8 +1391,7 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a field from the left (optional - counts occurrences if empty)
+                                Drop numeric field here (optional - counts occurrences if empty)
                               </div>
                             )}
                           </div>
@@ -1336,12 +1401,12 @@ export function ChartCustomizationPanel({
 
                     {/* Scorecard Data Mapping */}
                     {effectiveChartType === 'scorecard' && (
-                      <div className="flex gap-6">
-                        {/* Available Fields for Scorecard */}
-                        <div className="w-1/3 flex-shrink-0">
-                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
-                            <div className="grid grid-cols-1 gap-2">
+                      <div className="grid grid-cols-[2fr_3fr] gap-8">
+                        {/* Available Fields - Left Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Data Sources</label>
+                          <div className="border-2 border-gray-300 rounded-lg p-4 bg-gradient-to-br from-gray-50 to-white max-h-[500px] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100 shadow-inner">
+                            <div className="grid grid-cols-1 gap-2.5">
                               {columnsByType.numeric.map((col, index) => {
                                 const columnType = 'number'
                                 const icon = '🔢'
@@ -1356,7 +1421,7 @@ export function ChartCustomizationPanel({
                                         fieldType: columnType
                                       }))
                                     }}
-                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                    className="flex items-center space-x-3 p-3 bg-white border border-gray-200 rounded-md cursor-move hover:bg-blue-50 hover:border-blue-400 hover:shadow-sm transition-all select-none"
                                   >
                                     <span className="text-xs">{icon}</span>
                                     <span className="text-sm font-medium text-gray-700">{col}</span>
@@ -1368,62 +1433,64 @@ export function ChartCustomizationPanel({
                           </div>
                           <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
                             <span className="mr-1">💡</span>
-                            Tip: Drag fields to the right →
+                            Tip: Drag fields from left to right into mapping slots
                           </p>
                         </div>
 
-                        <div className="flex-1 space-y-4">
+                        {/* Mapping Slots - Right Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Field Mappings</label>
+                          <div className="space-y-4">
                           {/* Metric Drop Zone */}
                           <div
-                            onDragOver={(e) => {
-                              e.preventDefault()
-                              e.currentTarget.classList.add('border-indigo-400', 'bg-indigo-50')
-                            }}
-                            onDragLeave={(e) => {
-                              e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50')
-                            }}
-                            onDrop={(e) => {
-                              e.preventDefault()
-                              e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50')
-                              try {
-                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                if (data.fieldType === 'number') {
-                                  handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      metric: data.fieldName
-                                    }
-                                  })
-                                }
-                              } catch (error) {
-                                console.error('Failed to parse drop data:', error)
+                          onDragOver={(e) => {
+                            e.preventDefault()
+                            e.currentTarget.classList.add('border-indigo-400', 'bg-indigo-50')
+                          }}
+                          onDragLeave={(e) => {
+                            e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50')
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault()
+                            e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50')
+                            try {
+                              const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                              if (data.fieldType === 'number') {
+                                handleUpdate({
+                                  dataMapping: {
+                                    ...customization?.dataMapping,
+                                    metric: data.fieldName
+                                  }
+                                })
                               }
-                            }}
-                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
-                          >
-                            <div className="text-sm font-medium text-gray-600 mb-2">Metric Field</div>
-                            {effectiveDataMapping?.metric ? (
-                              <div className="flex items-center justify-between p-2 bg-indigo-100 border border-indigo-300 rounded">
-                                <span className="text-sm text-indigo-800">{effectiveDataMapping.metric}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      metric: undefined
-                                    }
-                                  })}
-                                  className="text-indigo-600 hover:text-indigo-800 text-xs"
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a numeric field from the left for the metric
-                              </div>
-                            )}
-                          </div>
+                            } catch (error) {
+                              console.error('Failed to parse drop data:', error)
+                            }
+                          }}
+                          className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                        >
+                          <div className="text-sm font-medium text-gray-600 mb-2">Metric Field</div>
+                          {effectiveDataMapping?.metric ? (
+                            <div className="flex items-center justify-between p-2 bg-indigo-100 border border-indigo-300 rounded">
+                              <span className="text-sm text-indigo-800">{effectiveDataMapping.metric}</span>
+                              <button
+                                onClick={() => handleUpdate({
+                                  dataMapping: {
+                                    ...customization?.dataMapping,
+                                    metric: undefined
+                                  }
+                                })}
+                                className="text-indigo-600 hover:text-indigo-800 text-xs"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="text-center py-3 text-gray-500 text-sm">
+                              Drop a numeric field here for the metric
+                            </div>
+                          )}
+                        </div>
                         </div>
                       </div>
                     )}
@@ -1473,12 +1540,12 @@ export function ChartCustomizationPanel({
 
                     {/* Waterfall Chart Data Mapping */}
                     {effectiveChartType === 'waterfall' && (
-                      <div className="flex gap-6">
-                        {/* Available Fields for Waterfall Chart */}
-                        <div className="w-1/3 flex-shrink-0">
-                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
-                            <div className="grid grid-cols-1 gap-2">
+                      <div className="grid grid-cols-[2fr_3fr] gap-8">
+                        {/* Available Fields - Left Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Data Sources</label>
+                          <div className="border-2 border-gray-300 rounded-lg p-4 bg-gradient-to-br from-gray-50 to-white max-h-[500px] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100 shadow-inner">
+                            <div className="grid grid-cols-1 gap-2.5">
                               {columnsByType.all.map((col, index) => {
                                 const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
                                 const icon = columnType === 'number' ? '🔢' : columnType === 'date' ? '📅' : '📝'
@@ -1493,7 +1560,7 @@ export function ChartCustomizationPanel({
                                         fieldType: columnType
                                       }))
                                     }}
-                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                    className="flex items-center space-x-3 p-3 bg-white border border-gray-200 rounded-md cursor-move hover:bg-blue-50 hover:border-blue-400 hover:shadow-sm transition-all select-none"
                                   >
                                     <span className="text-xs">{icon}</span>
                                     <span className="text-sm font-medium text-gray-700">{col}</span>
@@ -1505,12 +1572,14 @@ export function ChartCustomizationPanel({
                           </div>
                           <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
                             <span className="mr-1">💡</span>
-                            Tip: Drag fields to the right →
+                            Tip: Drag fields from left to right into mapping slots
                           </p>
                         </div>
 
-                        {/* Waterfall Chart Drop Zones */}
-                        <div className="flex-1 space-y-4">
+                        {/* Mapping Slots - Right Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Field Mappings</label>
+                          <div className="space-y-4">
                           {/* Category Drop Zone */}
                           <div
                             onDragOver={(e) => {
@@ -1555,8 +1624,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a field from the left for categories (X-axis)
+                                <span className="block text-lg mb-1">⬇️</span>
+                                Drop a field here for categories (X-axis)
                               </div>
                             )}
                           </div>
@@ -1608,8 +1677,8 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a numeric field from the left for values
+                                <span className="block text-lg mb-1">⬇️</span>
+                                Drop a numeric field here for values
                               </div>
                             )}
                           </div>
@@ -1658,22 +1727,32 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a field from the left to indicate increase/decrease/total (optional)
+                                <span className="block text-lg mb-1">⬇️</span>
+                                Drop a field to indicate increase/decrease/total (optional)
                               </div>
                             )}
                           </div>
+                        </div>
+
+                        {/* Waterfall Chart Info */}
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <p className="text-xs text-blue-800 font-medium mb-1">About Waterfall Charts</p>
+                          <p className="text-xs text-blue-700">
+                            Waterfall charts show how an initial value is affected by a series of positive and negative values.
+                            The type field can specify if each value is an "increase", "decrease", or "total".
+                          </p>
                         </div>
                       </div>
                     )}
 
                     {/* Funnel Chart Data Mapping */}
                     {effectiveChartType === 'funnel' && (
-                      <div className="flex gap-6">
-                        <div className="w-1/3 flex-shrink-0">
-                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
-                            <div className="grid grid-cols-1 gap-2">
+                      <div className="grid grid-cols-[2fr_3fr] gap-8">
+                        {/* Available Fields - Left Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Data Sources</label>
+                          <div className="border-2 border-gray-300 rounded-lg p-4 bg-gradient-to-br from-gray-50 to-white max-h-[500px] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100 shadow-inner">
+                            <div className="grid grid-cols-1 gap-2.5">
                               {columnsByType.all.map((col) => {
                                 const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
                                 const icon = columnType === 'number' ? '🔢' : columnType === 'date' ? '📅' : '📝'
@@ -1687,7 +1766,7 @@ export function ChartCustomizationPanel({
                                         fieldType: columnType
                                       }))
                                     }}
-                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                    className="flex items-center space-x-3 p-3 bg-white border border-gray-200 rounded-md cursor-move hover:bg-blue-50 hover:border-blue-400 hover:shadow-sm transition-all select-none"
                                   >
                                     <span className="text-xs">{icon}</span>
                                     <span className="text-sm font-medium text-gray-700">{col}</span>
@@ -1699,11 +1778,14 @@ export function ChartCustomizationPanel({
                           </div>
                           <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
                             <span className="mr-1">💡</span>
-                            Tip: Drag fields to the right →
+                            Tip: Drag fields from left to right into mapping slots
                           </p>
                         </div>
 
-                        <div className="flex-1 space-y-4">
+                        {/* Mapping Slots - Right Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Field Mappings</label>
+                          <div className="space-y-4">
                           <div
                             onDragOver={(e) => {
                               e.preventDefault()
@@ -1747,8 +1829,7 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a field from the left for funnel stages
+                                Drop a field for funnel stages
                               </div>
                             )}
                           </div>
@@ -1798,8 +1879,7 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a numeric field from the left for values
+                                Drop a numeric field for values
                               </div>
                             )}
                           </div>
@@ -1809,11 +1889,12 @@ export function ChartCustomizationPanel({
 
                     {/* Heatmap Chart Data Mapping */}
                     {effectiveChartType === 'heatmap' && (
-                      <div className="flex gap-6">
-                        <div className="w-1/3 flex-shrink-0">
-                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
-                            <div className="grid grid-cols-1 gap-2">
+                      <div className="grid grid-cols-[2fr_3fr] gap-8">
+                        {/* Available Fields - Left Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Data Sources</label>
+                          <div className="border-2 border-gray-300 rounded-lg p-4 bg-gradient-to-br from-gray-50 to-white max-h-[500px] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100 shadow-inner">
+                            <div className="grid grid-cols-1 gap-2.5">
                               {columnsByType.all.map((col) => {
                                 const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
                                 const icon = columnType === 'number' ? '🔢' : columnType === 'date' ? '📅' : '📝'
@@ -1827,7 +1908,7 @@ export function ChartCustomizationPanel({
                                         fieldType: columnType
                                       }))
                                     }}
-                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                    className="flex items-center space-x-3 p-3 bg-white border border-gray-200 rounded-md cursor-move hover:bg-blue-50 hover:border-blue-400 hover:shadow-sm transition-all select-none"
                                   >
                                     <span className="text-xs">{icon}</span>
                                     <span className="text-sm font-medium text-gray-700">{col}</span>
@@ -1839,11 +1920,14 @@ export function ChartCustomizationPanel({
                           </div>
                           <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
                             <span className="mr-1">💡</span>
-                            Tip: Drag fields to the right →
+                            Tip: Drag fields from left to right into mapping slots
                           </p>
                         </div>
 
-                        <div className="flex-1 space-y-4">
+                        {/* Mapping Slots - Right Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Field Mappings</label>
+                          <div className="space-y-4">
                           <div
                             onDragOver={(e) => {
                               e.preventDefault()
@@ -1887,8 +1971,7 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a field from the left for X-axis
+                                Drop a field for X-axis
                               </div>
                             )}
                           </div>
@@ -1936,8 +2019,7 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a field from the left for Y-axis
+                                Drop a field for Y-axis
                               </div>
                             )}
                           </div>
@@ -1987,8 +2069,7 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a numeric field from the left for intensity values
+                                Drop a numeric field for intensity values
                               </div>
                             )}
                           </div>
@@ -1998,101 +2079,53 @@ export function ChartCustomizationPanel({
 
                     {/* Gauge Chart Data Mapping */}
                     {effectiveChartType === 'gauge' && (
-                      <div className="flex gap-6">
-                        {/* Available Fields for Gauge */}
-                        <div className="w-1/3 flex-shrink-0">
-                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
-                            <div className="grid grid-cols-1 gap-2">
-                              {columnsByType.numeric.map((col) => {
-                                const columnType = 'number'
-                                const icon = '🔢'
-                                return (
-                                  <div
-                                    key={col}
-                                    draggable
-                                    onDragStart={(e) => {
-                                      e.dataTransfer.setData('application/json', JSON.stringify({
-                                        fieldName: col,
-                                        fieldType: columnType
-                                      }))
-                                    }}
-                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
-                                  >
-                                    <span className="text-xs">{icon}</span>
-                                    <span className="text-sm font-medium text-gray-700">{col}</span>
-                                    <span className="text-xs text-gray-500 ml-auto">{columnType}</span>
-                                  </div>
-                                )
-                              })}
-                            </div>
+                      <div className="space-y-6">
+                        {/* Metric Field */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Metric Field (Required)
+                          </label>
+                          <div
+                            className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 min-h-[60px] bg-gray-50 dark:bg-gray-800"
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              const fieldName = e.dataTransfer.getData('text/plain')
+                              if (fieldName) {
+                                handleUpdate({
+                                  dataMapping: {
+                                    ...customization?.dataMapping,
+                                    metric: fieldName
+                                  }
+                                })
+                              }
+                            }}
+                          >
+                            {effectiveDataMapping?.metric ? (
+                              <div className="flex items-center justify-between bg-white dark:bg-gray-700 px-3 py-2 rounded">
+                                <span className="text-sm font-medium">{effectiveDataMapping.metric}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      metric: undefined
+                                    }
+                                  })}
+                                  className="text-gray-400 hover:text-red-500"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
+                                Drag a numeric field here
+                              </p>
+                            )}
                           </div>
-                          <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
-                            <span className="mr-1">💡</span>
-                            Tip: Drag fields to the right →
-                          </p>
                         </div>
 
-                        {/* Right Panel with Drop Zone and Settings */}
-                        <div className="flex-1 space-y-4">
-                          {/* Metric Field */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                              Metric Field (Required)
-                            </label>
-                            <div
-                              className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-3 min-h-16 bg-gray-50 dark:bg-gray-800 transition-all"
-                              onDragOver={(e) => {
-                                e.preventDefault()
-                                e.currentTarget.classList.add('border-indigo-400', 'bg-indigo-50')
-                              }}
-                              onDragLeave={(e) => {
-                                e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50')
-                              }}
-                              onDrop={(e) => {
-                                e.preventDefault()
-                                e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50')
-                                try {
-                                  const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                  if (data.fieldType === 'number') {
-                                    handleUpdate({
-                                      dataMapping: {
-                                        ...customization?.dataMapping,
-                                        metric: data.fieldName
-                                      }
-                                    })
-                                  }
-                                } catch (error) {
-                                  console.error('Failed to parse drop data:', error)
-                                }
-                              }}
-                            >
-                              {effectiveDataMapping?.metric ? (
-                                <div className="flex items-center justify-between p-2 bg-indigo-100 border border-indigo-300 rounded">
-                                  <span className="text-sm text-indigo-800">{effectiveDataMapping.metric}</span>
-                                  <button
-                                    onClick={() => handleUpdate({
-                                      dataMapping: {
-                                        ...customization?.dataMapping,
-                                        metric: undefined
-                                      }
-                                    })}
-                                    className="text-indigo-600 hover:text-indigo-800 text-xs"
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="text-center py-3 text-gray-500 text-sm">
-                                  <span className="block text-lg mb-1">👈</span>
-                                  Drag a numeric field from the left
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Aggregation Type */}
-                          <div>
+                        {/* Aggregation Type */}
+                        <div>
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             Aggregation (Required)
                           </label>
@@ -2101,13 +2134,13 @@ export function ChartCustomizationPanel({
                             onChange={(e) => handleUpdate({
                               dataMapping: {
                                 ...customization?.dataMapping,
-                                aggregation: e.target.value as 'sum' | 'avg' | 'median' | 'min' | 'max' | 'count'
+                                aggregation: e.target.value as 'sum' | 'average' | 'median' | 'min' | 'max' | 'count'
                               }
                             })}
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                           >
                             <option value="sum">Sum</option>
-                            <option value="avg">Average</option>
+                            <option value="average">Average</option>
                             <option value="median">Median</option>
                             <option value="min">Minimum</option>
                             <option value="max">Maximum</option>
@@ -2125,12 +2158,9 @@ export function ChartCustomizationPanel({
                           </label>
                           <input
                             type="number"
-                            value={effectiveDataMapping?.max || ''}
+                            value={(customization as any)?.max || ''}
                             onChange={(e) => handleUpdate({
-                              dataMapping: {
-                                ...customization?.dataMapping,
-                                max: e.target.value ? Number(e.target.value) : undefined
-                              }
+                              max: e.target.value ? Number(e.target.value) : undefined
                             })}
                             placeholder="e.g., 100000"
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
@@ -2147,12 +2177,9 @@ export function ChartCustomizationPanel({
                           </label>
                           <input
                             type="number"
-                            value={effectiveDataMapping?.min !== undefined ? effectiveDataMapping?.min : 0}
+                            value={(customization as any)?.min !== undefined ? (customization as any)?.min : 0}
                             onChange={(e) => handleUpdate({
-                              dataMapping: {
-                                ...customization?.dataMapping,
-                                min: e.target.value ? Number(e.target.value) : 0
-                              }
+                              min: e.target.value ? Number(e.target.value) : 0
                             })}
                             placeholder="0"
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
@@ -2161,17 +2188,17 @@ export function ChartCustomizationPanel({
                             The minimum value for the gauge (0% mark). Default: 0
                           </p>
                         </div>
-                        </div>
                       </div>
                     )}
 
                     {/* Cohort Chart Data Mapping */}
                     {effectiveChartType === 'cohort' && (
-                      <div className="flex gap-6">
-                        <div className="w-1/3 flex-shrink-0">
-                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
-                            <div className="grid grid-cols-1 gap-2">
+                      <div className="grid grid-cols-[2fr_3fr] gap-8">
+                        {/* Available Fields - Left Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Data Sources</label>
+                          <div className="border-2 border-gray-300 rounded-lg p-4 bg-gradient-to-br from-gray-50 to-white max-h-[500px] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100 shadow-inner">
+                            <div className="grid grid-cols-1 gap-2.5">
                               {columnsByType.all.map((col) => {
                                 const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
                                 const icon = columnType === 'number' ? '🔢' : columnType === 'date' ? '📅' : '📝'
@@ -2185,7 +2212,7 @@ export function ChartCustomizationPanel({
                                         fieldType: columnType
                                       }))
                                     }}
-                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                    className="flex items-center space-x-3 p-3 bg-white border border-gray-200 rounded-md cursor-move hover:bg-blue-50 hover:border-blue-400 hover:shadow-sm transition-all select-none"
                                   >
                                     <span className="text-xs">{icon}</span>
                                     <span className="text-sm font-medium text-gray-700">{col}</span>
@@ -2197,11 +2224,14 @@ export function ChartCustomizationPanel({
                           </div>
                           <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
                             <span className="mr-1">💡</span>
-                            Tip: Drag fields to the right →
+                            Tip: Drag fields from left to right into mapping slots
                           </p>
                         </div>
 
-                        <div className="flex-1 space-y-4">
+                        {/* Mapping Slots - Right Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Field Mappings</label>
+                          <div className="space-y-4">
                           <div
                             onDragOver={(e) => {
                               e.preventDefault()
@@ -2245,8 +2275,7 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a field from the left for cohort identifier
+                                Drop a field for cohort identifier
                               </div>
                             )}
                           </div>
@@ -2294,8 +2323,7 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a field from the left for time period
+                                Drop a field for time period
                               </div>
                             )}
                           </div>
@@ -2345,8 +2373,7 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a numeric field from the left for retention percentage
+                                Drop a numeric field for retention percentage
                               </div>
                             )}
                           </div>
@@ -2356,11 +2383,12 @@ export function ChartCustomizationPanel({
 
                     {/* Bullet Chart Data Mapping */}
                     {effectiveChartType === 'bullet' && (
-                      <div className="flex gap-6">
-                        <div className="w-1/3 flex-shrink-0">
-                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
-                            <div className="grid grid-cols-1 gap-2">
+                      <div className="grid grid-cols-[2fr_3fr] gap-8">
+                        {/* Available Fields - Left Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Data Sources</label>
+                          <div className="border-2 border-gray-300 rounded-lg p-4 bg-gradient-to-br from-gray-50 to-white max-h-[500px] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100 shadow-inner">
+                            <div className="grid grid-cols-1 gap-2.5">
                               {columnsByType.all.map((col) => {
                                 const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
                                 const icon = columnType === 'number' ? '🔢' : columnType === 'date' ? '📅' : '📝'
@@ -2374,7 +2402,7 @@ export function ChartCustomizationPanel({
                                         fieldType: columnType
                                       }))
                                     }}
-                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                    className="flex items-center space-x-3 p-3 bg-white border border-gray-200 rounded-md cursor-move hover:bg-blue-50 hover:border-blue-400 hover:shadow-sm transition-all select-none"
                                   >
                                     <span className="text-xs">{icon}</span>
                                     <span className="text-sm font-medium text-gray-700">{col}</span>
@@ -2386,11 +2414,14 @@ export function ChartCustomizationPanel({
                           </div>
                           <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
                             <span className="mr-1">💡</span>
-                            Tip: Drag fields to the right →
+                            Tip: Drag fields from left to right into mapping slots
                           </p>
                         </div>
 
-                        <div className="flex-1 space-y-4">
+                        {/* Mapping Slots - Right Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Field Mappings</label>
+                          <div className="space-y-4">
                           <div
                             onDragOver={(e) => {
                               e.preventDefault()
@@ -2434,8 +2465,7 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a field from the left for categories (optional)
+                                Drop a field for categories (optional)
                               </div>
                             )}
                           </div>
@@ -2485,8 +2515,7 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a numeric field from the left for actual value
+                                Drop a numeric field for actual value
                               </div>
                             )}
                           </div>
@@ -2536,8 +2565,7 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a numeric field from the left for comparative/target value
+                                Drop a numeric field for comparative/target value
                               </div>
                             )}
                           </div>
@@ -2547,11 +2575,12 @@ export function ChartCustomizationPanel({
 
                     {/* Treemap Chart Data Mapping */}
                     {effectiveChartType === 'treemap' && (
-                      <div className="flex gap-6">
-                        <div className="w-1/3 flex-shrink-0">
-                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
-                            <div className="grid grid-cols-1 gap-2">
+                      <div className="grid grid-cols-[2fr_3fr] gap-8">
+                        {/* Available Fields - Left Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Data Sources</label>
+                          <div className="border-2 border-gray-300 rounded-lg p-4 bg-gradient-to-br from-gray-50 to-white max-h-[500px] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100 shadow-inner">
+                            <div className="grid grid-cols-1 gap-2.5">
                               {columnsByType.all.map((col) => {
                                 const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
                                 const icon = columnType === 'number' ? '🔢' : columnType === 'date' ? '📅' : '📝'
@@ -2565,7 +2594,7 @@ export function ChartCustomizationPanel({
                                         fieldType: columnType
                                       }))
                                     }}
-                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                    className="flex items-center space-x-3 p-3 bg-white border border-gray-200 rounded-md cursor-move hover:bg-blue-50 hover:border-blue-400 hover:shadow-sm transition-all select-none"
                                   >
                                     <span className="text-xs">{icon}</span>
                                     <span className="text-sm font-medium text-gray-700">{col}</span>
@@ -2577,11 +2606,14 @@ export function ChartCustomizationPanel({
                           </div>
                           <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
                             <span className="mr-1">💡</span>
-                            Tip: Drag fields to the right →
+                            Tip: Drag fields from left to right into mapping slots
                           </p>
                         </div>
 
-                        <div className="flex-1 space-y-4">
+                        {/* Mapping Slots - Right Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Field Mappings</label>
+                          <div className="space-y-4">
                           <div
                             onDragOver={(e) => {
                               e.preventDefault()
@@ -2625,8 +2657,7 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a field from the left for categories
+                                Drop a field for categories
                               </div>
                             )}
                           </div>
@@ -2676,8 +2707,7 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a numeric field from the left for size values
+                                Drop a numeric field for size values
                               </div>
                             )}
                           </div>
@@ -2687,11 +2717,12 @@ export function ChartCustomizationPanel({
 
                     {/* Sankey Chart Data Mapping */}
                     {effectiveChartType === 'sankey' && (
-                      <div className="flex gap-6">
-                        <div className="w-1/3 flex-shrink-0">
-                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
-                            <div className="grid grid-cols-1 gap-2">
+                      <div className="grid grid-cols-[2fr_3fr] gap-8">
+                        {/* Available Fields - Left Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Data Sources</label>
+                          <div className="border-2 border-gray-300 rounded-lg p-4 bg-gradient-to-br from-gray-50 to-white max-h-[500px] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100 shadow-inner">
+                            <div className="grid grid-cols-1 gap-2.5">
                               {columnsByType.all.map((col) => {
                                 const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
                                 const icon = columnType === 'number' ? '🔢' : columnType === 'date' ? '📅' : '📝'
@@ -2705,7 +2736,7 @@ export function ChartCustomizationPanel({
                                         fieldType: columnType
                                       }))
                                     }}
-                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                    className="flex items-center space-x-3 p-3 bg-white border border-gray-200 rounded-md cursor-move hover:bg-blue-50 hover:border-blue-400 hover:shadow-sm transition-all select-none"
                                   >
                                     <span className="text-xs">{icon}</span>
                                     <span className="text-sm font-medium text-gray-700">{col}</span>
@@ -2717,11 +2748,14 @@ export function ChartCustomizationPanel({
                           </div>
                           <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
                             <span className="mr-1">💡</span>
-                            Tip: Drag fields to the right →
+                            Tip: Drag fields from left to right into mapping slots
                           </p>
                         </div>
 
-                        <div className="flex-1 space-y-4">
+                        {/* Mapping Slots - Right Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Field Mappings</label>
+                          <div className="space-y-4">
                           <div
                             onDragOver={(e) => {
                               e.preventDefault()
@@ -2765,8 +2799,7 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a field from the left for source nodes
+                                Drop a field for source nodes
                               </div>
                             )}
                           </div>
@@ -2814,8 +2847,7 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a field from the left for target nodes
+                                Drop a field for target nodes
                               </div>
                             )}
                           </div>
@@ -2865,8 +2897,7 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a numeric field from the left for flow values
+                                Drop a numeric field for flow values
                               </div>
                             )}
                           </div>
@@ -2876,11 +2907,12 @@ export function ChartCustomizationPanel({
 
                     {/* Sparkline Chart Data Mapping */}
                     {effectiveChartType === 'sparkline' && (
-                      <div className="flex gap-6">
-                        <div className="w-1/3 flex-shrink-0">
-                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
-                            <div className="grid grid-cols-1 gap-2">
+                      <div className="grid grid-cols-[2fr_3fr] gap-8">
+                        {/* Available Fields - Left Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Data Sources</label>
+                          <div className="border-2 border-gray-300 rounded-lg p-4 bg-gradient-to-br from-gray-50 to-white max-h-[500px] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100 shadow-inner">
+                            <div className="grid grid-cols-1 gap-2.5">
                               {columnsByType.all.map((col) => {
                                 const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
                                 const icon = columnType === 'number' ? '🔢' : columnType === 'date' ? '📅' : '📝'
@@ -2894,7 +2926,7 @@ export function ChartCustomizationPanel({
                                         fieldType: columnType
                                       }))
                                     }}
-                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                    className="flex items-center space-x-3 p-3 bg-white border border-gray-200 rounded-md cursor-move hover:bg-blue-50 hover:border-blue-400 hover:shadow-sm transition-all select-none"
                                   >
                                     <span className="text-xs">{icon}</span>
                                     <span className="text-sm font-medium text-gray-700">{col}</span>
@@ -2906,11 +2938,14 @@ export function ChartCustomizationPanel({
                           </div>
                           <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
                             <span className="mr-1">💡</span>
-                            Tip: Drag fields to the right →
+                            Tip: Drag fields from left to right into mapping slots
                           </p>
                         </div>
 
-                        <div className="flex-1 space-y-4">
+                        {/* Mapping Slots - Right Column */}
+                        <div className="flex flex-col h-full">
+                          <label className="text-sm font-semibold mb-3 block text-gray-700 uppercase tracking-wide">Field Mappings</label>
+                          <div className="space-y-4">
                           <div
                             onDragOver={(e) => {
                               e.preventDefault()
@@ -2956,8 +2991,7 @@ export function ChartCustomizationPanel({
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a numeric field from the left for sparkline trend
+                                Drop a numeric field for sparkline trend
                               </div>
                             )}
                           </div>
@@ -2995,16 +3029,7 @@ export function ChartCustomizationPanel({
                           let isValid = false
                           let missingFields = ''
 
-                          // Use effectiveChartType to account for customization changes
-                          const validationChartType = customization?.chartType || chartType
-
-                          console.log('🔍 [VALIDATION] Validating chart:', {
-                            validationChartType,
-                            mapping,
-                            hasMapping: Object.keys(mapping).length > 0
-                          })
-
-                          switch (validationChartType) {
+                          switch (chartType) {
                             case 'line':
                             case 'bar':
                               isValid = !!(mapping.xAxis || mapping.category)
@@ -3095,7 +3120,7 @@ export function ChartCustomizationPanel({
 
                           if (!isValid) {
                             // Show a more user-friendly error message
-                            console.warn('⚠️ [CUSTOMIZATION_PANEL] Validation failed:', missingFields)
+                            console.error('❌ [CUSTOMIZATION_PANEL] Validation failed:', missingFields)
 
                             // You could replace this with a toast notification in a real app
                             const errorMessage = missingFields || 'Please configure required data fields before generating the chart'

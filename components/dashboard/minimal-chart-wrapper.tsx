@@ -250,18 +250,21 @@ export const MinimalChartWrapper = React.memo<MinimalChartWrapperProps>(function
     }
 
     // Get axis keys from dataMapping or fall back to dataKey
-    const xKey = dataMapping?.xAxis || safeDataKey[0]
-    const yKey = dataMapping?.yAxis || safeDataKey[1]
+    // Ensure we always use strings, not arrays
+    const xKeyRaw = dataMapping?.xAxis || safeDataKey[0]
+    const yKeyRaw = dataMapping?.yAxis || safeDataKey[1]
+    const xKey = Array.isArray(xKeyRaw) ? xKeyRaw[0] : xKeyRaw
+    const yKey = Array.isArray(yKeyRaw) ? yKeyRaw[0] : yKeyRaw
     const sizeKey = dataMapping?.size
     const colorKey = dataMapping?.color
 
     // Filter and validate data points
     const validPoints = chartData
       .map(row => {
-        const x = Number(row[xKey])
-        const y = Number(row[yKey])
-        const size = sizeKey ? Number(row[sizeKey]) : 100
-        const color = colorKey ? String(row[colorKey] || 'Default') : 'Default'
+        const x = Number((row as any)[xKey])
+        const y = Number((row as any)[yKey])
+        const size = sizeKey ? Number((row as any)[sizeKey]) : 100
+        const color = colorKey ? String((row as any)[colorKey] || 'Default') : 'Default'
 
         // Only include points with valid x and y values
         if (isNaN(x) || isNaN(y)) return null
@@ -382,7 +385,7 @@ export const MinimalChartWrapper = React.memo<MinimalChartWrapperProps>(function
               title={title}
               value={metricValue}
               unit=""
-              aggregationType={aggregation}
+              aggregationType={aggregation as any}
             />
           )
         }
@@ -595,7 +598,7 @@ export const MinimalChartWrapper = React.memo<MinimalChartWrapperProps>(function
                 outerRadius="60%"
                 fill="#8884d8"
                 dataKey="value"
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}
                 labelLine={{
                   stroke: '#3C3C43',
                   strokeWidth: 1
@@ -810,7 +813,7 @@ export const MinimalChartWrapper = React.memo<MinimalChartWrapperProps>(function
                 <ZAxis
                   type="number"
                   dataKey="size"
-                  range={bubbleSizeRange}
+                  range={bubbleSizeRange as [number, number]}
                   name={sizeKey}
                 />
               )}
@@ -962,7 +965,7 @@ export const MinimalChartWrapper = React.memo<MinimalChartWrapperProps>(function
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <h3 className="text-lg font-semibold text-gray-900 leading-tight">{title}</h3>
-            {type !== 'scorecard' && description && (
+            {description && (
               <p className="text-sm text-gray-600 mt-1 leading-relaxed">{description}</p>
             )}
           </div>

@@ -301,7 +301,6 @@ export function usePreloader() {
   return {
     preload: preloader.preload.bind(preloader),
     prefetch: preloader.prefetch.bind(preloader),
-    preloadQueue: preloader.preloadQueue.bind(preloader),
     isPreloaded: preloader.isPreloaded.bind(preloader),
     smartPrefetcher,
     preloadUploadResources,

@@ -606,7 +606,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
     if (valueKeys.length < 2) return null
 
     // Calculate min/max ranges for each metric
-    const ranges = valueKeys.map(key => {
+    const ranges = valueKeys.map((key: string) => {
       const values = chartData
         .map(row => Number(row[key]))
         .filter(v => !isNaN(v) && v !== 0)
@@ -679,7 +679,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
 
   // Container-aware sizing with minimum dimensions
   const containerSizing = useMemo(() => {
-    const minDims = CHART_MINIMUMS[type] || CHART_MINIMUMS.bar
+    const minDims = (CHART_MINIMUMS as any)[type] || CHART_MINIMUMS.bar
     const { width, height } = chartDimensions
 
     // Ensure container meets minimum requirements
@@ -1031,7 +1031,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
       // Group by color dimension
       const groupMap: Record<string, DataRow[]> = {}
       numericData.forEach(row => {
-        const colorValue = String(row[colorKey] || 'Unknown')
+        const colorValue = String((row as any)[colorKey as string] || 'Unknown')
         if (!groupMap[colorValue]) {
           groupMap[colorValue] = []
         }
@@ -1132,7 +1132,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
           <Database className="h-16 w-16 text-gray-400 mb-4" />
           <h3 className="text-lg font-semibold text-gray-700 mb-2">{title}</h3>
           <p className="text-sm text-gray-500 mb-4 text-center max-w-xs">
-            Configure this chart's data mapping in the Data tab to visualize your data
+            Configure this chart&apos;s data mapping in the Data tab to visualize your data
           </p>
           <Button
             onClick={(e) => {
@@ -1306,7 +1306,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                   })}
                 />
               )}
-              {safeDataKey.slice(1).map((key, index) => {
+              {safeDataKey.slice(1).map((key: string, index: number) => {
                 // Determine which Y-axis this line should use
                 const yAxisId = dualAxisConfig
                   ? (dualAxisConfig.leftMetrics.includes(key) ? "left" : "right")
@@ -1365,15 +1365,15 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
         const numericBarData = chartData.map(row => {
           const transformed = { ...row }
           // Transform value columns (everything except first column which is category)
-          safeDataKey.slice(1).forEach(key => {
-            transformed[key] = parseNumericValueBar(row[key])
+          safeDataKey.slice(1).forEach((key: string) => {
+            (transformed as any)[key] = parseNumericValueBar((row as any)[key])
           })
           return transformed
         })
 
         // Calculate Y-axis domain to ensure bars are visible
         const allYValues = numericBarData.flatMap(row =>
-          safeDataKey.slice(1).map(key => row[key]).filter(v => typeof v === 'number' && !isNaN(v))
+          safeDataKey.slice(1).map((key: string) => (row as any)[key]).filter((v: any) => typeof v === 'number' && !isNaN(v))
         )
         const maxYValue = Math.max(...allYValues, 0)
         const minYValue = Math.min(...allYValues, 0)
@@ -1485,7 +1485,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                   height={36}
                 />
               )}
-              {safeDataKey.slice(1).map((key, index) => {
+              {safeDataKey.slice(1).map((key: string, index: number) => {
                 // Determine which Y-axis this bar should use
                 const yAxisId = dualAxisConfig
                   ? (dualAxisConfig.leftMetrics.includes(key) ? "left" : "right")
@@ -1524,7 +1524,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                 fill="#8884d8"
                 dataKey="value"
                 label={responsiveFeatures.showSecondaryLabels && customization?.showLegend !== false ?
-                  ({ name, percent }) => {
+                  ({ name, percent }: any) => {
                     if (!responsiveFeatures.showGrid) {
                       return `${(percent * 100).toFixed(0)}%`
                     }
@@ -1671,7 +1671,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                   })}
                 />
               )}
-              {safeDataKey.slice(1).map((key, index) => {
+              {safeDataKey.slice(1).map((key: string, index: number) => {
                 // Determine which Y-axis this area should use
                 const yAxisId = dualAxisConfig
                   ? (dualAxisConfig.leftMetrics.includes(key) ? "left" : "right")
@@ -1952,7 +1952,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                 data={numericScatterData}
                 fillOpacity={0.6}
                 animationDuration={customization?.animate !== false ? 1500 : 0}
-                shape={(props) => {
+                shape={(props: any) => {
                   // Determine color based on the colorKey value
                   let pointColor = colors[0]
                   if (colorKey && props.payload) {
@@ -2167,7 +2167,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                           <div style={{ fontSize: '10px', fontWeight: '600', color: '#2563eb', marginBottom: '4px', textTransform: 'uppercase' }}>
                             {yAxis1Label} (Left)
                           </div>
-                          {yAxis1Metrics.map((metric, idx) => (
+                          {yAxis1Metrics.map((metric: string, idx: number) => (
                             <div key={metric} style={{ marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                               <div style={{
                                 width: '8px',
@@ -2190,7 +2190,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                           <div style={{ fontSize: '10px', fontWeight: '600', color: '#10b981', marginBottom: '4px', textTransform: 'uppercase' }}>
                             {yAxis2Label} (Right)
                           </div>
-                          {yAxis2Metrics.map((metric, idx) => (
+                          {yAxis2Metrics.map((metric: string, idx: number) => (
                             <div key={metric} style={{ marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                               <div style={{
                                 width: '8px',
@@ -2256,7 +2256,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
               )}
 
               {/* Render Left Y-Axis (yAxis1) metrics */}
-              {yAxis1Metrics.map((metric, idx) => {
+              {yAxis1Metrics.map((metric: string, idx: number) => {
                 const color = getMetricColor(idx, false)
                 const stackId = customization?.stacked ? "stack1" : undefined
 
@@ -2345,7 +2345,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
               })}
 
               {/* Render Right Y-Axis (yAxis2) metrics - only if they exist */}
-              {yAxis2Metrics.length > 0 && yAxis2Metrics.map((metric, idx) => {
+              {yAxis2Metrics.length > 0 && yAxis2Metrics.map((metric: string, idx: number) => {
                 const color = getMetricColor(idx, true)
                 const stackId = customization?.stacked ? "stack2" : undefined
 
@@ -2457,7 +2457,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                 showLabels: customization?.showLabels !== false,
                 showValues: customization?.showValues !== false,
                 colors: colors
-              }}
+              } as any}
             />
           </React.Suspense>
         )
@@ -2483,7 +2483,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
               customization={{
                 colorScheme: customization?.colorScheme || 'blue',
                 showValues: customization?.showValues !== false
-              }}
+              } as any}
             />
           </React.Suspense>
         )
@@ -2529,12 +2529,12 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
               dataMapping={{
                 cohort: effectiveDataMapping?.cohort || safeDataKey[0] || 'cohort',
                 period: effectiveDataMapping?.period || safeDataKey[1] || 'period',
-                value: effectiveDataMapping?.value || safeDataKey[2] || 'retention'
+                retention: effectiveDataMapping?.value || safeDataKey[2] || 'retention'
               }}
               customization={{
                 colorScheme: customization?.colorScheme || 'blue',
                 showPercentages: customization?.showPercentages !== false
-              }}
+              } as any}
             />
           </React.Suspense>
         )
@@ -2815,7 +2815,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
             Export
           </ContextMenuItem>
           <ContextMenuSeparator />
-          {chartTemplates.map((template) => (
+          {chartTemplates.map((template: any) => (
             <ContextMenuItem
               key={template.id}
               onClick={() => handleChangeType(template.type)}
@@ -2912,7 +2912,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                         <QualityBadge score={qualityScore} />
                       )}
                     </div>
-                    {type !== 'scorecard' && (customization?.customDescription || description) && (
+                    {(type as any) !== 'scorecard' && (customization?.customDescription || description) && (
                       <p className="text-sm text-gray-600 mt-1 leading-relaxed">
                         {customization?.customDescription || description}
                       </p>
@@ -3056,7 +3056,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
           Export
         </ContextMenuItem>
         <ContextMenuSeparator />
-        {chartTemplates.map((template) => (
+        {chartTemplates.map((template: any) => (
           <ContextMenuItem
             key={template.id}
             onClick={() => handleChangeType(template.type)}

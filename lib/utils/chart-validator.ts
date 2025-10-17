@@ -24,7 +24,7 @@ export function validateChartConfig(config: ChartConfig): ChartValidationResult 
     }
   }
 
-  switch (config.type) {
+  switch ((config as any).type) {
     case 'funnel':
       if (!dm.stage) {
         return { isValid: false, errors: ['Funnel chart requires stage field in dataMapping'] }
@@ -126,7 +126,7 @@ export function validateChartData(
 
   if ((chartConfig as any).dataMapping) {
     const dm = (chartConfig as any).dataMapping
-    switch (chartConfig.type) {
+    switch ((chartConfig as any).type) {
       case 'bar':
         if (dm.category) dataKeys.push(dm.category)
         if (dm.values) dataKeys.push(...(Array.isArray(dm.values) ? dm.values : [dm.values]))
@@ -211,11 +211,11 @@ export function validateChartData(
         }
         break
     }
-  } else if (chartConfig.dataKey) {
+  } else if ((chartConfig as any).dataKey) {
     // Fallback to legacy format
-    dataKeys = Array.isArray(chartConfig.dataKey)
-      ? chartConfig.dataKey
-      : [chartConfig.dataKey]
+    dataKeys = Array.isArray((chartConfig as any).dataKey)
+      ? (chartConfig as any).dataKey
+      : [(chartConfig as any).dataKey]
   }
 
   // If no dataKeys extracted, chart is unconfigured but still valid (will show placeholder)
@@ -240,7 +240,7 @@ export function validateChartData(
   }
 
   // Type-specific validations
-  switch (chartConfig.type) {
+  switch ((chartConfig as any).type) {
     case 'scorecard':
       // Scorecards need at least SOME numeric values (not necessarily in first row)
       // Check if any row has a valid numeric value for the metric
@@ -293,7 +293,7 @@ export function validateChartData(
       if (data.length < 2) {
         return {
           isValid: false,
-          reason: `${chartConfig.type} chart needs at least 2 data points`,
+          reason: `${(chartConfig as any).type} chart needs at least 2 data points`,
           suggestions: ['Add more data points for meaningful visualization']
         }
       }
@@ -527,17 +527,17 @@ export function filterValidCharts(
 
   console.log('🔍 [CHART_VALIDATOR] Starting chart validation:', {
     totalCharts: chartConfigs.length,
-    chartTypes: chartConfigs.map(c => c.type).join(', ')
+    chartTypes: chartConfigs.map(c => (c as any).type).join(', ')
   })
 
   const validCharts = chartConfigs.filter((config, index) => {
     const validation = validateChartData(config, data)
 
-    console.log(`🔍 [CHART_VALIDATOR] Chart ${index} (${config.type} - "${config.title}"):`, {
+    console.log(`🔍 [CHART_VALIDATOR] Chart ${index} (${(config as any).type} - "${(config as any).title}"):`, {
       isValid: validation.isValid,
       reason: validation.reason,
       suggestions: validation.suggestions,
-      dataKey: config.dataKey,
+      dataKey: (config as any).dataKey,
       dataMapping: (config as any).dataMapping
     })
 
@@ -548,7 +548,7 @@ export function filterValidCharts(
     totalCharts: chartConfigs.length,
     validCharts: validCharts.length,
     filteredOut: chartConfigs.length - validCharts.length,
-    validChartTypes: validCharts.map(c => c.type).join(', ')
+    validChartTypes: validCharts.map(c => (c as any).type).join(', ')
   })
 
   return validCharts

@@ -265,6 +265,7 @@ export function VirtualTable({
         <List
           ref={listRef}
           height={containerHeight - 50}
+          width="100%"
           itemCount={processedData.length}
           itemSize={rowHeight}
           itemData={{

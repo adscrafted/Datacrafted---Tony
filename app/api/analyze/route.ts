@@ -121,9 +121,9 @@ interface ChartRecommendation {
     // value already covered
 
     // Gauge specific
-    metric?: string             // Metric column
-    aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct'  // Aggregation function
-    target?: string             // Target/goal value column
+    // metric already covered above (shared with scorecard)
+    // aggregation already covered above
+    // target defined below (shared with bullet chart)
     min?: number | string       // Min value (static or column)
     max?: number | string       // Max value (static or column)
     thresholds?: Array<{value: number, color: string}>  // Color zones

@@ -170,11 +170,11 @@ export const ChatInterface = React.memo(function ChatInterface() {
       }))
 
       // Get selected chart details if any
-      let selectedChart = null
+      let selectedChart: any = null
       if (selectedChartId && analysis) {
-        selectedChart = analysis.chartConfig.find(c =>
+        selectedChart = analysis.chartConfig.find((c: any) =>
           (c.id || `chart-${analysis.chartConfig.indexOf(c)}`) === selectedChartId
-        )
+        ) as any
       }
 
       // Build headers with auth token
@@ -201,7 +201,7 @@ export const ChatInterface = React.memo(function ChatInterface() {
           selectedChart: selectedChart ? {
             id: selectedChartId,
             title: selectedChart.title,
-            type: selectedChart.type,
+            type: selectedChart.type as any,  // Type assertion for compatibility with all chart types
             dataKey: selectedChart.dataKey,
             description: selectedChart.description
           } : null
@@ -418,7 +418,7 @@ export const ChatInterface = React.memo(function ChatInterface() {
             <div className="mt-2 p-2 bg-blue-50 rounded text-xs">
               <p className="font-medium text-blue-800">
                 Selected Chart: {
-                  analysis.chartConfig.find(c =>
+                  analysis.chartConfig.find((c: any) =>
                     (c.id || `chart-${analysis.chartConfig.indexOf(c)}`) === selectedChartId
                   )?.title || 'Unknown'
                 }

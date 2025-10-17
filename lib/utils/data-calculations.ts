@@ -624,7 +624,7 @@ export class DataCalculator {
         resultRowCount: currentData.length,
         columns: Object.keys(currentData[0] || {}),
         steps: metadata
-      }
+      } as any
     }
   }
 }

@@ -100,7 +100,7 @@ const postHandler = withAuth(async (request, authUser) => {
         data: {
           firebaseUid: authUser.uid,
           email: authUser.email || undefined,
-          name: authUser.name || undefined,
+          name: authUser.displayName || undefined,
           photoURL: authUser.photoURL || undefined,
         }
       })

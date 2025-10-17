@@ -23,7 +23,6 @@ import {
 import { useDataStore } from '@/lib/store';
 import { processDataForChart } from '@/lib/utils/performance/data-sampling';
 import { useChartPerformanceMonitor } from '@/lib/utils/performance/web-vitals-monitor';
-import { useDebounce } from '@/lib/utils/performance/memory-management';
 
 interface OptimizedChartProps {
   id: string;
@@ -66,10 +65,17 @@ export function OptimizedChartWrapper({
 
   // OPTIMIZATION 4: Track container size with debouncing
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState(800);
+  const [containerWidth, setContainerWidth] = useState<number>(800);
+  const [debouncedWidth, setDebouncedWidth] = useState<number>(800);
 
   // Debounce width updates to prevent excessive re-renders during resize
-  const debouncedWidth = useDebounce(containerWidth, 200);
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedWidth(containerWidth);
+    }, 200);
+
+    return () => clearTimeout(timeout);
+  }, [containerWidth]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -275,14 +281,14 @@ export function OptimizedChartWrapper({
         )}
       </ResponsiveContainer>
 
-      {/* Customization Panel */}
-      {customization?.showSettings && (
+      {/* Customization Panel - Disabled in example */}
+      {/* {customization?.showSettings && (
         <ChartSettings
           chartId={id}
           config={chartConfig}
           onChange={handleCustomizationChange}
         />
-      )}
+      )} */}
     </div>
   );
 }

@@ -91,9 +91,9 @@ async function parseCSVChunked(file: File): Promise<ParseResult> {
 
         // Report progress
         reportProgress({
-          loaded: parser.streamer?._input?.length || 0,
+          loaded: (parser as any).streamer?._input?.length || 0,
           total: file.size,
-          percentage: Math.min(((parser.streamer?._input?.length || 0) / file.size) * 100, 100),
+          percentage: Math.min((((parser as any).streamer?._input?.length || 0) / file.size) * 100, 100),
           stage: 'parsing',
           rowsProcessed: totalRows,
           currentChunk

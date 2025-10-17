@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { DataRow, AnalysisResult, DataSchema } from '@/lib/store'
+import { EnhancedAnalysisResult } from '@/lib/types/recommendation'
 import { projectDataStorage } from '@/lib/project-data-storage'
 import { auth } from '@/lib/config/firebase'
 import { retryWithBackoff } from '@/lib/utils/retry'
@@ -62,9 +63,9 @@ interface ProjectStore {
   setCurrentProject: (projectId: string | null) => void
 
   // Project data management (debug mode)
-  saveProjectData: (projectId: string, data: DataRow[], analysis?: AnalysisResult | import('./types/recommendation').EnhancedAnalysisResult, schema?: DataSchema) => Promise<void>
-  getProjectData: (projectId: string) => { rawData: DataRow[], analysis: AnalysisResult | import('./types/recommendation').EnhancedAnalysisResult | null, dataSchema: DataSchema | null } | null
-  loadProjectDataAsync: (projectId: string) => Promise<{ rawData: DataRow[], analysis: AnalysisResult | import('./types/recommendation').EnhancedAnalysisResult | null, dataSchema: DataSchema | null } | null>
+  saveProjectData: (projectId: string, data: DataRow[], analysis?: AnalysisResult | EnhancedAnalysisResult, schema?: DataSchema) => Promise<void>
+  getProjectData: (projectId: string) => { rawData: DataRow[], analysis: AnalysisResult | EnhancedAnalysisResult | null, dataSchema: DataSchema | null } | null
+  loadProjectDataAsync: (projectId: string) => Promise<{ rawData: DataRow[], analysis: AnalysisResult | EnhancedAnalysisResult | null, dataSchema: DataSchema | null } | null>
 
   // Dashboard configuration management
   saveDashboardConfig: (projectId: string, config: {

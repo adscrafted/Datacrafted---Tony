@@ -132,13 +132,15 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       return validationCache.current.get(cacheKey)
     }
 
-    const result = filterValidCharts(analysis.chartConfig, data)
+    const result = filterValidCharts(analysis.chartConfig as any, data)
     validationCache.current.set(cacheKey, result)
 
     // Limit cache size to prevent memory leaks
     if (validationCache.current.size > 10) {
       const firstKey = validationCache.current.keys().next().value
-      validationCache.current.delete(firstKey)
+      if (firstKey) {
+        validationCache.current.delete(firstKey)
+      }
     }
 
     return result
@@ -149,7 +151,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
   const sortedCharts = useMemo(() => {
     // CRITICAL: Filter out the draft chart - it shouldn't be visible on the dashboard yet
     // Also filter out unconfigured scorecards (missing metric or formula)
-    const chartsToDisplay = validCharts.filter(chart => {
+    const chartsToDisplay = validCharts.filter((chart: any) => {
       const chartId = chart.id || `chart-${analysis.chartConfig.indexOf(chart)}`
       const isDraft = draftChart?.id === chartId
       if (isDraft) {
@@ -224,7 +226,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     const scorecards: typeof chartsToDisplay = []
     const otherCharts: typeof chartsToDisplay = []
 
-    chartsToDisplay.forEach(chart => {
+    chartsToDisplay.forEach((chart: any) => {
       const chartId = chart.id || `chart-${analysis.chartConfig.indexOf(chart)}`
       const customization = chartCustomizations[chartId]
       const effectiveType = customization?.chartType || chart.type
@@ -237,7 +239,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     })
 
     // Sort other charts by quality score (highest first)
-    const sortedOthers = otherCharts.sort((a, b) => {
+    const sortedOthers = otherCharts.sort((a: any, b: any) => {
       const scoreA = a.qualityScore ?? 0
       const scoreB = b.qualityScore ?? 0
       return scoreB - scoreA // Descending order
@@ -253,7 +255,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
 
     if (isEnhancedAnalysisResult(analysis)) {
       // Analysis is in enhanced format with recommendations
-      analysis.recommendations.forEach((rec: ChartRecommendation) => {
+      analysis.recommendations?.forEach((rec: ChartRecommendation) => {
         if (rec.qualityScore !== undefined) {
           scores[rec.id] = rec.qualityScore
         }
@@ -857,7 +859,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
             customization={chartCustomizations[draftChart.id] || {}}
             onCustomizationChange={updateChartCustomization}
             initialTab="data"
-            configDataMapping={draftChart.dataMapping}
+            configDataMapping={(draftChart as any).dataMapping}
             autoOpen={true}
           />
         </div>

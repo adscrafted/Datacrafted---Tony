@@ -145,7 +145,7 @@ export function SignInForm({ onSuccess, onSwitchView }: AuthFormProps) {
 
       <div className="mt-6 text-center">
         <p className="text-sm text-[#5f6368]">
-          Don't have an account?{' '}
+          Don&apos;t have an account?{' '}
           <button
             onClick={() => onSwitchView?.('signup')}
             className="text-blue-600 hover:text-blue-700 font-medium transition-colors"

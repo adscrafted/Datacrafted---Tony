@@ -139,7 +139,7 @@ export const DashboardLayoutComponent = React.memo<DashboardLayoutComponentProps
       chartTypes: analysis.chartConfig?.map(c => c.type).join(', ')
     })
 
-    const filtered = filterValidCharts(analysis.chartConfig, data)
+    const filtered = filterValidCharts(analysis.chartConfig as any, data)
 
     console.log('🔍 [DASHBOARD_LAYOUT] Charts after filtering:', {
       validCharts: filtered.length,
@@ -151,10 +151,10 @@ export const DashboardLayoutComponent = React.memo<DashboardLayoutComponentProps
   
   // Update layout to only include valid charts
   React.useEffect(() => {
-    setLayout(prevLayout => 
-      prevLayout.filter(item => 
-        validCharts.some(chart => 
-          (chart.id || `chart-${analysis.chartConfig.indexOf(chart)}`) === item.i
+    setLayout(prevLayout =>
+      prevLayout.filter(item =>
+        validCharts.some(chart =>
+          ((chart as any).id || `chart-${analysis.chartConfig.indexOf(chart as any)}`) === item.i
         )
       )
     )
@@ -163,19 +163,19 @@ export const DashboardLayoutComponent = React.memo<DashboardLayoutComponentProps
   // Convert valid chart configs to React elements for DraggableGrid
   const chartElements = validCharts.map((config, index) => {
     // Use the original index from analysis.chartConfig to maintain consistent IDs
-    const originalIndex = analysis.chartConfig.indexOf(config)
-    const chartId = config.id || `chart-${originalIndex}`
+    const originalIndex = analysis.chartConfig.indexOf(config as any)
+    const chartId = (config as any).id || `chart-${originalIndex}`
     
     return (
       <div key={chartId} className="h-full">
         <MinimalChartWrapper
           id={chartId}
-          type={config.type}
-          title={config.title}
-          description={config.description}
+          type={(config as any).type}
+          title={(config as any).title}
+          description={(config as any).description}
           data={data}
-          dataKey={config.dataKey}
-          dataMapping={config.dataMapping}
+          dataKey={(config as any).dataKey}
+          dataMapping={(config as any).dataMapping}
         />
       </div>
     )
@@ -296,7 +296,7 @@ export const DashboardLayoutComponent = React.memo<DashboardLayoutComponentProps
             <div>
               <h3 className="text-2xl font-semibold text-gray-900">No visualizations available</h3>
               <p className="text-gray-500 mt-3 text-base leading-relaxed">
-                The data doesn't support meaningful chart creation. Try uploading a different dataset.
+                The data doesn&apos;t support meaningful chart creation. Try uploading a different dataset.
               </p>
             </div>
           </div>
@@ -304,19 +304,19 @@ export const DashboardLayoutComponent = React.memo<DashboardLayoutComponentProps
       ) : (
         <div className="space-y-12">
           {validCharts.map((config, index) => {
-            const originalIndex = analysis.chartConfig.indexOf(config)
-            const chartId = config.id || `chart-${originalIndex}`
+            const originalIndex = analysis.chartConfig.indexOf(config as any)
+            const chartId = (config as any).id || `chart-${originalIndex}`
 
             return (
               <div key={chartId}>
                 <MinimalChartWrapper
                   id={chartId}
-                  type={config.type}
-                  title={config.title}
-                  description={config.description}
+                  type={(config as any).type}
+                  title={(config as any).title}
+                  description={(config as any).description}
                   data={data}
-                  dataKey={config.dataKey}
-                  dataMapping={config.dataMapping}
+                  dataKey={(config as any).dataKey}
+                  dataMapping={(config as any).dataMapping}
                 />
               </div>
             )

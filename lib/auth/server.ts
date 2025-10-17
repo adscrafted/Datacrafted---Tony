@@ -70,9 +70,9 @@ export async function verifyIdToken(token: string): Promise<TokenPayload> {
         uid: DEBUG_USER.uid,
         email: DEBUG_USER.email,
         email_verified: DEBUG_USER.emailVerified,
-        name: DEBUG_USER.displayName,
-        picture: DEBUG_USER.photoURL,
-        phone_number: DEBUG_USER.phoneNumber,
+        name: DEBUG_USER.displayName ?? undefined,
+        picture: DEBUG_USER.photoURL ?? undefined,
+        phone_number: DEBUG_USER.phoneNumber ?? undefined,
       }
     }
 

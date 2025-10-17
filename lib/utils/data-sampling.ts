@@ -34,8 +34,8 @@ export function uniformSample<T = DataRow>(
 /**
  * Smart sampling that preserves data characteristics
  */
-export function smartSample<T = DataRow>(
-  data: T[], 
+export function smartSample<T extends Record<string, any> = DataRow>(
+  data: T[],
   targetSize: number,
   options: SamplingOptions = {}
 ): T[] {

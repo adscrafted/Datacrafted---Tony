@@ -165,34 +165,26 @@ export default function SankeyChart({
             ? `${label.substring(0, maxLength)}...`
             : label
         }}
-        // Tooltip configuration
-        tooltip={({ node, link }: any) => {
-          if (link) {
-            return (
-              <div className="bg-white px-3 py-2 shadow-lg rounded-md border border-gray-200">
-                <div className="text-xs font-semibold text-gray-900">
-                  {link.source.id} → {link.target.id}
-                </div>
-                <div className="text-xs text-gray-600 mt-1">
-                  Value: <span className="font-medium">{link.value.toLocaleString()}</span>
-                </div>
-              </div>
-            )
-          }
-
-          if (node) {
-            return (
-              <div className="bg-white px-3 py-2 shadow-lg rounded-md border border-gray-200">
-                <div className="text-xs font-semibold text-gray-900">{node.id}</div>
-                <div className="text-xs text-gray-600 mt-1">
-                  Total: <span className="font-medium">{node.value?.toLocaleString()}</span>
-                </div>
-              </div>
-            )
-          }
-
-          return null
-        }}
+        // Node tooltip configuration
+        nodeTooltip={(node: any) => (
+          <div className="bg-white px-3 py-2 shadow-lg rounded-md border border-gray-200">
+            <div className="text-xs font-semibold text-gray-900">{node.id}</div>
+            <div className="text-xs text-gray-600 mt-1">
+              Total: <span className="font-medium">{node.value?.toLocaleString()}</span>
+            </div>
+          </div>
+        )}
+        // Link tooltip configuration
+        linkTooltip={(link: any) => (
+          <div className="bg-white px-3 py-2 shadow-lg rounded-md border border-gray-200">
+            <div className="text-xs font-semibold text-gray-900">
+              {link.source.id} → {link.target.id}
+            </div>
+            <div className="text-xs text-gray-600 mt-1">
+              Value: <span className="font-medium">{link.value.toLocaleString()}</span>
+            </div>
+          </div>
+        )}
         // Animation
         animate={true}
         motionConfig="gentle"

@@ -247,7 +247,7 @@ function isValidChart(chart: ChartConfig): boolean {
   }
 
   // Check if dataMapping exists and is not empty
-  const hasDataMapping = chart.dataMapping && Object.keys(chart.dataMapping).length > 0
+  const hasDataMapping = !!(chart.dataMapping && Object.keys(chart.dataMapping).length > 0)
 
   // Check type-specific requirements
   switch (chart.type) {

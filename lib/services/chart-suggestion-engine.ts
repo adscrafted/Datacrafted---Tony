@@ -80,7 +80,7 @@ export class ChartSuggestionEngine {
                   const columns = value.split(', ').map((col, i) => ({
                     key: col.toLowerCase().replace(/\s+/g, '_'),
                     label: col,
-                    type: i === 0 ? 'text' : 'number',
+                    type: (i === 0 ? 'text' : 'number') as "number" | "percentage" | "date" | "text" | "currency",
                     sortable: true
                   }))
                   suggestion.tableConfig = { columns }

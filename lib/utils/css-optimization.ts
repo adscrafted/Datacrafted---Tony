@@ -42,9 +42,9 @@ export function optimizeScroll(element: HTMLElement) {
   // Smooth scrolling with GPU
   element.style.scrollBehavior = 'smooth'
   element.style.overscrollBehavior = 'contain'
-  
+
   // Enable momentum scrolling on iOS
-  element.style.webkitOverflowScrolling = 'touch'
+  ;(element.style as any).webkitOverflowScrolling = 'touch'
 }
 
 /**

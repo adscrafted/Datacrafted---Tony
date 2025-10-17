@@ -90,7 +90,7 @@ export function SaveDashboardButton() {
   }, [chartCustomizations, currentLayout, dashboardFilters, currentTheme, dateRange, granularity, analysis?.chartConfig?.length, chatMessages.length, isDirty, markAsDirty])
 
   // Keyboard shortcut handler (Cmd/Ctrl + S)
-  const handleSaveRef = useRef<() => void>()
+  const handleSaveRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

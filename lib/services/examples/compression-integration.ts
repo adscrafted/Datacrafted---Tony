@@ -4,9 +4,9 @@
  */
 
 import { DataCompressionService, CompressionAlgorithm } from '../data-compression';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@/lib/generated/prisma';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient() as any; // Example file - dataSession model doesn't exist in schema
 
 // ============================================================================
 // Example 1: CSV Upload with Compression
@@ -310,9 +310,9 @@ export async function getUserCompressionStats(userId: string): Promise<Compressi
     };
   }
 
-  const totalOriginalSize = sessions.reduce((sum, s) => sum + s.originalSize, 0);
-  const totalCompressedSize = sessions.reduce((sum, s) => sum + s.compressedSize, 0);
-  const averageCompressionRatio = sessions.reduce((sum, s) => sum + s.compressionRatio, 0) / sessions.length;
+  const totalOriginalSize = sessions.reduce((sum: number, s: any) => sum + s.originalSize, 0);
+  const totalCompressedSize = sessions.reduce((sum: number, s: any) => sum + s.compressedSize, 0);
+  const averageCompressionRatio = sessions.reduce((sum: number, s: any) => sum + s.compressionRatio, 0) / sessions.length;
   const totalSpaceSaved = totalOriginalSize - totalCompressedSize;
   const spaceSavedPercentage = (totalSpaceSaved / totalOriginalSize) * 100;
 

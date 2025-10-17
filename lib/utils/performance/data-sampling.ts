@@ -288,29 +288,7 @@ export function processDataForChart(
 /**
  * Example usage in a chart component:
  *
- * ```tsx
- * const MyChart = ({ data, xKey, yKey }) => {
- *   const containerRef = useRef<HTMLDivElement>(null);
- *   const [containerWidth, setContainerWidth] = useState(800);
- *
- *   const { processedData, wasSampled, originalCount } = useMemo(() => {
- *     return processDataForChart(data, containerWidth, { xKey, yKey });
- *   }, [data, containerWidth, xKey, yKey]);
- *
- *   return (
- *     <div ref={containerRef}>
- *       {wasSampled && (
- *         <div className="text-xs text-muted-foreground">
- *           Showing {processedData.length} of {originalCount} points
- *         </div>
- *       )}
- *       <ResponsiveContainer>
- *         <LineChart data={processedData}>
- *           {/* ... */}
- *         </LineChart>
- *       </ResponsiveContainer>
- *     </div>
- *   );
- * };
- * ```
+ * Use processDataForChart with your data and container width,
+ * then render the processedData in your chart component.
+ * The wasSampled flag indicates if sampling occurred.
  */

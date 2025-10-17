@@ -6,8 +6,7 @@
  */
 
 import { useDataStore } from '@/lib/store';
-import { useMemo } from 'react';
-import { shallow } from 'zustand/shallow';
+import { useMemo, useState, useEffect } from 'react';
 
 /**
  * Subscribe to filtered data without subscribing to raw data
@@ -31,9 +30,7 @@ export function useFilteredData() {
  */
 export function useChartCustomization(chartId: string) {
   return useDataStore(
-    state => state.chartCustomizations[chartId],
-    // Use shallow comparison for object equality
-    shallow
+    state => state.chartCustomizations[chartId]
   );
 }
 
@@ -46,8 +43,7 @@ export function useMultipleChartCustomizations(chartIds: string[]) {
     state => chartIds.reduce((acc, id) => {
       acc[id] = state.chartCustomizations[id];
       return acc;
-    }, {} as Record<string, any>),
-    shallow
+    }, {} as Record<string, any>)
   );
 }
 
@@ -98,8 +94,7 @@ export function useThemeColors() {
     state => ({
       chartColors: state.currentTheme.chartColors,
       colors: state.currentTheme.colors,
-    }),
-    shallow
+    })
   );
 }
 
@@ -117,9 +112,7 @@ export function useDataStoreActions() {
       exportChart: state.exportChart,
       removeChart: state.removeChart,
       duplicateChart: state.duplicateChart,
-    }),
-    // Actions never change, so this will never cause re-render
-    () => true
+    })
   );
 }
 
@@ -134,8 +127,7 @@ export function useSessionMetadata() {
       fileName: state.fileName,
       isSaving: state.isSaving,
       saveError: state.saveError,
-    }),
-    shallow
+    })
   );
 }
 
@@ -149,8 +141,7 @@ export function useLoadingStates() {
       analysisProgress: state.analysisProgress,
       isSaving: state.isSaving,
       isChatLoading: state.isChatLoading,
-    }),
-    shallow
+    })
   );
 }
 
@@ -163,8 +154,7 @@ export function useErrorStates() {
       error: state.error,
       saveError: state.saveError,
       chatError: state.chatError,
-    }),
-    shallow
+    })
   );
 }
 
@@ -280,7 +270,7 @@ export function useStoreDebugger(label: string) {
       console.log(`[${label}] Store changed:`, {
         state,
         prevState,
-        diff: Object.keys(state).filter(key => state[key] !== prevState[key]),
+        diff: Object.keys(state).filter(key => (state as any)[key] !== (prevState as any)[key]),
       });
     });
   }

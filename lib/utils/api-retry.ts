@@ -316,14 +316,14 @@ export function resetAllCircuitBreakers(): void {
  * @returns Map of endpoint patterns to their circuit breaker states
  */
 export function getCircuitBreakerStatus(): Record<string, CircuitBreakerState> {
-  return Object.fromEntries(circuitBreakers.entries())
+  return Object.fromEntries(Array.from(circuitBreakers.entries()))
 }
 
 /**
  * Check if any circuit breakers are open
  */
 export function hasOpenCircuitBreakers(): boolean {
-  for (const breaker of circuitBreakers.values()) {
+  for (const breaker of Array.from(circuitBreakers.values())) {
     if (breaker.state === 'open') {
       return true
     }
@@ -336,7 +336,7 @@ export function hasOpenCircuitBreakers(): boolean {
  */
 export function getOpenCircuitBreakerCount(): number {
   let count = 0
-  for (const breaker of circuitBreakers.values()) {
+  for (const breaker of Array.from(circuitBreakers.values())) {
     if (breaker.state === 'open') {
       count++
     }

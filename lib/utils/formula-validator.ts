@@ -110,7 +110,7 @@ export function validateFormulaComprehensive(
   })
 
   // 5. Check column data types (ensure numeric)
-  for (const column of usedColumns) {
+  for (const column of Array.from(usedColumns)) {
     const sampleValues = data.slice(0, 100).map(row => row[column])
     const numericValues = sampleValues.filter(val => parseNumericValue(val) !== null)
 

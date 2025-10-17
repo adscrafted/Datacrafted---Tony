@@ -115,7 +115,7 @@ function cleanupExpiredEntries(): void {
   const now = Date.now()
   let cleanedCount = 0
 
-  for (const [key, value] of rateLimits.entries()) {
+  for (const [key, value] of Array.from(rateLimits.entries())) {
     if (now > value.resetTime) {
       rateLimits.delete(key)
       cleanedCount++
@@ -315,13 +315,13 @@ export function createRateLimiter(config: RateLimitConfig) {
  * )
  * ```
  */
-export function withRateLimit<P = {}>(
+export function withRateLimit<P = any>(
   config: RateLimitConfig,
-  handler: (request: NextRequest, context?: { params: P }) => Promise<Response>
-): (request: NextRequest, context?: { params: P }) => Promise<Response> {
+  handler: (request: NextRequest, context: { params: Promise<P> }) => Promise<Response>
+): (request: NextRequest, context: { params: Promise<P> }) => Promise<Response> {
   const rateLimiter = createRateLimiter(config)
 
-  return async function (request: NextRequest, context?: { params: P }) {
+  return async function (request: NextRequest, context: { params: Promise<P> }) {
     return rateLimiter(request, async () => {
       const response = await handler(request, context)
       return response instanceof NextResponse ? response : NextResponse.json(response)
@@ -379,9 +379,9 @@ export const RATE_LIMITS = {
  * export const POST = withRateLimit(RATE_LIMITS.AUTH, handler)
  * ```
  */
-export function combineAuthAndRateLimit<P = {}>(
+export function combineAuthAndRateLimit<P = any>(
   config: RateLimitConfig,
-  authHandler: (request: NextRequest, context?: { params: P }) => Promise<Response>
+  authHandler: (request: NextRequest, context: { params: Promise<P> }) => Promise<Response>
 ) {
   return withRateLimit(config, authHandler)
 }

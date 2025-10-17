@@ -352,18 +352,6 @@ export default function WaterfallChart({
             radius={[4, 4, 0, 0]}
             label={showLabels ? {
               position: 'top',
-              formatter: (value: number, entry: any) => {
-                const point = entry as WaterfallDataPoint
-                if (!point || typeof point !== 'object') return ''
-                if (point.type === 'total') {
-                  return point.cumulative?.toLocaleString(undefined, {
-                    maximumFractionDigits: 0
-                  }) || ''
-                }
-                return point.displayValue >= 0
-                  ? `+${point.displayValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-                  : point.displayValue.toLocaleString(undefined, { maximumFractionDigits: 0 })
-              },
               fontSize: 11,
               fill: '#374151'
             } : undefined}

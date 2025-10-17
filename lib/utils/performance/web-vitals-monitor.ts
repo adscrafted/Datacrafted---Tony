@@ -189,10 +189,11 @@ export class PerformanceTracker {
     return duration;
   }
 
-  measure(label: string, callback: () => void): number {
+  measure<T>(label: string, callback: () => T): T {
     this.start(label);
-    callback();
-    return this.end(label) || 0;
+    const result = callback();
+    this.end(label);
+    return result;
   }
 
   async measureAsync<T>(label: string, callback: () => Promise<T>): Promise<T> {
@@ -288,12 +289,14 @@ export function useChartPerformanceMonitor(chartId: string) {
   });
 
   return {
-    trackDataProcessing: (callback: () => void) => {
+    trackDataProcessing: <T,>(callback: () => T) => {
       return tracker.measure(`Chart ${chartId} - Data Processing`, callback);
     },
     trackRender: () => {
       tracker.start(`Chart ${chartId} - Render`);
-      return () => tracker.end(`Chart ${chartId} - Render`);
+      return () => {
+        tracker.end(`Chart ${chartId} - Render`);
+      };
     },
     getRenderCount: () => renderCount.current,
   };
@@ -353,25 +356,23 @@ export function usePerformanceMonitoring(
     enableChartMonitor = process.env.NODE_ENV === 'development',
   } = options;
 
-  // Web Vitals
-  if (enableWebVitals) {
-    useWebVitals();
-  }
+  // Web Vitals - always call hook, control behavior with options
+  useWebVitals({
+    enableConsoleLogging: enableWebVitals,
+    enableAnalytics: enableWebVitals,
+  });
 
-  // Memory monitoring
-  if (enableMemoryMonitor) {
-    useMemoryMonitor({
-      onHighMemory: (usage) => {
-        // You could trigger cleanup or show warning to user
-        console.error('Memory usage is critically high:', usage);
-      },
-    });
-  }
+  // Memory monitoring - always call hook, control behavior with options
+  useMemoryMonitor({
+    interval: enableMemoryMonitor ? 10000 : 3600000, // Check rarely if disabled
+    onHighMemory: enableMemoryMonitor ? (usage) => {
+      // You could trigger cleanup or show warning to user
+      console.error('Memory usage is critically high:', usage);
+    } : undefined,
+  });
 
-  // Network monitoring
-  if (enableNetworkMonitor) {
-    useNetworkMonitor();
-  }
+  // Network monitoring - always call hook, control behavior internally
+  useNetworkMonitor();
 
   // Performance tracker
   const tracker = usePerformanceTracker();

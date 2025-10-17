@@ -1,0 +1,162 @@
+   ▲ Next.js 15.5.4
+   - Environments: .env.local
+   - Experiments (use with caution):
+     · serverActions
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 4.9s
+   Linting and checking validity of types ...
+
+./app/dashboard/page.tsx
+185:6  Warning: React Hook React.useCallback has an unnecessary dependency: 'analysis'. Either exclude it or remove the dependency array.  react-hooks/exhaustive-deps
+486:6  Warning: React Hook useEffect has missing dependencies: 'getProjectData', 'loadProjectDataAsync', 'loadSession', 'performAnalysis', and 'setCurrentProject'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./app/layout.tsx
+38:9  Warning: Custom fonts not added in `pages/_document.js` will only load for a single page. This is discouraged. See: https://nextjs.org/docs/messages/no-page-custom-font  @next/next/no-page-custom-font
+
+./app/page.tsx
+104:6  Warning: React Hook useCallback has an unnecessary dependency: 'router'. Either exclude it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/dashboard/chart-wrapper.tsx
+182:6  Warning: React Hook useMemo has unnecessary dependencies: 'dashboardFilters', 'dateRange', 'granularity', 'rawData', and 'selectedDateColumn'. Either exclude them or remove the dependency array.  react-hooks/exhaustive-deps
+308:6  Warning: React Hook useMemo has missing dependencies: 'data' and 'filteredData'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+1007:6  Warning: React Hook useMemo has missing dependencies: 'calculateMargins', 'displayDescription', 'displayTitle', 'showGrid', and 'showLegend'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/dashboard/charts/waterfall-chart.example.tsx
+272:1  Warning: Assign object to a variable before exporting as module default  import/no-anonymous-default-export
+
+./components/dashboard/chat/chat-interface.tsx
+328:6  Warning: React Hook React.useCallback has a missing dependency: 'dataSchema'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/dashboard/date-range-selector.tsx
+115:6  Warning: React Hook useEffect has missing dependencies: 'setGranularity' and 'setSelectedDateColumn'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/dashboard/enhanced-chart-wrapper.tsx
+317:6  Warning: React Hook React.useMemo has a missing dependency: 'effectiveChartType'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+473:6  Warning: React Hook React.useMemo has a missing dependency: 'title'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+831:6  Warning: React Hook useMemo has a missing dependency: 'responsiveFeatures.showLegend'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+1056:6  Warning: React Hook React.useMemo has a missing dependency: 'colors'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/dashboard/flexible-dashboard-layout.tsx
+84:6  Warning: React Hook useMemo has unnecessary dependencies: 'granularity' and 'selectedDateColumn'. Either exclude them or remove the dependency array.  react-hooks/exhaustive-deps
+147:6  Warning: React Hook useMemo has missing dependencies: 'analysis.chartConfig' and 'data'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/dashboard/schema-viewer.tsx
+55:6  Warning: React Hook useEffect has a missing dependency: 'generateSchema'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/session/auto-save-indicator.tsx
+88:6  Warning: React Hook useEffect has missing dependencies: 'getSaveDataHash' and 'performAutoSave'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/upload/file-upload-core.tsx
+391:6  Warning: React Hook useCallback has a missing dependency: 'setUploadProgress'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+439:6  Warning: React Hook useCallback has a missing dependency: 'setUploadProgress'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./lib/hooks/use-data-store-optimized.ts
+17:6  Warning: React Hook useEffect was passed a dependency list that is not an array literal. This means we can't statically verify whether you've passed the correct dependencies.  react-hooks/exhaustive-deps
+17:6  Warning: React Hook useEffect has a missing dependency: 'deps'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./lib/utils/animations.ts
+365:1  Warning: Assign object to a variable before exporting as module default  import/no-anonymous-default-export
+
+./lib/utils/performance/memory-management.ts
+82:16  Warning: The ref value 'cacheRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'cacheRef.current' to a variable inside the effect, and use that variable in the cleanup function.  react-hooks/exhaustive-deps
+
+./lib/utils/performance/selective-subscriptions.ts
+24:6  Warning: React Hook useMemo has unnecessary dependencies: 'dashboardFilters', 'dateRange', and 'granularity'. Either exclude them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./lib/utils/preloader.ts
+379:1  Warning: Assign object to a variable before exporting as module default  import/no-anonymous-default-export
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
+   Collecting page data ...
+[CACHE] Initialized with TTL: 1440 minutes
+✅ [SECURITY] Production mode - DEBUG_MODE is disabled
+✅ [SECURITY] Production mode - DEBUG_MODE is disabled
+✅ [SECURITY] Production mode - DEBUG_MODE is disabled
+✅ [SECURITY] Production mode - DEBUG_MODE is disabled
+✅ [SECURITY] Production mode - DEBUG_MODE is disabled
+✅ [SECURITY] Production mode - DEBUG_MODE is disabled
+✅ [SECURITY] Production mode - DEBUG_MODE is disabled
+✅ [SECURITY] Production mode - DEBUG_MODE is disabled
+✅ [SECURITY] Production mode - DEBUG_MODE is disabled
+✅ [SECURITY] Production mode - DEBUG_MODE is disabled
+   Generating static pages (0/29) ...
+[CACHE] Initialized with TTL: 1440 minutes
+✅ [SECURITY] Production mode - DEBUG_MODE is disabled
+   Generating static pages (7/29) 
+   Generating static pages (14/29) 
+   Generating static pages (21/29) 
+✅ [SECURITY] Production mode - DEBUG_MODE is disabled
+ ✓ Generating static pages (29/29)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                           Size  First Load JS
+┌ ○ /                                               4.3 kB         780 kB
+├ ○ /_not-found                                      318 B         717 kB
+├ ○ /account/billing                               2.97 kB         761 kB
+├ ○ /account/profile                               2.47 kB         761 kB
+├ ○ /account/team                                  3.69 kB         762 kB
+├ ○ /admin                                         2.93 kB         753 kB
+├ ƒ /api/analyze                                     297 B         717 kB
+├ ƒ /api/analyze-simple                              297 B         717 kB
+├ ƒ /api/auth/session                                297 B         717 kB
+├ ƒ /api/chat                                        297 B         717 kB
+├ ƒ /api/generate-chart-title                        297 B         717 kB
+├ ƒ /api/health                                      297 B         717 kB
+├ ƒ /api/monitoring                                  297 B         717 kB
+├ ƒ /api/projects                                    297 B         717 kB
+├ ƒ /api/projects/[id]                               297 B         717 kB
+├ ƒ /api/projects/[id]/chat                          297 B         717 kB
+├ ƒ /api/projects/[id]/config                        297 B         717 kB
+├ ƒ /api/projects/[id]/data                          297 B         717 kB
+├ ƒ /api/recommendations/refresh                     297 B         717 kB
+├ ƒ /api/sessions                                    297 B         717 kB
+├ ƒ /api/sessions/[id]                               297 B         717 kB
+├ ƒ /api/sessions/[id]/chat                          297 B         717 kB
+├ ƒ /api/sessions/[id]/data                          297 B         717 kB
+├ ƒ /api/sessions/[id]/export                        297 B         717 kB
+├ ƒ /api/test-openai                                 297 B         717 kB
+├ ƒ /api/user                                        297 B         717 kB
+├ ƒ /api/user/profile                                297 B         717 kB
+├ ƒ /api/user/sync                                   297 B         717 kB
+├ ○ /auth/reset-password                           2.51 kB         761 kB
+├ ○ /auth/signin                                    2.4 kB         761 kB
+├ ○ /auth/signup                                   2.59 kB         761 kB
+├ ○ /calendar-demo                                 2.54 kB         752 kB
+├ ○ /dashboard                                      160 kB         934 kB
+├ ○ /dev/cleanup                                   3.25 kB         758 kB
+└ ○ /projects                                       132 kB         908 kB
++ First Load JS shared by all                       718 kB
+  ├ chunks/framework-2898f16f-52e8165e07c242c0.js  19.8 kB
+  ├ chunks/framework-351e52ed-3bb9bc3bf581ef06.js  21.6 kB
+  ├ chunks/framework-36598b9c-cdc102916692c3dc.js    53 kB
+  ├ chunks/framework-4497f2ad-7857aa2c46d945b4.js  13.3 kB
+  ├ chunks/framework-4aa88247-399b072245eadcfc.js  10.9 kB
+  ├ chunks/framework-ff30e0d3-446b6591047c2842.js  54.2 kB
+  ├ chunks/vendors-37a93c5f-2ffe5e0732aca779.js    27.3 kB
+  ├ chunks/vendors-3c7125ad-3cf0e084d12b774d.js    20.8 kB
+  ├ chunks/vendors-3ff49df3-aef6d35d7f974f74.js    44.9 kB
+  ├ chunks/vendors-6ab73c90-b2abe873e5f3281c.js    20.7 kB
+  ├ chunks/vendors-71890363-6914fd8ca783f755.js    32.7 kB
+  ├ chunks/vendors-8787c537-382947c5561239bc.js      16 kB
+  ├ chunks/vendors-901bd3b1-b27775b286c6ca56.js     104 kB
+  ├ chunks/vendors-9b4c83bb-64a7cb0b1536ae60.js    25.4 kB
+  ├ chunks/vendors-b23b11a0-1cf886f74e3a38eb.js    24.8 kB
+  ├ chunks/vendors-b32ad36f-530d801af0031d94.js    16.4 kB
+  ├ chunks/vendors-b49fab05-3c35b2e9fae62b83.js    10.6 kB
+  ├ chunks/vendors-bc050c32-f032d1559fba72a6.js      14 kB
+  ├ chunks/vendors-be93acbf-dc6b8f79198ece14.js    14.7 kB
+  ├ chunks/vendors-c0d76f48-e21b84e721232c5a.js    25.2 kB
+  ├ chunks/vendors-c8689bc3-048412233f2f195e.js    10.4 kB
+  ├ chunks/vendors-e3786338-b716f9df22ea7e08.js    10.9 kB
+  ├ chunks/vendors-eb2fbf4c-61506fe463bdee26.js    20.2 kB
+  ├ chunks/vendors-f0394994-3f4c5d14c753d763.js    10.9 kB
+  └ other shared chunks (total)                    94.9 kB
+
+
+ƒ Middleware                                       33.3 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

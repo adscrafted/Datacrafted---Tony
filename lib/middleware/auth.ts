@@ -87,11 +87,11 @@ import { DEBUG_MODE } from '@/lib/config/firebase-admin'
  * })
  * ```
  */
-export function withAuth<P = {}>(
+export function withAuth<P = any>(
   handler: AuthenticatedRouteHandler<P>,
   config: AuthMiddlewareConfig = {}
-): (request: NextRequest, context?: { params: P }) => Promise<Response> {
-  return async (request: NextRequest, context?: { params: P }) => {
+): (request: NextRequest, context: { params: Promise<P> }) => Promise<Response> {
+  return async (request: NextRequest, context: { params: Promise<P> }) => {
     try {
       // Authenticate the request
       const user = await requireAuth(request)

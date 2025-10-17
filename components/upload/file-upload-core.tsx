@@ -189,9 +189,9 @@ export function FileUploadCore({
     try {
       // Initialize progress stages
       initializeStages([
-        { id: 'parsing', label: 'Parsing file', status: 'pending' },
-        { id: 'analyzing', label: 'Analyzing data', status: 'pending' },
-        { id: 'complete', label: 'Complete', status: 'pending' }
+        { id: 'parsing', label: 'Parsing file' },
+        { id: 'analyzing', label: 'Analyzing data' },
+        { id: 'complete', label: 'Complete' }
       ])
 
       // Set upload stage to uploading

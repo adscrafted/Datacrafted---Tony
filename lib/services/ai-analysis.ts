@@ -1,4 +1,5 @@
-import { DataRow, AnalysisResult, ChartConfig } from '@/lib/store'
+import { DataRow, AnalysisResult } from '@/lib/store'
+import { ChartConfig } from '@/lib/types/chart-types'
 import { auth, DEBUG_MODE } from '@/lib/config/firebase'
 
 /**
@@ -240,14 +241,14 @@ function generateBasicAnalysis(data: DataRow[]): AnalysisResult {
   }
 
   // Generate chart configurations
-  const chartConfig: ChartConfig[] = []
+  const chartConfig: any[] = []
 
   // Add a scorecard for the first numeric column if available
   if (numericColumns.length > 0) {
     const primaryMetric = numericColumns[0]
     const values = data.map(row => Number(row[primaryMetric.name]) || 0)
     const total = values.reduce((a, b) => a + b, 0)
-    
+
     chartConfig.push({
       type: 'scorecard',
       title: `Total ${primaryMetric.name}`,

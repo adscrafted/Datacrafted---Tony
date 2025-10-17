@@ -87,7 +87,7 @@ class FileParserOptimized {
           parseTime: 0, // Cached result
           fileSize: file.size
         },
-        errors: cachedResult.errors
+        errors: (cachedResult as any).errors
       }
     }
 

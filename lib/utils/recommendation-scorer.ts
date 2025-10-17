@@ -381,18 +381,6 @@ export function calculateDataTypeMatchScore(
       return 15
     }
 
-    case 'combo': {
-      // Combo charts are valuable when comparing metrics with different scales
-      const hasMultipleNumeric = usedColumns.filter(col => col.type === 'number').length >= 2
-      const hasDifferentUnits = recommendation.dataTransform?.aggregations?.[0] !== recommendation.dataTransform?.aggregations?.[1]
-
-      let score = 25
-      if (hasMultipleNumeric) score = 35
-      if (hasMultipleNumeric && hasDifferentUnits) score = 40
-
-      return score
-    }
-
     default:
       return 20 // Default score for unknown chart types
   }

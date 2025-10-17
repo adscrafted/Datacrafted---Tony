@@ -59,17 +59,17 @@ export function usesColumn(chart: ChartConfig | ChartRecommendation, columnName:
 
   const mapping = chart.dataMapping
 
-  // Check all possible mapping fields
+  // Check all possible mapping fields (use optional chaining since types differ)
   const fieldsToCheck = [
     mapping.category,
-    mapping.value,
+    (mapping as any).value, // ChartRecommendation doesn't have value, but ChartConfig does
     mapping.xAxis,
-    mapping.metric,
-    mapping.sortBy,
-    ...(Array.isArray(mapping.values) ? mapping.values : []),
-    ...(Array.isArray(mapping.yAxis) ? mapping.yAxis : [mapping.yAxis]),
-    ...(Array.isArray(mapping.columns) ? mapping.columns : []),
-  ]
+    (mapping as any).metric, // Not in all types
+    (mapping as any).sortBy, // Not in all types
+    ...((mapping as any).values && Array.isArray((mapping as any).values) ? (mapping as any).values : []),
+    ...(Array.isArray(mapping.yAxis) ? mapping.yAxis : (mapping.yAxis ? [mapping.yAxis] : [])),
+    ...((mapping as any).columns && Array.isArray((mapping as any).columns) ? (mapping as any).columns : []),
+  ].filter(Boolean) // Remove undefined values
 
   return fieldsToCheck.some((field) => field === columnName)
 }
@@ -109,15 +109,15 @@ function extractColumnsFromChart(chart: ChartConfig): string[] {
 
   if (!mapping) return columns
 
-  // Add all column references
+  // Add all column references (use type assertions since mapping types vary)
   if (mapping.category) columns.push(mapping.category)
-  if (mapping.value) columns.push(mapping.value)
+  if ((mapping as any).value) columns.push((mapping as any).value)
   if (mapping.xAxis) columns.push(mapping.xAxis)
-  if (mapping.metric) columns.push(mapping.metric)
-  if (mapping.sortBy) columns.push(mapping.sortBy)
+  if ((mapping as any).metric) columns.push((mapping as any).metric)
+  if ((mapping as any).sortBy) columns.push((mapping as any).sortBy)
 
-  if (Array.isArray(mapping.values)) {
-    columns.push(...mapping.values)
+  if ((mapping as any).values && Array.isArray((mapping as any).values)) {
+    columns.push(...(mapping as any).values)
   }
 
   if (Array.isArray(mapping.yAxis)) {
@@ -126,11 +126,11 @@ function extractColumnsFromChart(chart: ChartConfig): string[] {
     columns.push(mapping.yAxis)
   }
 
-  if (Array.isArray(mapping.columns)) {
-    columns.push(...mapping.columns)
+  if ((mapping as any).columns && Array.isArray((mapping as any).columns)) {
+    columns.push(...(mapping as any).columns)
   }
 
-  return [...new Set(columns)] // Remove duplicates
+  return Array.from(new Set(columns)).filter(Boolean) // Remove duplicates and undefined
 }
 
 /**
@@ -150,7 +150,7 @@ function isDuplicateChart(
 
     // If all columns are the same, it's a duplicate
     if (existingColumns.size === newColumns.size) {
-      const allMatch = [...newColumns].every((col) => existingColumns.has(col))
+      const allMatch = Array.from(newColumns).every((col) => existingColumns.has(col))
       if (allMatch) return true
     }
 

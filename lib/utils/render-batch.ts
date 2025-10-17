@@ -2,6 +2,8 @@
  * Batch rendering utilities for optimal performance
  */
 
+import { startTransition } from 'react'
+
 interface BatchRenderOptions {
   batchSize?: number
   delay?: number
@@ -103,9 +105,9 @@ export function cancelBatchRender(id: string) {
  */
 export function batchedUpdates<T>(fn: () => T): T {
   // In React 18+, this is automatic, but we can still optimize
-  if ('startTransition' in React) {
+  if (typeof startTransition !== 'undefined') {
     let result: T
-    (React as any).startTransition(() => {
+    startTransition(() => {
       result = fn()
     })
     return result!

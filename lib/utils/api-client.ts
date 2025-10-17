@@ -84,7 +84,7 @@ export async function authenticatedFetch(
   })
 
   // If we get a 401, try refreshing the token once
-  if (response.status === 401 && !options.headers?.['X-Token-Refreshed']) {
+  if (response.status === 401 && !(options.headers as Record<string, string>)?.['X-Token-Refreshed']) {
     console.log('[API-CLIENT] Token expired, refreshing...')
     const refreshedAuthHeader = await createAuthHeader(user, true)
 
