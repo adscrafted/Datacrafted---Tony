@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ThemeCustomizationPanel } from './theme-customization-panel'
 import { SchemaViewer } from './schema-viewer'
-import { useDataStore } from '@/lib/store'
+import { useUIStore } from '@/lib/stores/ui-store'
+import { useChartStore } from '@/lib/stores/chart-store'
 
 // PERFORMANCE OPTIMIZATION: Lazy load heavy export/share panel
 // This component is only needed when user clicks the Export & Share button
@@ -27,18 +28,20 @@ export function DashboardToolbar({
   showLayoutToggle = true,
   className 
 }: DashboardToolbarProps) {
-  const {
-    isCustomizing,
-    setIsCustomizing,
-    customizationHistory,
-    undoLastAction,
-    redoLastAction,
-    dashboardFilters
-  } = useDataStore()
+  // UI Store selectors
+  const isCustomizing = useUIStore(state => state.isCustomizing)
+  const setIsCustomizing = useUIStore(state => state.setIsCustomizing)
+
+  // Chart Store selectors
+  const customizationHistory = useChartStore(state => state.customizationHistory)
+  const undoLastAction = useChartStore(state => state.undoLastAction)
+  const redoLastAction = useChartStore(state => state.redoLastAction)
+  const dashboardFilters = useChartStore(state => state.dashboardFilters)
+  const chartCustomizations = useChartStore(state => state.chartCustomizations)
 
   const activeFiltersCount = dashboardFilters.filter(f => f.isActive).length
   const canUndo = customizationHistory.length > 0
-  const hasCustomizations = activeFiltersCount > 0 || Object.keys(useDataStore.getState().chartCustomizations).length > 0
+  const hasCustomizations = activeFiltersCount > 0 || Object.keys(chartCustomizations).length > 0
 
   return (
     <Card className={cn('p-3', className)}>

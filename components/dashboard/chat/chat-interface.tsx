@@ -4,7 +4,10 @@ import React, { useState, useRef, useEffect } from 'react'
 import { MessageCircle, X, Send, RotateCcw, Download, Loader2, Sparkles, BarChart3, ChevronDown, Zap, PanelLeftClose, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useDataStore, ChatMessage } from '@/lib/store'
+import { useDataStore } from '@/lib/stores/data-store'
+import { useChatStore, type ChatMessage } from '@/lib/stores/chat-store'
+import { useUIStore } from '@/lib/stores/ui-store'
+import { useChartStore } from '@/lib/stores/chart-store'
 import { useProjectStore } from '@/lib/stores/project-store'
 import { ChatMessages } from './chat-messages'
 import { ExampleQuestions } from './example-questions'
@@ -14,27 +17,32 @@ import { useChartRegeneration } from '@/lib/hooks/use-chart-regeneration'
 import { auth } from '@/lib/config/firebase'
 
 export const ChatInterface = React.memo(function ChatInterface() {
-  const {
-    fileName,
-    rawData,
-    dataSchema,
-    analysis,
-    chatMessages,
-    isChatOpen,
-    isChatLoading,
-    chatError,
-    setIsChatOpen,
-    setIsChatLoading,
-    setChatError,
-    addChatMessage,
-    clearChatHistory,
-    selectedChartId,
-    chartCustomizations,
-    loadProjectChat,
-    saveProjectChatMessage,
-    clearProjectChat,
-    replaceChatMessage
-  } = useDataStore()
+  // Data Store selectors
+  const fileName = useDataStore(state => state.fileName)
+  const rawData = useDataStore(state => state.rawData)
+  const dataSchema = useDataStore(state => state.dataSchema)
+  const analysis = useDataStore(state => state.analysis)
+
+  // Chat Store selectors
+  const chatMessages = useChatStore(state => state.chatMessages)
+  const isChatOpen = useChatStore(state => state.isChatOpen)
+  const isChatLoading = useChatStore(state => state.isChatLoading)
+  const chatError = useChatStore(state => state.chatError)
+  const setIsChatOpen = useChatStore(state => state.setIsChatOpen)
+  const setIsChatLoading = useChatStore(state => state.setIsChatLoading)
+  const setChatError = useChatStore(state => state.setChatError)
+  const addChatMessage = useChatStore(state => state.addChatMessage)
+  const clearChatHistory = useChatStore(state => state.clearChatHistory)
+  const loadProjectChat = useChatStore(state => state.loadProjectChat)
+  const saveProjectChatMessage = useChatStore(state => state.saveProjectChatMessage)
+  const clearProjectChat = useChatStore(state => state.clearProjectChat)
+  const replaceChatMessage = useChatStore(state => state.replaceChatMessage)
+
+  // UI Store selectors
+  const selectedChartId = useUIStore(state => state.selectedChartId)
+
+  // Chart Store selectors
+  const chartCustomizations = useChartStore(state => state.chartCustomizations)
 
   const { currentProjectId } = useProjectStore()
 

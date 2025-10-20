@@ -5,7 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Download, FileSpreadsheet, Loader2, Maximize2, X, BarChart3, Layout, Share2, PanelLeftClose, PanelLeft, Grid3x3, LogOut, Plus, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { useDataStore, useUIStore, useChartStore } from '@/lib/stores'
+import { useDataStore } from '@/lib/stores/data-store'
+import { useUIStore } from '@/lib/stores/ui-store'
+import { useChartStore } from '@/lib/stores/chart-store'
+import { useChatStore } from '@/lib/stores/chat-store'
+import { useSessionStore } from '@/lib/stores/session-store'
+import { getFilteredData } from '@/lib/stores/filtered-data'
 import { useShallow } from 'zustand/react/shallow'
 import { analyzeData } from '@/lib/services/ai-analysis'
 import { cn } from '@/lib/utils/cn'
@@ -69,9 +74,16 @@ function DashboardContent() {
   // View state - simplified to dashboard and schema toggle
   const [currentView, setCurrentView] = useState<'dashboard' | 'schema'>('dashboard')
 
-  const { setIsCustomizing, selectedChartId, setSelectedChartId, showChartSettings, setShowChartSettings } = useUIStore()
-  const { updateChartCustomization } = useChartStore()
-  
+  // UI Store selectors
+  const setIsCustomizing = useUIStore(state => state.setIsCustomizing)
+  const selectedChartId = useUIStore(state => state.selectedChartId)
+  const setSelectedChartId = useUIStore(state => state.setSelectedChartId)
+  const showChartSettings = useUIStore(state => state.showChartSettings)
+  const setShowChartSettings = useUIStore(state => state.setShowChartSettings)
+
+  // Chart Store selectors
+  const updateChartCustomization = useChartStore(state => state.updateChartCustomization)
+
   // Track if analysis has been initiated to prevent multiple calls
   const analysisInitiatedRef = React.useRef(false)
 
@@ -88,35 +100,46 @@ function DashboardContent() {
   // This prevents race condition where AI analysis triggers before config is loaded
   const [isLoadingConfig, setIsLoadingConfig] = useState(false)
   
-  const {
-    fileName,
-    rawData,
-    dataId,
-    analysis,
-    setAnalysis,
-    isAnalyzing,
-    setIsAnalyzing,
-    analysisProgress,
-    setAnalysisProgress,
-    usingAI,
-    setUsingAI,
-    error,
-    setError,
-    reset,
-    currentSession,
-    loadSession,
-    exportSession,
-    showFullScreen,
-    setFullScreen,
-    currentTheme,
-    getFilteredData,
-    setFileName,
-    setRawData,
-    setDataSchema,
-    setShowChartTemplateGallery,
-    batchUpdateChartCustomizations,
-    chartCustomizations
-  } = useDataStore()
+  // Data Store selectors
+  const fileName = useDataStore(state => state.fileName)
+  const rawData = useDataStore(state => state.rawData)
+  const dataId = useDataStore(state => state.dataId)
+  const analysis = useDataStore(state => state.analysis)
+  const setAnalysis = useDataStore(state => state.setAnalysis)
+  const isAnalyzing = useDataStore(state => state.isAnalyzing)
+  const setIsAnalyzing = useDataStore(state => state.setIsAnalyzing)
+  const analysisProgress = useDataStore(state => state.analysisProgress)
+  const setAnalysisProgress = useDataStore(state => state.setAnalysisProgress)
+  const usingAI = useDataStore(state => state.usingAI)
+  const setUsingAI = useDataStore(state => state.setUsingAI)
+  const error = useDataStore(state => state.error)
+  const setError = useDataStore(state => state.setError)
+  const setFileName = useDataStore(state => state.setFileName)
+  const setRawData = useDataStore(state => state.setRawData)
+  const setDataSchema = useDataStore(state => state.setDataSchema)
+
+  // Session Store selectors
+  const currentSession = useSessionStore(state => state.currentSession)
+  const loadSession = useSessionStore(state => state.loadSession)
+  const exportSession = useSessionStore(state => state.exportSession)
+
+  // UI Store selectors for fullscreen
+  const showFullScreen = useUIStore(state => state.showFullScreen)
+  const setFullScreen = useUIStore(state => state.setFullScreen)
+  const setShowChartTemplateGallery = useUIStore(state => state.setShowChartTemplateGallery)
+
+  // Chart Store selectors
+  const currentTheme = useChartStore(state => state.currentTheme)
+  const batchUpdateChartCustomizations = useChartStore(state => state.batchUpdateChartCustomizations)
+  const chartCustomizations = useChartStore(state => state.chartCustomizations)
+
+  // Reset function - combines resets from multiple stores
+  const reset = React.useCallback(() => {
+    useDataStore.getState().clearData()
+    useSessionStore.getState().clearSession()
+    useChartStore.getState().clearCharts()
+    useUIStore.getState().resetUI()
+  }, [])
 
 
   const { user, logout } = useAuth()
@@ -305,7 +328,7 @@ function DashboardContent() {
 
               // Restore chat messages if they exist in saved config
               if (savedConfig.chatMessages && savedConfig.chatMessages.length > 0) {
-                const { setChatMessages } = useDataStore.getState()
+                const { setChatMessages } = useChatStore.getState()
                 setChatMessages(savedConfig.chatMessages)
                 console.log('✅ [DASHBOARD] Restored', savedConfig.chatMessages.length, 'chat messages from database')
               }
@@ -435,7 +458,7 @@ function DashboardContent() {
 
               // Restore chat messages if they exist in saved config
               if (savedConfig.chatMessages && savedConfig.chatMessages.length > 0) {
-                const { setChatMessages } = useDataStore.getState()
+                const { setChatMessages } = useChatStore.getState()
                 setChatMessages(savedConfig.chatMessages)
                 console.log('✅ [DASHBOARD] Restored', savedConfig.chatMessages.length, 'chat messages from database')
               }
@@ -569,7 +592,7 @@ function DashboardContent() {
       sampleRow: data?.[0]
     })
     return data
-  }, [getFilteredData])
+  }, [rawData, chartCustomizations]) // Dependencies: rawData and filters
 
   // Update message only when progress increases by 10% or more
   useEffect(() => {

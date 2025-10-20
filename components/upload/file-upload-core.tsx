@@ -4,7 +4,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { Upload, Loader2, AlertTriangle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useDataStore } from '@/lib/store'
+import { useDataStore } from '@/lib/stores/data-store'
+import { useUIStore } from '@/lib/stores/ui-store'
 import { cn } from '@/lib/utils/cn'
 import { analyzeDataSchema } from '@/lib/utils/schema-analyzer'
 import { schemaCache } from '@/lib/utils/cache-manager'
@@ -32,17 +33,18 @@ export function FileUploadCore({
   isTypingComplete = false
 }: FileUploadCoreProps) {
   const router = useRouter()
-  const {
-    setFileName,
-    setRawData,
-    setDataSchema,
-    setError,
-    isAnalyzing,
-    setIsAnalyzing,
-    setAnalysis,
-    setUploadProgress,
-    setUploadStage
-  } = useDataStore()
+  // Data Store selectors
+  const setFileName = useDataStore(state => state.setFileName)
+  const setRawData = useDataStore(state => state.setRawData)
+  const setDataSchema = useDataStore(state => state.setDataSchema)
+  const setError = useDataStore(state => state.setError)
+  const isAnalyzing = useDataStore(state => state.isAnalyzing)
+  const setIsAnalyzing = useDataStore(state => state.setIsAnalyzing)
+  const setAnalysis = useDataStore(state => state.setAnalysis)
+
+  // UI Store selectors
+  const setUploadProgress = useUIStore(state => state.setUploadProgress)
+  const setUploadStage = useUIStore(state => state.setUploadStage)
 
   // Enhanced progress tracking
   const {

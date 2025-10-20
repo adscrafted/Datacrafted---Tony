@@ -28,7 +28,9 @@ import {
   ContextMenuSeparator
 } from '@/components/ui/context-menu'
 import { ChartCustomizationPanel } from '../chart-customization-panel'
-import { DataRow, useDataStore, ChartTemplate, ChartType } from '@/lib/store'
+import { useDataStore, type DataRow } from '@/lib/stores/data-store'
+import { useUIStore } from '@/lib/stores/ui-store'
+import { useChartStore, type ChartTemplate, type ChartType } from '@/lib/stores/chart-store'
 import { useShallow } from 'zustand/react/shallow'
 import { cn } from '@/lib/utils/cn'
 import { QualityBadge } from '../quality-indicator'
@@ -91,33 +93,21 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
   const [editableTitle, setEditableTitle] = useState(title)
   const [editableDescription, setEditableDescription] = useState(description)
 
-  const {
-    setFullScreen,
-    exportChart,
-    chartCustomizations,
-    removeChart,
-    duplicateChart,
-    updateChartType,
-    updateChartCustomization,
-    chartTemplates,
-    setContextMenu,
-    contextMenuPosition,
-    contextMenuChartId,
-    draftChart
-  } = useDataStore(useShallow((state: any) => ({
-    setFullScreen: state.setFullScreen,
-    exportChart: state.exportChart,
-    chartCustomizations: state.chartCustomizations,
-    removeChart: state.removeChart,
-    duplicateChart: state.duplicateChart,
-    updateChartType: state.updateChartType,
-    updateChartCustomization: state.updateChartCustomization,
-    chartTemplates: state.chartTemplates,
-    setContextMenu: state.setContextMenu,
-    contextMenuPosition: state.contextMenuPosition,
-    contextMenuChartId: state.contextMenuChartId,
-    draftChart: state.draftChart
-  })))
+  // UI Store selectors
+  const setFullScreen = useUIStore(state => state.setFullScreen)
+  const setContextMenu = useUIStore(state => state.setContextMenu)
+  const contextMenuPosition = useUIStore(state => state.contextMenuPosition)
+  const contextMenuChartId = useUIStore(state => state.contextMenuChartId)
+
+  // Chart Store selectors
+  const exportChart = useChartStore(state => state.exportChart)
+  const chartCustomizations = useChartStore(state => state.chartCustomizations)
+  const removeChart = useChartStore(state => state.removeChart)
+  const duplicateChart = useChartStore(state => state.duplicateChart)
+  const updateChartType = useChartStore(state => state.updateChartType)
+  const updateChartCustomization = useChartStore(state => state.updateChartCustomization)
+  const chartTemplates = useChartStore(state => state.chartTemplates)
+  const draftChart = useChartStore(state => state.draftChart)
 
   // Get chart customization
   const customization = chartCustomizations[id]
