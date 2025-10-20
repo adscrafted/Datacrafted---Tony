@@ -28,7 +28,19 @@ interface ScatterRendererProps {
   onDataPointClick?: (dataPoint: any) => void
 }
 
-export const ScatterRenderer: React.FC<ScatterRendererProps> = ({
+// MEMOIZATION: Custom comparison function to prevent unnecessary re-renders
+const arePropsEqual = (prevProps: ScatterRendererProps, nextProps: ScatterRendererProps): boolean => {
+  if (prevProps.scatterData !== nextProps.scatterData) return false
+  if (prevProps.safeDataKey.length !== nextProps.safeDataKey.length) return false
+  if (prevProps.safeDataKey.some((key, i) => key !== nextProps.safeDataKey[i])) return false
+  if (prevProps.customization?.animate !== nextProps.customization?.animate) return false
+  if (prevProps.customization?.showGrid !== nextProps.customization?.showGrid) return false
+  if (JSON.stringify(prevProps.customization?.dataMapping) !== JSON.stringify(nextProps.customization?.dataMapping)) return false
+  if (JSON.stringify(prevProps.configDataMapping) !== JSON.stringify(nextProps.configDataMapping)) return false
+  return true
+}
+
+const ScatterRendererComponent: React.FC<ScatterRendererProps> = ({
   scatterData,
   safeDataKey,
   customization,
@@ -241,3 +253,6 @@ export const ScatterRenderer: React.FC<ScatterRendererProps> = ({
     </ResponsiveContainer>
   )
 }
+
+// MEMOIZATION: Export memoized component to prevent unnecessary re-renders
+export const ScatterRenderer = React.memo(ScatterRendererComponent, arePropsEqual)

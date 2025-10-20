@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react'
 import {
   User,
   signInWithEmailAndPassword,
@@ -205,7 +205,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const signIn = async (email: string, password: string) => {
+  // MEMOIZATION: Wrap signIn with useCallback to prevent unnecessary re-renders
+  const signIn = useCallback(async (email: string, password: string) => {
     try {
       setError(null)
       // In debug mode, accept any credentials
@@ -232,9 +233,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsSyncing(false)
       throw err
     }
-  }
+  }, [router])
 
-  const signUp = async (email: string, password: string, displayName: string) => {
+  // MEMOIZATION: Wrap signUp with useCallback to prevent unnecessary re-renders
+  const signUp = useCallback(async (email: string, password: string, displayName: string) => {
     try {
       setError(null)
       // In debug mode, accept any credentials
@@ -260,9 +262,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsSyncing(false)
       throw err
     }
-  }
+  }, [router])
 
-  const signInWithGoogle = async () => {
+  // MEMOIZATION: Wrap signInWithGoogle with useCallback to prevent unnecessary re-renders
+  const signInWithGoogle = useCallback(async () => {
     try {
       setError(null)
       // In debug mode, skip Google auth
@@ -288,9 +291,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsSyncing(false)
       throw err
     }
-  }
+  }, [router])
 
-  const logout = async () => {
+  // MEMOIZATION: Wrap logout with useCallback to prevent unnecessary re-renders
+  const logout = useCallback(async () => {
     try {
       setError(null)
       if (DEBUG_MODE) {
@@ -308,9 +312,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setError(err.message || 'Failed to log out')
       throw err
     }
-  }
+  }, [router])
 
-  const resetPassword = async (email: string) => {
+  // MEMOIZATION: Wrap resetPassword with useCallback to prevent unnecessary re-renders
+  const resetPassword = useCallback(async (email: string) => {
     try {
       setError(null)
       if (DEBUG_MODE) {
@@ -323,9 +328,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setError(err.message || 'Failed to send password reset email')
       throw err
     }
-  }
+  }, [])
 
-  const updateUserProfile = async (displayName: string, photoURL?: string) => {
+  // MEMOIZATION: Wrap updateUserProfile with useCallback to prevent unnecessary re-renders
+  const updateUserProfile = useCallback(async (displayName: string, photoURL?: string) => {
     try {
       setError(null)
       if (DEBUG_MODE) {
@@ -340,9 +346,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setError(err.message || 'Failed to update profile')
       throw err
     }
-  }
+  }, [user])
 
-  const value = {
+  // MEMOIZATION: Wrap context value with useMemo to prevent unnecessary re-renders of consumers
+  // Only recreate when primitive values or memoized callbacks change
+  const value = useMemo(() => ({
     user,
     loading,
     isSyncing,
@@ -355,7 +363,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     resetPassword,
     updateUserProfile,
     isDebugMode: DEBUG_MODE
-  }
+  }), [user, loading, isSyncing, error, syncError, signIn, signUp, logout, signInWithGoogle, resetPassword, updateUserProfile])
 
   return (
     <AuthContext.Provider value={value}>

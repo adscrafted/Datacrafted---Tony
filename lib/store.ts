@@ -11,6 +11,29 @@ import type {
   isEnhancedAnalysisResult
 } from '@/lib/types/recommendation'
 
+// MEMOIZATION: Cache for getFilteredData to prevent unnecessary recalculations
+// This cache stores the result based on a hash of the input dependencies
+let filteredDataCache: {
+  key: string | null
+  data: DataRow[]
+} = {
+  key: null,
+  data: []
+}
+
+// Helper to create cache key from dependencies
+const createFilterCacheKey = (
+  rawDataLength: number,
+  dateRangeFrom: Date | undefined,
+  dateRangeTo: Date | undefined,
+  granularity: string,
+  selectedDateColumn: string | null,
+  filtersCount: number,
+  filtersHash: string
+): string => {
+  return `${rawDataLength}-${dateRangeFrom?.getTime()}-${dateRangeTo?.getTime()}-${granularity}-${selectedDateColumn}-${filtersCount}-${filtersHash}`
+}
+
 export interface DataRow {
   [key: string]: string | number | boolean | Date | null
 }
@@ -1750,19 +1773,51 @@ export const useDataStore = create<DataStore>()(
       },
       
       // PERFORMANCE OPTIMIZATION: Memoized filtered data getter
+      // Only recalculates when rawData, dashboardFilters, dateRange, granularity, or selectedDateColumn change
       getFilteredData: () => {
         const state = get()
         const { rawData, dashboardFilters, dateRange, granularity, selectedDateColumn } = state
 
-        console.log('🔍 [Store.getFilteredData] Starting with:', {
+        // Quick return for empty data
+        if (!rawData || rawData.length === 0) {
+          filteredDataCache = { key: null, data: [] }
+          return []
+        }
+
+        // MEMOIZATION: Create cache key from all dependencies
+        const filtersHash = JSON.stringify(dashboardFilters.map(f => ({
+          col: f.column,
+          op: f.operator,
+          val: f.value,
+          active: f.isActive
+        })))
+
+        const cacheKey = createFilterCacheKey(
+          rawData.length,
+          dateRange?.from,
+          dateRange?.to,
+          granularity,
+          selectedDateColumn,
+          dashboardFilters.length,
+          filtersHash
+        )
+
+        // MEMOIZATION: Return cached result if key matches (no dependencies changed)
+        if (filteredDataCache.key === cacheKey) {
+          console.log('✅ [Store.getFilteredData] Returning CACHED result:', {
+            cachedDataLength: filteredDataCache.data.length,
+            cacheKey
+          })
+          return filteredDataCache.data
+        }
+
+        console.log('🔍 [Store.getFilteredData] Recalculating (cache miss):', {
           rawDataLength: rawData?.length || 0,
           hasDateRange: !!(dateRange?.from || dateRange?.to),
           granularity,
-          selectedDateColumn
+          selectedDateColumn,
+          cacheKey
         })
-
-        // Quick return for empty data
-        if (!rawData || rawData.length === 0) return []
 
         let filteredData = rawData
 
@@ -1955,6 +2010,12 @@ export const useDataStore = create<DataStore>()(
           finalLength: filteredData.length,
           aggregationWasApplied: shouldApplyGranularityAggregation
         })
+
+        // MEMOIZATION: Cache the result for future calls
+        filteredDataCache = {
+          key: cacheKey,
+          data: filteredData
+        }
 
         return filteredData
       },

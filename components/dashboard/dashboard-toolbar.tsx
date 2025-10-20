@@ -1,14 +1,20 @@
 'use client'
 
-import React from 'react'
+import React, { Suspense, lazy } from 'react'
 import { Settings, Layout, Undo2, Redo2, Eye, EyeOff } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ThemeCustomizationPanel } from './theme-customization-panel'
-import { ExportSharePanel } from './export-share-panel'
 import { SchemaViewer } from './schema-viewer'
 import { useDataStore } from '@/lib/store'
+
+// PERFORMANCE OPTIMIZATION: Lazy load heavy export/share panel
+// This component is only needed when user clicks the Export & Share button
+// Reduces initial bundle size and improves Time to Interactive (TTI)
+const ExportSharePanel = lazy(() =>
+  import('./export-share-panel').then(mod => ({ default: mod.ExportSharePanel }))
+)
 
 interface DashboardToolbarProps {
   onToggleCustomization?: () => void
@@ -118,7 +124,13 @@ export function DashboardToolbar({
         <div className="flex items-center space-x-2">
           <SchemaViewer />
           <ThemeCustomizationPanel />
-          <ExportSharePanel />
+          <Suspense fallback={
+            <Button variant="outline" size="sm" disabled className="flex items-center space-x-2">
+              <span>Loading...</span>
+            </Button>
+          }>
+            <ExportSharePanel />
+          </Suspense>
         </div>
       </div>
       

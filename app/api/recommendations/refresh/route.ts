@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
-import { DataRow, DataSchema, ColumnSchema } from '@/lib/store'
-import {
+import type { DataRow, DataSchema, ColumnSchema } from '@/lib/store'
+import type {
   ChartRecommendation,
   CorrectedColumn,
   DataContext,

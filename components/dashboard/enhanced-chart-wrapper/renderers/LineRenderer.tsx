@@ -18,7 +18,28 @@ type LineRendererProps = Pick<ChartRendererProps,
   'smartAxisScaling' | 'enhancedAxisLabels' | 'dualAxisConfig' |
   'colors' | 'truncateLabel' | 'onDataPointClick'>
 
-export const LineRenderer: React.FC<LineRendererProps> = ({
+// MEMOIZATION: Custom comparison function to prevent unnecessary re-renders
+// Only re-render when critical props change
+const arePropsEqual = (prevProps: LineRendererProps, nextProps: LineRendererProps): boolean => {
+  // Check if data reference changed
+  if (prevProps.chartData !== nextProps.chartData) return false
+
+  // Check if data keys changed (array comparison)
+  if (prevProps.safeDataKey.length !== nextProps.safeDataKey.length) return false
+  if (prevProps.safeDataKey.some((key, i) => key !== nextProps.safeDataKey[i])) return false
+
+  // Check critical customization properties
+  if (prevProps.customization?.animate !== nextProps.customization?.animate) return false
+  if (prevProps.customization?.showGrid !== nextProps.customization?.showGrid) return false
+  if (prevProps.customization?.stacked !== nextProps.customization?.stacked) return false
+
+  // For deep customization changes, use JSON comparison (expensive but thorough)
+  if (JSON.stringify(prevProps.customization?.dataMapping) !== JSON.stringify(nextProps.customization?.dataMapping)) return false
+
+  return true
+}
+
+const LineRendererComponent: React.FC<LineRendererProps> = ({
   chartData,
   safeDataKey,
   customization,
@@ -182,3 +203,6 @@ export const LineRenderer: React.FC<LineRendererProps> = ({
     </ResponsiveContainer>
   )
 }
+
+// MEMOIZATION: Export memoized component to prevent unnecessary re-renders
+export const LineRenderer = React.memo(LineRendererComponent, arePropsEqual)

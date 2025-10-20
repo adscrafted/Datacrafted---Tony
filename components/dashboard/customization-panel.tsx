@@ -1,15 +1,15 @@
 'use client'
 
-import React, { useState } from 'react'
-import { 
-  Settings, 
-  Palette, 
-  Filter, 
-  Layout, 
-  Share2, 
-  Undo, 
-  Redo, 
-  RotateCcw, 
+import React, { useState, Suspense, lazy } from 'react'
+import {
+  Settings,
+  Palette,
+  Filter,
+  Layout,
+  Share2,
+  Undo,
+  Redo,
+  RotateCcw,
   Save,
   ChevronLeft,
   ChevronRight,
@@ -24,9 +24,13 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ThemeSelector } from '@/components/ui/theme-selector'
 import { FilterPanel } from '@/components/ui/filter-panel'
-import { ExportSharePanel } from './export-share-panel'
 import { useDataStore } from '@/lib/store'
 import { useTheme } from './theme-provider'
+
+// PERFORMANCE OPTIMIZATION: Lazy load export/share panel
+const ExportSharePanel = lazy(() =>
+  import('./export-share-panel').then(mod => ({ default: mod.ExportSharePanel }))
+)
 
 interface CustomizationPanelProps {
   className?: string
@@ -271,7 +275,11 @@ export function CustomizationPanel({ className }: CustomizationPanelProps) {
         )
 
       case 'export':
-        return <ExportSharePanel />
+        return (
+          <Suspense fallback={<div className="p-4 text-center text-muted-foreground">Loading export options...</div>}>
+            <ExportSharePanel />
+          </Suspense>
+        )
 
       case 'history':
         return (

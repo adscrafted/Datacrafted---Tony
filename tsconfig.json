@@ -1,6 +1,9 @@
 {
   "compilerOptions": {
-    "target": "es5",
+    // PERFORMANCE OPTIMIZATION: Changed from es5 to es2020
+    // Modern browsers support es2020, reducing transpilation overhead
+    // This results in smaller bundle size and better runtime performance
+    "target": "es2020",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
@@ -14,6 +17,10 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
+    // PERFORMANCE OPTIMIZATION: Remove comments from output
+    "removeComments": true,
+    // PERFORMANCE OPTIMIZATION: Remove unused imports for better tree-shaking
+    "verbatimModuleSyntax": true,
     "types": ["jest", "@testing-library/jest-dom", "node"],
     "plugins": [
       {
@@ -25,5 +32,6 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  // PERFORMANCE OPTIMIZATION: Exclude test files from production builds
+  "exclude": ["node_modules", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"]
 }

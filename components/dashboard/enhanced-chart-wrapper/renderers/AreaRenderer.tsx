@@ -18,7 +18,19 @@ type AreaRendererProps = Pick<ChartRendererProps,
   'smartAxisScaling' | 'enhancedAxisLabels' | 'dualAxisConfig' |
   'colors' | 'truncateLabel' | 'onDataPointClick'>
 
-export const AreaRenderer: React.FC<AreaRendererProps> = ({
+// MEMOIZATION: Custom comparison function to prevent unnecessary re-renders
+const arePropsEqual = (prevProps: AreaRendererProps, nextProps: AreaRendererProps): boolean => {
+  if (prevProps.chartData !== nextProps.chartData) return false
+  if (prevProps.safeDataKey.length !== nextProps.safeDataKey.length) return false
+  if (prevProps.safeDataKey.some((key, i) => key !== nextProps.safeDataKey[i])) return false
+  if (prevProps.customization?.animate !== nextProps.customization?.animate) return false
+  if (prevProps.customization?.showGrid !== nextProps.customization?.showGrid) return false
+  if (prevProps.customization?.stacked !== nextProps.customization?.stacked) return false
+  if (JSON.stringify(prevProps.customization?.dataMapping) !== JSON.stringify(nextProps.customization?.dataMapping)) return false
+  return true
+}
+
+const AreaRendererComponent: React.FC<AreaRendererProps> = ({
   chartData,
   safeDataKey,
   customization,
@@ -188,3 +200,6 @@ export const AreaRenderer: React.FC<AreaRendererProps> = ({
     </ResponsiveContainer>
   )
 }
+
+// MEMOIZATION: Export memoized component to prevent unnecessary re-renders
+export const AreaRenderer = React.memo(AreaRendererComponent, arePropsEqual)

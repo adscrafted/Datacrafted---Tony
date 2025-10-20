@@ -5,11 +5,32 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '50mb',
     },
+    // PERFORMANCE OPTIMIZATION: Optimize package imports for tree-shaking
+    // Automatically transforms imports to use tree-shakable paths
+    optimizePackageImports: [
+      '@radix-ui/react-accordion',
+      '@radix-ui/react-alert-dialog',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-dropdown-menu',
+      '@radix-ui/react-select',
+      '@radix-ui/react-tabs',
+      '@radix-ui/react-tooltip',
+      'recharts',
+      'lucide-react',
+    ],
   },
   // Optimize for production builds
   productionBrowserSourceMaps: false,
   poweredByHeader: false,
   compress: true,
+
+  // PERFORMANCE OPTIMIZATION: Image optimization settings
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    minimumCacheTTL: 60,
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+  },
   
   // Security headers
   async headers() {
@@ -72,7 +93,23 @@ const nextConfig = {
         path: false,
         os: false,
       }
+
+      // PERFORMANCE OPTIMIZATION: Add webpack alias for better tree-shaking
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        // Use lodash-es for better tree-shaking
+        'lodash': 'lodash-es',
+      }
     }
+
+    // PERFORMANCE OPTIMIZATION: Ignore moment.js locales (saves ~500KB)
+    // moment is often included as a dependency of chart libraries
+    config.plugins.push(
+      new webpack.IgnorePlugin({
+        resourceRegExp: /^\.\/locale$/,
+        contextRegExp: /moment$/,
+      })
+    )
 
     // Add bundle analysis in development
     if (dev && process.env.ANALYZE === 'true') {

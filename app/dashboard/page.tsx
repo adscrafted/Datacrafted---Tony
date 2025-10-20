@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Download, FileSpreadsheet, Loader2, Maximize2, X, BarChart3, Layout, Share2, PanelLeftClose, PanelLeft, Grid3x3, LogOut, Plus, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { useDataStore } from '@/lib/store'
+import { useDataStore, useUIStore, useChartStore } from '@/lib/stores'
+import { useShallow } from 'zustand/react/shallow'
 import { analyzeData } from '@/lib/services/ai-analysis'
 import { cn } from '@/lib/utils/cn'
 import dynamic from 'next/dynamic'
@@ -25,7 +26,8 @@ import { useAuth } from '@/lib/contexts/auth-context'
 import { filterValidCharts } from '@/lib/utils/chart-validator'
 import { FullscreenDataTable } from '@/components/dashboard/fullscreen-data-table'
 import { ScorecardCalculationDetails } from '@/components/dashboard/scorecard-calculation-details'
-import { DataCalculator, AggregationType } from '@/lib/utils/data-calculations'
+import { DataCalculator } from '@/lib/utils/data-calculations'
+import type { AggregationType } from '@/lib/utils/data-calculations'
 import { DateRangeSelector } from '@/components/dashboard/date-range-selector'
 
 function DashboardContent() {
@@ -66,8 +68,9 @@ function DashboardContent() {
   
   // View state - simplified to dashboard and schema toggle
   const [currentView, setCurrentView] = useState<'dashboard' | 'schema'>('dashboard')
-  
-  const { setIsCustomizing, selectedChartId, setSelectedChartId, showChartSettings, setShowChartSettings, updateChartCustomization } = useDataStore()
+
+  const { setIsCustomizing, selectedChartId, setSelectedChartId, showChartSettings, setShowChartSettings } = useUIStore()
+  const { updateChartCustomization } = useChartStore()
   
   // Track if analysis has been initiated to prevent multiple calls
   const analysisInitiatedRef = React.useRef(false)

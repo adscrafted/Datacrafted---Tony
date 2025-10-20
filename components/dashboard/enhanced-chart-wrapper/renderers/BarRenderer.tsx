@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import {
   ResponsiveContainer,
   BarChart,
@@ -17,7 +17,19 @@ type BarRendererProps = Pick<ChartRendererProps,
   'smartAxisScaling' | 'enhancedAxisLabels' | 'dualAxisConfig' |
   'colors' | 'truncateLabel' | 'onDataPointClick'>
 
-export const BarRenderer: React.FC<BarRendererProps> = ({
+// MEMOIZATION: Custom comparison function to prevent unnecessary re-renders
+const arePropsEqual = (prevProps: BarRendererProps, nextProps: BarRendererProps): boolean => {
+  if (prevProps.chartData !== nextProps.chartData) return false
+  if (prevProps.safeDataKey.length !== nextProps.safeDataKey.length) return false
+  if (prevProps.safeDataKey.some((key, i) => key !== nextProps.safeDataKey[i])) return false
+  if (prevProps.customization?.animate !== nextProps.customization?.animate) return false
+  if (prevProps.customization?.showGrid !== nextProps.customization?.showGrid) return false
+  if (prevProps.customization?.stacked !== nextProps.customization?.stacked) return false
+  if (JSON.stringify(prevProps.customization?.dataMapping) !== JSON.stringify(nextProps.customization?.dataMapping)) return false
+  return true
+}
+
+const BarRendererComponent: React.FC<BarRendererProps> = ({
   chartData,
   safeDataKey,
   customization,
@@ -38,21 +50,27 @@ export const BarRenderer: React.FC<BarRendererProps> = ({
     return isNaN(num) ? 0 : num
   }
 
-  // Transform data inline without useMemo
-  const numericBarData = chartData.map(row => {
-    const transformed = { ...row }
-    // Transform value columns (everything except first column which is category)
-    safeDataKey.slice(1).forEach((key: string) => {
-      (transformed as any)[key] = parseNumericValueBar((row as any)[key])
+  // MEMOIZATION: Use useMemo for expensive data transformation
+  // Only recalculate when chartData or safeDataKey change
+  const numericBarData = useMemo(() => {
+    return chartData.map(row => {
+      const transformed = { ...row }
+      // Transform value columns (everything except first column which is category)
+      safeDataKey.slice(1).forEach((key: string) => {
+        (transformed as any)[key] = parseNumericValueBar((row as any)[key])
+      })
+      return transformed
     })
-    return transformed
-  })
+  }, [chartData, safeDataKey])
 
-  // Calculate Y-axis domain to ensure bars are visible
-  const allYValues = numericBarData.flatMap(row =>
-    safeDataKey.slice(1).map((key: string) => (row as any)[key]).filter((v: any) => typeof v === 'number' && !isNaN(v))
-  )
-  const maxYValue = Math.max(...allYValues, 0)
+  // MEMOIZATION: Use useMemo to calculate Y-axis domain
+  // Only recalculate when numericBarData or safeDataKey change
+  const maxYValue = useMemo(() => {
+    const allYValues = numericBarData.flatMap(row =>
+      safeDataKey.slice(1).map((key: string) => (row as any)[key]).filter((v: any) => typeof v === 'number' && !isNaN(v))
+    )
+    return Math.max(...allYValues, 0)
+  }, [numericBarData, safeDataKey])
 
   const commonProps = {
     data: numericBarData,
@@ -197,3 +215,6 @@ export const BarRenderer: React.FC<BarRendererProps> = ({
     </ResponsiveContainer>
   )
 }
+
+// MEMOIZATION: Export memoized component to prevent unnecessary re-renders
+export const BarRenderer = React.memo(BarRendererComponent, arePropsEqual)

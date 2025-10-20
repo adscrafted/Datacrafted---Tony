@@ -8,6 +8,10 @@ import { getPerformanceReport, logPerformanceSummary } from '@/lib/utils/perform
 import { logger } from '@/lib/utils/logger'
 import { BarChart3, Zap, Clock, Database, TrendingUp, AlertCircle } from 'lucide-react'
 
+// MEMORY LEAK FIX: Maximum number of metrics to keep in memory
+// Prevents unbounded array growth in performance monitoring
+const MAX_METRICS = 100
+
 interface PerformanceStats {
   avgRenderTime: number
   totalRenders: number
@@ -26,7 +30,14 @@ export function PerformanceDashboard() {
 
     const updateStats = () => {
       const report = getPerformanceReport()
-      
+
+      // MEMORY LEAK FIX: Limit metrics array to prevent unbounded growth
+      // Only keep the most recent MAX_METRICS entries
+      if (report.metrics.length > MAX_METRICS) {
+        console.warn(`⚠️ [PerformanceDashboard] Metrics array exceeded ${MAX_METRICS} entries. Trimming to prevent memory leak.`)
+        report.metrics = report.metrics.slice(-MAX_METRICS)
+      }
+
       // Calculate average render time
       const chartRenders = report.metrics.filter(m => m.name.includes('chart-data-processing'))
       const avgRenderTime = chartRenders.length > 0

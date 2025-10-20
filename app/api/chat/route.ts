@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
-import { DataRow, DataSchema } from '@/lib/store'
+import type { DataRow, DataSchema } from '@/lib/store'
 import { withAuth } from '@/lib/middleware/auth'
 
 // Initialize OpenAI client

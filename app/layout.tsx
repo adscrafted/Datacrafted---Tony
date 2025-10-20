@@ -1,23 +1,18 @@
 import type { Metadata } from 'next'
-import { Inter, Space_Grotesk, Montserrat } from 'next/font/google'
+import { Inter } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/lib/contexts/auth-context'
 import { ToastContainer } from '@/components/ui/toast'
 
-const inter = Inter({ subsets: ['latin'] })
-const interTight = Inter({
+// PERFORMANCE OPTIMIZATION: Single optimized Inter font with font-display swap
+// Removed: Space_Grotesk, Montserrat, duplicate Inter instances, Google Sans CDN
+// This reduces font loading overhead and improves Core Web Vitals (LCP, CLS)
+const inter = Inter({
   subsets: ['latin'],
-  variable: '--font-inter-tight',
-  weight: ['400', '500', '600', '700', '800', '900']
-})
-const spaceGrotesk = Space_Grotesk({ subsets: ['latin'], variable: '--font-space-grotesk' })
-const montserrat = Montserrat({ subsets: ['latin'], variable: '--font-montserrat' })
-
-// Google Sans-like font (using Inter as fallback since Google Sans requires special access)
-const googleSans = Inter({
-  subsets: ['latin'],
-  variable: '--font-google-sans',
-  weight: ['400', '500', '600', '700']
+  variable: '--font-inter',
+  weight: ['400', '500', '600', '700', '800', '900'],
+  display: 'swap', // Prevents invisible text during font loading (FOIT)
+  preload: true,   // Preload for better performance
 })
 
 export const metadata: Metadata = {
@@ -31,11 +26,9 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${interTight.variable} ${spaceGrotesk.variable} ${montserrat.variable} ${googleSans.variable}`}>
+    <html lang="en" className={inter.variable}>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&family=Google+Sans+Text:wght@400;500&display=swap" rel="stylesheet" />
+        {/* REMOVED: Google Fonts CDN links - reduces external DNS lookups and improves performance */}
         <style>{`
           :root {
             --color-primary: #0088FE;

@@ -28,7 +28,20 @@ interface ComboRendererProps {
   onDataPointClick?: (dataPoint: any) => void
 }
 
-export const ComboRenderer: React.FC<ComboRendererProps> = ({
+// MEMOIZATION: Custom comparison function to prevent unnecessary re-renders
+const arePropsEqual = (prevProps: ComboRendererProps, nextProps: ComboRendererProps): boolean => {
+  if (prevProps.comboData !== nextProps.comboData) return false
+  if (prevProps.safeDataKey.length !== nextProps.safeDataKey.length) return false
+  if (prevProps.safeDataKey.some((key, i) => key !== nextProps.safeDataKey[i])) return false
+  if (prevProps.customization?.animate !== nextProps.customization?.animate) return false
+  if (prevProps.customization?.showGrid !== nextProps.customization?.showGrid) return false
+  if (prevProps.customization?.stacked !== nextProps.customization?.stacked) return false
+  if (JSON.stringify(prevProps.customization?.dataMapping) !== JSON.stringify(nextProps.customization?.dataMapping)) return false
+  if (JSON.stringify(prevProps.configDataMapping) !== JSON.stringify(nextProps.configDataMapping)) return false
+  return true
+}
+
+const ComboRendererComponent: React.FC<ComboRendererProps> = ({
   comboData,
   safeDataKey,
   customization,
@@ -466,3 +479,6 @@ export const ComboRenderer: React.FC<ComboRendererProps> = ({
     </ResponsiveContainer>
   )
 }
+
+// MEMOIZATION: Export memoized component to prevent unnecessary re-renders
+export const ComboRenderer = React.memo(ComboRendererComponent, arePropsEqual)
