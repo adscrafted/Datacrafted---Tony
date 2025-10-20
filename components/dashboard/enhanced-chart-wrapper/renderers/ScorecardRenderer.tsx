@@ -33,6 +33,16 @@ export const ScorecardRenderer: React.FC<ScorecardRendererProps> = ({
   // Get aggregation type - check customization first, then dataMapping, default to 'sum'
   const aggregationType = customization?.aggregation || effectiveMapping?.aggregation || 'sum'
 
+  console.log(`🔍 [SCORECARD_RENDERER] ${title} - Calculating:`, {
+    key,
+    aggregationType,
+    chartDataLength: chartData.length,
+    effectiveMapping,
+    safeDataKey,
+    firstRow: chartData[0],
+    chartDataKeys: chartData[0] ? Object.keys(chartData[0]) : []
+  })
+
   let metricValue = 0
 
   // Check if this is formula-based scorecard that's already been processed

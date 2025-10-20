@@ -32,6 +32,12 @@ export function useChartData({
       return []
     }
 
+    // Get effective data mapping
+    const effectiveMapping = {
+      ...configDataMapping,
+      ...customization?.dataMapping
+    }
+
     // CRITICAL FIX: For scorecards, we MUST use all data to ensure accurate aggregation
     // The fullscreen view uses ALL filteredData for calculation details (see app/dashboard/page.tsx line 465-496)
     // If we limit scorecard data here, the card value and calculation details will show different numbers
@@ -41,14 +47,15 @@ export function useChartData({
     if (type === 'scorecard') {
       console.log(`🔍 [SCORECARD_DATA_DEBUG] ${title} - Initial data:`, {
         inputDataLength: data.length,
-        processedDataLength: processedData.length
+        processedDataLength: processedData.length,
+        metric: effectiveMapping.metric,
+        aggregation: effectiveMapping.aggregation,
+        formula: effectiveMapping.formula,
+        formulaAlias: effectiveMapping.formulaAlias,
+        customizationDataMapping: customization?.dataMapping,
+        configDataMapping: configDataMapping,
+        effectiveMapping: effectiveMapping
       })
-    }
-
-    // Get effective data mapping
-    const effectiveMapping = {
-      ...configDataMapping,
-      ...customization?.dataMapping
     }
 
     // Process formula-based scorecards using the chart data processor

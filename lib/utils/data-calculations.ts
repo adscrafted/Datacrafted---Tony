@@ -907,6 +907,21 @@ export function calculateScorecardValue(
   const sampleValue = rawValues[0]
   const isDateColumn = typeof sampleValue === 'string' && !isNaN(Date.parse(sampleValue))
 
+  // Debug logging for MIN/MAX aggregations
+  if (aggregationType === 'min' || aggregationType === 'max') {
+    console.log(`🔍 [CALC_DEBUG] calculateScorecardValue - ${aggregationType.toUpperCase()}(${metric}):`, {
+      metric,
+      aggregationType,
+      dataLength: data.length,
+      rawValuesCount: rawValues.length,
+      sampleValue,
+      sampleValueType: typeof sampleValue,
+      isDateColumn,
+      firstFewRawValues: rawValues.slice(0, 5),
+      availableColumns: data[0] ? Object.keys(data[0]) : []
+    })
+  }
+
   // Handle date min/max specially
   if (isDateColumn && (aggregationType === 'min' || aggregationType === 'max')) {
     const dates = rawValues
@@ -917,7 +932,15 @@ export function calculateScorecardValue(
       .filter((v): v is number => v !== null)
 
     if (dates.length === 0) return null
-    return aggregationType === 'min' ? Math.min(...dates) : Math.max(...dates)
+    const result = aggregationType === 'min' ? Math.min(...dates) : Math.max(...dates)
+
+    console.log(`🔍 [CALC_DEBUG] Date ${aggregationType.toUpperCase()} result:`, {
+      result,
+      resultAsDate: new Date(result).toISOString(),
+      firstFewDates: dates.slice(0, 5).map(d => ({ timestamp: d, date: new Date(d).toISOString() }))
+    })
+
+    return result
   }
 
   // Handle distinct count - use raw values for categorical data
