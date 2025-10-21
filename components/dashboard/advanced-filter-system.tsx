@@ -7,7 +7,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { MultiSelect } from '@/components/ui/multi-select'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
-import { useDataStore, type DashboardFilter, type DataRow } from '@/lib/store'
+import { useDataStore } from '@/lib/stores/data-store'
+import { useChartStore } from '@/lib/stores/chart-store'
+import { getFilteredData } from '@/lib/stores/filtered-data'
+import type { DashboardFilter, DataRow } from '@/lib/store'
 
 interface AdvancedFilterSystemProps {
   className?: string
@@ -59,16 +62,15 @@ const getColumnType = (column: { name: string; type: string }): DashboardFilter[
 }
 
 export function AdvancedFilterSystem({ className }: AdvancedFilterSystemProps) {
-  const {
-    rawData,
-    analysis,
-    dashboardFilters,
-    addDashboardFilter,
-    updateDashboardFilter,
-    removeDashboardFilter,
-    clearAllFilters,
-    getFilteredData
-  } = useDataStore()
+  // Modular store migration - selective subscriptions
+  const rawData = useDataStore((state) => state.rawData)
+  const analysis = useDataStore((state) => state.analysis)
+
+  const dashboardFilters = useChartStore((state) => state.dashboardFilters)
+  const addDashboardFilter = useChartStore((state) => state.addDashboardFilter)
+  const updateDashboardFilter = useChartStore((state) => state.updateDashboardFilter)
+  const removeDashboardFilter = useChartStore((state) => state.removeDashboardFilter)
+  const clearAllFilters = useChartStore((state) => state.clearAllFilters)
 
   const [isExpanded, setIsExpanded] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')

@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { FixedGridLayout } from '@/components/ui/fixed-grid-layout'
 import { MinimalChartWrapper } from './minimal-chart-wrapper'
-import { useDataStore, type DashboardLayout, type AnalysisResult, type DataRow } from '@/lib/store'
+import { useChartStore } from '@/lib/stores/chart-store'
+import type { DashboardLayout, AnalysisResult, DataRow } from '@/lib/store'
 import { filterValidCharts } from '@/lib/utils/chart-validator'
 
 interface DashboardLayoutComponentProps {
@@ -17,21 +18,22 @@ interface DashboardLayoutComponentProps {
   className?: string
 }
 
-export const DashboardLayoutComponent = React.memo<DashboardLayoutComponentProps>(function DashboardLayoutComponent({ 
-  analysis, 
-  data, 
-  className 
+export const DashboardLayoutComponent = React.memo<DashboardLayoutComponentProps>(function DashboardLayoutComponent({
+  analysis,
+  data,
+  className
 }) {
-  const {
-    currentLayout,
-    chartCustomizations,
-    availableLayouts,
-    isCustomizing,
-    setIsCustomizing,
-    setCurrentLayout,
-    addCustomLayout,
-    updateChartCustomization
-  } = useDataStore()
+  // Modular store migration - all layout/customization from chart-store
+  const currentLayout = useChartStore((state) => state.currentLayout)
+  const chartCustomizations = useChartStore((state) => state.chartCustomizations)
+  const availableLayouts = useChartStore((state) => state.availableLayouts)
+  const setCurrentLayout = useChartStore((state) => state.setCurrentLayout)
+  const addCustomLayout = useChartStore((state) => state.addCustomLayout)
+  const updateChartCustomization = useChartStore((state) => state.updateChartCustomization)
+
+  // isCustomizing not yet in modular stores - placeholder
+  const isCustomizing = false
+  const setIsCustomizing = (_value: boolean) => {}
 
   const [layout, setLayout] = useState<GridLayout[]>([])
 

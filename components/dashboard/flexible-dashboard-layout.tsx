@@ -10,8 +10,12 @@ import { EnhancedChartWrapper } from './enhanced-chart-wrapper'
 import { ChartTemplateGallery } from './chart-template-gallery'
 import { ChartCustomizationPanel } from './chart-customization-panel'
 import { DateRangeSelector } from './date-range-selector'
-import { useDataStore, type AnalysisResult, type DataRow } from '@/lib/store'
+import { useDataStore } from '@/lib/stores/data-store'
+import { useChartStore } from '@/lib/stores/chart-store'
+import { useUIStore } from '@/lib/stores/ui-store'
+import { getFilteredData } from '@/lib/stores/filtered-data'
 import { useProjectStore } from '@/lib/stores/project-store'
+import type { AnalysisResult, DataRow } from '@/lib/store'
 import { filterValidCharts } from '@/lib/utils/chart-validator'
 import { cn } from '@/lib/utils/cn'
 import type { ChartRecommendation, EnhancedAnalysisResult } from '@/lib/types/recommendation'
@@ -41,34 +45,39 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
   const layoutChangeTimerRef = useRef<NodeJS.Timeout | null>(null)
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  const {
-    chartCustomizations,
-    currentLayout,
-    isCustomizing,
-    setIsCustomizing,
-    updateChartCustomization,
-    batchUpdateChartCustomizations,
-    showChartTemplateGallery,
-    setShowChartTemplateGallery,
-    autoSaveLayouts,
-    setAvailableColumns,
-    isDragging,
-    setIsDragging,
-    currentTheme,
-    dashboardFilters,
-    draftChart,
-    dateRange,
-    granularity,
-    setDateRange,
-    selectedDateColumn,
-    getFilteredData
-  } = useDataStore()
+  // Modular store migration - selective subscriptions
+  // chart-store: chart customizations, layout, filters, theme, date range
+  const chartCustomizations = useChartStore((state) => state.chartCustomizations)
+  const currentLayout = useChartStore((state) => state.currentLayout)
+  const updateChartCustomization = useChartStore((state) => state.updateChartCustomization)
+  const batchUpdateChartCustomizations = useChartStore((state) => state.batchUpdateChartCustomizations)
+  const currentTheme = useChartStore((state) => state.currentTheme)
+  const dashboardFilters = useChartStore((state) => state.dashboardFilters)
+  const dateRange = useChartStore((state) => state.dateRange)
+  const granularity = useChartStore((state) => state.granularity)
+  const setDateRange = useChartStore((state) => state.setDateRange)
+
+  // ui-store: UI state for template gallery and dragging
+  const showChartTemplateGallery = useUIStore((state) => state.showChartTemplateGallery)
+  const setShowChartTemplateGallery = useUIStore((state) => state.setShowChartTemplateGallery)
+  const isDragging = useUIStore((state) => state.isDragging)
+  const setIsDragging = useUIStore((state) => state.setIsDragging)
+
+  // data-store: only for analysis (to avoid circular deps with getFilteredData)
+  // Note: We don't need rawData here since we use getFilteredData() from imported function
+
+  // Properties not yet in modular stores - placeholders
+  const isCustomizing = false
+  const setIsCustomizing = (_value: boolean) => {}
+  const autoSaveLayouts = true
+  const setAvailableColumns = (_columns: string[]) => {}
+  const selectedDateColumn = ''
+  const draftChart: { id: string; title: string; description: string; type: string; dataMapping?: any } | null = null
 
   const { currentProjectId, saveDashboardConfig, loadDashboardConfig } = useProjectStore()
 
   // Wrap filtered data in useMemo with proper dependencies
-  // PERFORMANCE FIX: Don't depend on getFilteredData function reference
-  // Instead, call it directly and depend only on the state values that affect filtering
+  // Use imported getFilteredData function instead of store method
   const filteredData = useMemo(() => {
     const result = getFilteredData()
     // CRITICAL FIX: Only use fallback when NO filters are active
@@ -81,7 +90,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       return data
     }
     return result
-  }, [dateRange, granularity, selectedDateColumn, data, getFilteredData])
+  }, [dateRange, granularity, selectedDateColumn, data])
 
   // Update available columns when data changes
   useEffect(() => {
@@ -153,7 +162,8 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     // Also filter out unconfigured scorecards (missing metric or formula)
     const chartsToDisplay = validCharts.filter((chart: any) => {
       const chartId = chart.id || `chart-${analysis.chartConfig.indexOf(chart)}`
-      const isDraft = draftChart?.id === chartId
+      // MIGRATION NOTE: draftChart not yet in modular stores, always null for now
+      const isDraft = false // draftChart?.id === chartId
       if (isDraft) {
         return false
       }
@@ -847,10 +857,9 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       />
 
       {/* Standalone Chart Customization Panel for Draft Charts */}
-      {/* CRITICAL FIX: Draft charts are filtered out from rendering, so we need a standalone panel */}
-      {draftChart && (
+      {/* MIGRATION NOTE: draftChart not yet in modular stores - panel disabled for now */}
+      {/* {draftChart && (
         <div className="hidden">
-          {/* Hidden div - just hosts the panel which renders via portal */}
           <ChartCustomizationPanel
             chartId={draftChart.id}
             title={draftChart.title}
@@ -863,7 +872,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
             autoOpen={true}
           />
         </div>
-      )}
+      )} */}
     </div>
   )
 }
