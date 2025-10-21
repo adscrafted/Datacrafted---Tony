@@ -1,7 +1,8 @@
 'use client'
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { useDataStore, type DashboardTheme } from '@/lib/store'
+import { useChartStore } from '@/lib/stores/chart-store'
+import type { DashboardTheme } from '@/lib/stores/chart-store'
 
 // Utility functions for theme operations
 function hexToRgb(hex: string): string {
@@ -74,12 +75,11 @@ interface ThemeProviderProps {
 }
 
 export function ThemeProvider({ children }: ThemeProviderProps) {
-  const {
-    currentTheme,
-    availableThemes,
-    setCurrentTheme,
-    addCustomTheme
-  } = useDataStore()
+  // Modular store migration - theme management from chart-store
+  const currentTheme = useChartStore((state) => state.currentTheme)
+  const availableThemes = useChartStore((state) => state.availableThemes)
+  const setCurrentTheme = useChartStore((state) => state.setCurrentTheme)
+  const addCustomTheme = useChartStore((state) => state.addCustomTheme)
 
   const [systemPrefersDark, setSystemPrefersDark] = useState(false)
 

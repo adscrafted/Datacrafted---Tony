@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils/cn'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useDataStore } from '@/lib/store'
+import { useChartStore } from '@/lib/stores/chart-store'
+import { useSessionStore } from '@/lib/stores/session-store'
 
 interface ExportSharePanelProps {
   className?: string
@@ -87,16 +89,15 @@ const shareOptions = [
 ]
 
 export function ExportSharePanel({ className }: ExportSharePanelProps) {
-  const {
-    currentSession,
-    exportDashboard,
-    exportSession,
-    generateShareableLink,
-    currentTheme,
-    currentLayout,
-    chartCustomizations,
-    dashboardFilters
-  } = useDataStore()
+  // Modular store migration
+  const currentSession = useSessionStore((state) => state.currentSession)
+  const currentTheme = useChartStore((state) => state.currentTheme)
+  const currentLayout = useChartStore((state) => state.currentLayout)
+  const chartCustomizations = useChartStore((state) => state.chartCustomizations)
+  const dashboardFilters = useChartStore((state) => state.dashboardFilters)
+
+  // Functions still in monolithic store (to be migrated later)
+  const { exportDashboard, exportSession, generateShareableLink } = useDataStore()
 
   const [isOpen, setIsOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'export' | 'share'>('export')

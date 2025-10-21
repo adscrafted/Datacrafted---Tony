@@ -8,7 +8,9 @@ import { cn } from '@/lib/utils/cn'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subDays, subMonths, startOfYear, endOfYear, subYears } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
 import { Calendar as CalendarComponent } from '@/components/ui/calendar'
-import { useDataStore } from '@/lib/store'
+import { useDataStore as useMonolithicStore } from '@/lib/store'
+import { useDataStore } from '@/lib/stores/data-store'
+import { useChartStore } from '@/lib/stores/chart-store'
 
 type Granularity = 'day' | 'week' | 'month' | 'quarter' | 'year'
 
@@ -17,7 +19,17 @@ interface DateRangeSelectorProps {
 }
 
 export function DateRangeSelector({ className }: DateRangeSelectorProps) {
-  const { rawData, dateRange, setDateRange, granularity, setGranularity, selectedDateColumn, setSelectedDateColumn } = useDataStore()
+  // Modular store migration
+  const rawData = useDataStore((state) => state.rawData)
+  const dateRange = useChartStore((state) => state.dateRange)
+  const setDateRange = useChartStore((state) => state.setDateRange)
+  const granularity = useChartStore((state) => state.granularity)
+  const setGranularity = useChartStore((state) => state.setGranularity)
+
+  // selectedDateColumn still in monolithic store (to be migrated later)
+  const selectedDateColumn = useMonolithicStore((state) => state.selectedDateColumn)
+  const setSelectedDateColumn = useMonolithicStore((state) => state.setSelectedDateColumn)
+
   const [date, setDate] = useState<DateRange | undefined>(dateRange || undefined)
   const [isOpen, setIsOpen] = useState(false)
   const [isGranularityOpen, setIsGranularityOpen] = useState(false)
