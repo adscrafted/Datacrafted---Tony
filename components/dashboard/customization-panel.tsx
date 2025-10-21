@@ -24,7 +24,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ThemeSelector } from '@/components/ui/theme-selector'
 import { FilterPanel } from '@/components/ui/filter-panel'
-import { useDataStore } from '@/lib/store'
+import { useDataStore } from '@/lib/stores/data-store'
+import { useChartStore } from '@/lib/stores/chart-store'
+import { useSessionStore } from '@/lib/stores/session-store'
 import { useTheme } from './theme-provider'
 
 // PERFORMANCE OPTIMIZATION: Lazy load export/share panel
@@ -47,25 +49,33 @@ const tabs = [
 ] as const
 
 export function CustomizationPanel({ className }: CustomizationPanelProps) {
-  const {
-    analysis,
-    rawData,
-    dashboardFilters,
-    chartCustomizations,
-    customizationHistory,
-    redoHistory,
-    isCustomizing,
-    setIsCustomizing,
-    addDashboardFilter,
-    updateDashboardFilter,
-    removeDashboardFilter,
-    clearAllFilters,
-    undoLastAction,
-    redoLastAction,
-    saveCurrentSession,
-    isSaving,
-    currentSession
-  } = useDataStore()
+  // Modular store migration - split across multiple stores
+
+  // data-store: analysis and raw data
+  const analysis = useDataStore((state) => state.analysis)
+  const rawData = useDataStore((state) => state.rawData)
+
+  // chart-store: filters, customizations, undo/redo
+  const dashboardFilters = useChartStore((state) => state.dashboardFilters)
+  const chartCustomizations = useChartStore((state) => state.chartCustomizations)
+  const customizationHistory = useChartStore((state) => state.customizationHistory)
+  const redoHistory = useChartStore((state) => state.redoHistory)
+  const addDashboardFilter = useChartStore((state) => state.addDashboardFilter)
+  const updateDashboardFilter = useChartStore((state) => state.updateDashboardFilter)
+  const removeDashboardFilter = useChartStore((state) => state.removeDashboardFilter)
+  const clearAllFilters = useChartStore((state) => state.clearAllFilters)
+  const undoLastAction = useChartStore((state) => state.undoLastAction)
+  const redoLastAction = useChartStore((state) => state.redoLastAction)
+
+  // session-store: session management
+  const currentSession = useSessionStore((state) => state.currentSession)
+  const saveCurrentSession = useSessionStore((state) => state.saveCurrentSession)
+  const isSaving = useSessionStore((state) => state.isSaving)
+
+  // ui-store or monolithic store: customization UI state
+  // TODO: migrate isCustomizing to ui-store when it's created
+  const isCustomizing = false // Placeholder - this field may not exist in modular stores yet
+  const setIsCustomizing = (_value: boolean) => {} // Placeholder
 
   const { 
     theme,

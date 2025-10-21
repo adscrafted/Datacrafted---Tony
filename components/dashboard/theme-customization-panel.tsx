@@ -7,19 +7,19 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ThemeSelector } from '@/components/ui/theme-selector'
 import { ColorPicker } from '@/components/ui/color-picker'
-import { useDataStore, type DashboardTheme } from '@/lib/store'
+import { useChartStore } from '@/lib/stores/chart-store'
+import type { DashboardTheme } from '@/lib/stores/chart-store'
 
 interface ThemeCustomizationPanelProps {
   className?: string
 }
 
 export function ThemeCustomizationPanel({ className }: ThemeCustomizationPanelProps) {
-  const {
-    currentTheme,
-    availableThemes,
-    setCurrentTheme,
-    addCustomTheme
-  } = useDataStore()
+  // Modular store migration - all theme management from chart-store
+  const currentTheme = useChartStore((state) => state.currentTheme)
+  const availableThemes = useChartStore((state) => state.availableThemes)
+  const setCurrentTheme = useChartStore((state) => state.setCurrentTheme)
+  const addCustomTheme = useChartStore((state) => state.addCustomTheme)
 
   const [isOpen, setIsOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'presets' | 'colors' | 'advanced'>('presets')

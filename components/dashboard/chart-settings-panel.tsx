@@ -5,7 +5,7 @@ import { Settings, X, BarChart3, LineChart, PieChart, AreaChart, ScatterChart, D
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils/cn'
-import { useDataStore } from '@/lib/store'
+import { useDataStore } from '@/lib/stores/data-store'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
@@ -126,7 +126,10 @@ function DropZone({ title, fields, onDrop, onRemove, allowMultiple = false, plac
 }
 
 export function ChartSettingsPanel({ chartId, isOpen, onClose, chartConfig, onConfigUpdate }: ChartSettingsPanelProps) {
-  const { rawData, dataSchema } = useDataStore()
+  // Modular store migration - selective subscriptions from data-store
+  const rawData = useDataStore((state) => state.rawData)
+  const dataSchema = useDataStore((state) => state.dataSchema)
+
   const [config, setConfig] = useState({
     type: chartConfig.type || 'bar',
     title: chartConfig.title || '',
