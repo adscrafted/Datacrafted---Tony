@@ -4,7 +4,9 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { Save, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useProjectStore } from '@/lib/stores/project-store'
-import { useDataStore } from '@/lib/store'
+import { useDataStore } from '@/lib/stores/data-store'
+import { useChartStore } from '@/lib/stores/chart-store'
+import { useChatStore } from '@/lib/stores/chat-store'
 import { toast } from '@/components/ui/toast'
 import { cn } from '@/lib/utils/cn'
 
@@ -18,18 +20,19 @@ export function SaveDashboardButton() {
     currentProjectId
   } = useProjectStore()
 
-  const {
-    chartCustomizations,
-    currentLayout,
-    dashboardFilters,
-    currentTheme,
-    dateRange,
-    granularity,
-    analysis,
-    rawData,
-    dataSchema,
-    chatMessages
-  } = useDataStore()
+  // Modular store migration
+  const chartCustomizations = useChartStore((state) => state.chartCustomizations)
+  const currentLayout = useChartStore((state) => state.currentLayout)
+  const dashboardFilters = useChartStore((state) => state.dashboardFilters)
+  const currentTheme = useChartStore((state) => state.currentTheme)
+  const dateRange = useChartStore((state) => state.dateRange)
+  const granularity = useChartStore((state) => state.granularity)
+
+  const analysis = useDataStore((state) => state.analysis)
+  const rawData = useDataStore((state) => state.rawData)
+  const dataSchema = useDataStore((state) => state.dataSchema)
+
+  const chatMessages = useChatStore((state) => state.chatMessages)
 
   // Track previous state to detect changes
   const prevStateRef = useRef({
@@ -124,19 +127,22 @@ export function SaveDashboardButton() {
     setIsSaving(true)
 
     try {
-      // Get current state values - avoids dependency array issues
-      const {
-        chartCustomizations: currentChartCustomizations,
-        currentLayout: currentLayoutValue,
-        dashboardFilters: currentFilters,
-        currentTheme: currentThemeValue,
-        dateRange: currentDateRange,
-        granularity: currentGranularity,
-        chatMessages: currentChatMessages,
-        analysis: currentAnalysis,
-        rawData: currentRawData,
-        dataSchema: currentDataSchema
-      } = useDataStore.getState()
+      // Get current state values from modular stores - avoids dependency array issues
+      const chartStoreState = useChartStore.getState()
+      const currentChartCustomizations = chartStoreState.chartCustomizations
+      const currentLayoutValue = chartStoreState.currentLayout
+      const currentFilters = chartStoreState.dashboardFilters
+      const currentThemeValue = chartStoreState.currentTheme
+      const currentDateRange = chartStoreState.dateRange
+      const currentGranularity = chartStoreState.granularity
+
+      const dataStoreState = useDataStore.getState()
+      const currentAnalysis = dataStoreState.analysis
+      const currentRawData = dataStoreState.rawData
+      const currentDataSchema = dataStoreState.dataSchema
+
+      const chatStoreState = useChatStore.getState()
+      const currentChatMessages = chatStoreState.chatMessages
 
       // Save dashboard configuration
       await saveDashboardConfig(currentProjectId, {
@@ -156,7 +162,7 @@ export function SaveDashboardButton() {
         await saveProjectData(
           currentProjectId,
           currentRawData,
-          currentAnalysis,
+          currentAnalysis as any, // Type compatibility between data-store and project-store
           currentDataSchema || undefined
         )
       }

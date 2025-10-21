@@ -5,6 +5,7 @@ import { Copy, Check, Mail, Link, Download, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useDataStore } from '@/lib/store'
+import { useSessionStore } from '@/lib/stores/session-store'
 
 interface ShareDialogProps {
   isOpen: boolean
@@ -17,8 +18,12 @@ export function ShareDialog({ isOpen, onClose }: ShareDialogProps) {
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'link' | 'export'>('link')
-  
-  const { generateShareableLink, exportDashboard, currentSession } = useDataStore()
+
+  // Modular store migration
+  const currentSession = useSessionStore((state) => state.currentSession)
+
+  // These functions are still in monolithic store (to be migrated later)
+  const { generateShareableLink, exportDashboard } = useDataStore()
 
   const handleGenerateLink = async () => {
     setIsGenerating(true)

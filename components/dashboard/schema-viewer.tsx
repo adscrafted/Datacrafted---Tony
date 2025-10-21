@@ -5,7 +5,8 @@ import { Table, Database, FileText, X, Info, Hash, Calendar, ToggleLeft, Type, F
 import { cn } from '@/lib/utils/cn'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useDataStore, type DataRow } from '@/lib/store'
+import { useDataStore } from '@/lib/stores/data-store'
+import type { DataRow } from '@/lib/stores/data-store'
 
 interface SchemaViewerProps {
   className?: string
@@ -44,7 +45,11 @@ const typeColors = {
 }
 
 export function SchemaViewer({ className }: SchemaViewerProps) {
-  const { rawData, analysis, fileName } = useDataStore()
+  // Modular store migration - selective subscriptions
+  const rawData = useDataStore((state) => state.rawData)
+  const analysis = useDataStore((state) => state.analysis)
+  const fileName = useDataStore((state) => state.fileName)
+
   const [isOpen, setIsOpen] = useState(false)
   const [schema, setSchema] = useState<ColumnSchema[]>([])
 
