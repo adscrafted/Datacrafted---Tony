@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { useDataStore, DashboardTheme } from '@/lib/store'
+import { useDataStore, type DashboardTheme } from '@/lib/store'
 
 // Utility functions for theme operations
 function hexToRgb(hex: string): string {

@@ -1,4 +1,4 @@
-import { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/store'
 
 export interface StreamingOptions {
   chunkSize?: number

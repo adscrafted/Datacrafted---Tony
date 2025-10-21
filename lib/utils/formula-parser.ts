@@ -14,7 +14,7 @@
  * - Safety: Prevents code injection, limits complexity
  */
 
-import { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/store'
 import { parseNumericValue } from './data-calculations'
 
 // ============================================================================

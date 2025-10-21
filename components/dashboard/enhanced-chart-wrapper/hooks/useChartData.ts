@@ -1,7 +1,7 @@
 import React from 'react'
-import { ChartType, DataRow } from '@/lib/store'
+import type { ChartType, DataRow } from '@/lib/store'
 import { aggregateChartData } from '@/lib/utils/data-aggregation'
-import { processChartData, ChartDataMapping } from '@/lib/utils/chart-data-processor'
+import { processChartData, type ChartDataMapping } from '@/lib/utils/chart-data-processor'
 
 interface UseChartDataOptions {
   data: DataRow[]

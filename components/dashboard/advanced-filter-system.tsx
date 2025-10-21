@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { MultiSelect } from '@/components/ui/multi-select'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
-import { useDataStore, DashboardFilter, DataRow } from '@/lib/store'
+import { useDataStore, type DashboardFilter, type DataRow } from '@/lib/store'
 
 interface AdvancedFilterSystemProps {
   className?: string

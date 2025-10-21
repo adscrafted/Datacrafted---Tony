@@ -5,7 +5,7 @@
 
 import React from 'react'
 import { FIELD_TYPE_ICONS } from '../constants'
-import { DataSchema } from '../types'
+import type { DataSchema } from '../types'
 
 interface AvailableFieldsProps {
   columns: string[]

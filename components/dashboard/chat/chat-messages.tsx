@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { User, Bot } from 'lucide-react'
-import { ChatMessage } from '@/lib/store'
+import type { ChatMessage } from '@/lib/store'
 import { stripChartSuggestions } from '@/lib/services/chat-service'
 
 interface ChatMessagesProps {

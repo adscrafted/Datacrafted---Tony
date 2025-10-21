@@ -1,6 +1,6 @@
 import React from 'react'
 import { Scorecard } from '../../scorecard'
-import { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/store'
 
 interface ScorecardRendererProps {
   chartData: DataRow[]

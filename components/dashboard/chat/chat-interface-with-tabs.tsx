@@ -4,11 +4,11 @@ import React, { useState, useRef, useEffect } from 'react'
 import { MessageCircle, X, Send, RotateCcw, Download, Loader2, Sparkles, BarChart3, ChevronDown, Zap, PanelLeftClose } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useDataStore, ChatMessage } from '@/lib/store'
+import { useDataStore, type ChatMessage } from '@/lib/store'
 import { ChatMessages } from './chat-messages'
 import { ExampleQuestions } from './example-questions'
 import { ChartSuggestions } from './chart-suggestions'
-import { extractChartSuggestions, ChartSuggestion } from '@/lib/services/chat-service'
+import { extractChartSuggestions, type ChartSuggestion } from '@/lib/services/chat-service'
 import { useChartRegenerationWithTabs } from '@/lib/hooks/use-chart-regeneration-with-tabs'
 
 interface ChatInterfaceWithTabsProps {

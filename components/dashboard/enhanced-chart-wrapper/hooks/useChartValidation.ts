@@ -1,5 +1,5 @@
 import React from 'react'
-import { ChartType } from '@/lib/store'
+import type { ChartType } from '@/lib/store'
 
 interface UseChartValidationOptions {
   effectiveChartType: ChartType

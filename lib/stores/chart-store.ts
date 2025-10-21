@@ -29,11 +29,11 @@
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { DateRange } from 'react-day-picker'
+import type { DateRange } from 'react-day-picker'
 
 export type ChartType =
   | 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo'
-  | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sparkline'
+  | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline'
 
 export interface ChartCustomization {
   id: string

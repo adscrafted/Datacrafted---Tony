@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
-import { useDataStore, AnalysisResult } from '@/lib/store'
-import { ChartSuggestion } from '@/lib/services/chat-service'
+import { useDataStore, type AnalysisResult } from '@/lib/store'
+import type { ChartSuggestion } from '@/lib/services/chat-service'
 
 // Helper function to get default chart dimensions based on type
 function getDefaultChartDimensions(chartType: string): { w: number; h: number } {

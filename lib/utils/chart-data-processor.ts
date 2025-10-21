@@ -9,13 +9,15 @@
  * - Filtering and sorting
  */
 
-import { DataRow } from '@/lib/store'
-import {
-  DataCalculator,
+import type { DataRow } from '@/lib/store'
+import type {
   AggregationType,
   AggregationConfig,
   DerivedMetricConfig,
-  GroupByConfig,
+  GroupByConfig
+} from './data-calculations'
+import {
+  DataCalculator,
   calculateScorecard,
   calculateGroupedData,
   calculateTrendData,

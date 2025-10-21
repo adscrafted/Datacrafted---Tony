@@ -7,7 +7,7 @@
 
 import React from 'react'
 import { cn } from '@/lib/utils/cn'
-import { ChartCustomization } from '@/lib/store'
+import type { ChartCustomization } from '@/lib/store'
 import { LABEL_ROTATION_OPTIONS } from '../constants'
 
 interface AxesTabProps {

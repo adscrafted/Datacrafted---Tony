@@ -1,7 +1,7 @@
 import React from 'react'
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from 'recharts'
-import { DataRow } from '@/lib/store'
-import { ChartRendererProps } from '../types'
+import type { DataRow } from '@/lib/store'
+import type { ChartRendererProps } from '../types'
 import { renderCollapsibleLegend } from '../../collapsible-legend'
 
 interface PieRendererProps extends Pick<ChartRendererProps, 'chartData' | 'safeDataKey' | 'customization' | 'responsiveFeatures' | 'truncateLabel' | 'colors' | 'onDataPointClick'> {}

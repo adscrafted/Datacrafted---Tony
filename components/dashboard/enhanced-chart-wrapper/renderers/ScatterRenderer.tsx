@@ -10,8 +10,8 @@ import {
   Tooltip,
   Legend
 } from 'recharts'
-import { DataRow } from '@/lib/store'
-import { ScatterData } from '../types'
+import type { DataRow } from '@/lib/store'
+import type { ScatterData } from '../types'
 import { CustomScatterShape } from '../components/CustomScatterShape'
 import { renderCollapsibleLegend } from '../../collapsible-legend'
 

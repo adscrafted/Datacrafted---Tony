@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { AuthModalProps, AuthView } from './types'
+import type { AuthModalProps, AuthView } from './types'
 import { SignInForm } from './sign-in-form'
 import { SignUpForm } from './sign-up-form'
 

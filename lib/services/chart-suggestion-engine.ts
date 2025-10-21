@@ -2,8 +2,8 @@
  * Chart suggestion engine that processes AI suggestions and creates visualizations
  */
 
-import { ChartSuggestion, FilterCondition, OrderByCondition, AggregationCondition, ColumnTransform } from '@/lib/types/chart-suggestion'
-import { DataRow } from '@/lib/store'
+import type { ChartSuggestion, FilterCondition, OrderByCondition, AggregationCondition, ColumnTransform } from '@/lib/types/chart-suggestion'
+import type { DataRow } from '@/lib/store'
 import { logger } from '@/lib/utils/logger'
 
 export class ChartSuggestionEngine {

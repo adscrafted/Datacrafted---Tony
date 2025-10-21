@@ -29,7 +29,10 @@ import {
   DropdownMenuItem
 } from '@/components/ui/dropdown-menu'
 import { Scorecard } from './scorecard'
-import { DataRow, useDataStore, ChartType } from '@/lib/store'
+import { useDataStore, type DataRow } from '@/lib/stores/data-store'
+import { useChartStore, type ChartType } from '@/lib/stores/chart-store'
+import { useUIStore } from '@/lib/stores/ui-store'
+import { getFilteredData } from '@/lib/stores/filtered-data'
 import { cn } from '@/lib/utils/cn'
 
 const TableChartLazy = React.lazy(() => import('./charts/table-chart').then(m => ({ default: m.TableChart })))
@@ -75,7 +78,8 @@ export const MinimalChartWrapper = React.memo<MinimalChartWrapperProps>(function
   dataMapping
 }) {
   const chartId = id || `chart-${Date.now()}`
-  const { setFullScreen, exportChart, getFilteredData } = useDataStore()
+  const setFullScreen = useUIStore((state) => state.setFullScreen)
+  const exportChart = useChartStore((state) => state.exportChart)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
 
   // Use filtered data with aggregation support

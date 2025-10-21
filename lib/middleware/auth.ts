@@ -57,10 +57,10 @@ import {
   createUnauthorizedResponse,
 } from '@/lib/auth/server'
 import {
-  AuthUser,
+  type AuthUser,
   AuthError,
-  AuthMiddlewareConfig,
-  AuthenticatedRouteHandler,
+  type AuthMiddlewareConfig,
+  type AuthenticatedRouteHandler,
 } from '@/lib/types/auth'
 import { DEBUG_MODE } from '@/lib/config/firebase-admin'
 

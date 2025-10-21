@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { ChartSuggestion } from '@/lib/types/chart-suggestion'
+import type { ChartSuggestion } from '@/lib/types/chart-suggestion'
 import { chartSuggestionEngine } from '@/lib/services/chart-suggestion-engine'
 import { logger } from '@/lib/utils/logger'
 

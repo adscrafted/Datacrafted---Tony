@@ -1,5 +1,5 @@
 import React from 'react'
-import { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/store'
 
 const FunnelChart = React.lazy(() => import('../../charts/funnel-chart'))
 

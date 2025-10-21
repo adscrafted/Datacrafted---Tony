@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useAuth } from '@/lib/contexts/auth-context'
-import { AuthFormProps } from './types'
+import type { AuthFormProps } from './types'
 
 export function SignUpForm({ onSuccess, onSwitchView }: AuthFormProps) {
   const { signUp, signInWithGoogle, error } = useAuth()

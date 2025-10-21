@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { AuthView } from './types'
+import type { AuthView } from './types'
 import { SignInForm } from './sign-in-form'
 import { SignUpForm } from './sign-up-form'
 import { useAuth } from '@/lib/contexts/auth-context'

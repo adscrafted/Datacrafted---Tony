@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ThemeSelector } from '@/components/ui/theme-selector'
 import { ColorPicker } from '@/components/ui/color-picker'
-import { useDataStore, DashboardTheme } from '@/lib/store'
+import { useDataStore, type DashboardTheme } from '@/lib/store'
 
 interface ThemeCustomizationPanelProps {
   className?: string

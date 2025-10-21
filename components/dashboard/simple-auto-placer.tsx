@@ -1,7 +1,7 @@
 // Simple Auto-Placement Algorithm for Dashboard Charts
 // This is an alternative to complex collision detection algorithms
 
-import { Layout as GridLayout } from 'react-grid-layout'
+import type { Layout as GridLayout } from 'react-grid-layout'
 
 interface ChartDimensions {
   w: number

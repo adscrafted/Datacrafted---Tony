@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { ChartSuggestion } from '@/lib/types/chart-suggestion'
+import type { ChartSuggestion } from '@/lib/types/chart-suggestion'
 import { chartSuggestionEngine } from '@/lib/services/chart-suggestion-engine'
 import { useDataStore } from '@/lib/store'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'

@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils/cn'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ColorPicker } from '@/components/ui/color-picker'
-import { ChartCustomization, useDataStore } from '@/lib/store'
+import { useDataStore, type ChartCustomization } from '@/lib/store'
 import { debug } from '@/lib/debug'
 
 interface ChartCustomizationPanelProps {
@@ -477,11 +477,11 @@ export function ChartCustomizationPanel({
                             })
 
                             handleUpdate({
-                              chartType: option.value,
+                              chartType: option.value as any,
                               dataMapping: Object.keys(cleanedMapping).length > 0 ? cleanedMapping : undefined
                             })
                           } else {
-                            handleUpdate({ chartType: option.value })
+                            handleUpdate({ chartType: option.value as any })
                           }
                         }}
                         className={cn(

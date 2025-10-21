@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils/cn'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subDays, subMonths, startOfYear, endOfYear, subYears } from 'date-fns'
-import { DateRange } from 'react-day-picker'
+import type { DateRange } from 'react-day-picker'
 import { Calendar as CalendarComponent } from '@/components/ui/calendar'
 import { useDataStore } from '@/lib/store'
 

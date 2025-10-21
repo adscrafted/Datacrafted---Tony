@@ -1,6 +1,6 @@
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
-import { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/store'
 
 export const parseCSV = (file: File): Promise<DataRow[]> => {
   console.log('[FILE-PARSER] parseCSV called for file:', file.name)

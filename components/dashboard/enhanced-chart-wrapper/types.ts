@@ -1,4 +1,5 @@
-import { ChartType, DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/stores/data-store'
+import type { ChartType } from '@/lib/stores/chart-store'
 
 export interface EnhancedChartWrapperProps {
   id: string

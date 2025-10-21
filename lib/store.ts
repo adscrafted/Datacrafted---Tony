@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { DateRange } from 'react-day-picker'
+import type { DateRange } from 'react-day-picker'
 import { aggregateDataByGranularity } from '@/lib/utils/data-aggregation'
 import { dataStorage } from '@/lib/data-storage'
 import type {
@@ -85,7 +85,7 @@ export interface ChartCustomization {
   customDescription?: string
   axisLabels?: { x?: string; y?: string }
   isVisible?: boolean
-  chartType?: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo' | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sparkline'
+  chartType?: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo' | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sparkline' | 'sankey'
   animate?: boolean
   interactive?: boolean
   stacked?: boolean
@@ -153,7 +153,7 @@ export interface ChartCustomization {
 
 export type ChartType =
   | 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo'
-  | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sparkline'
+  | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline'
 
 export interface ChartTemplate {
   id: string
@@ -2310,7 +2310,7 @@ export const useDataStore = create<DataStore>()(
           default:
             // For other chart types, try to infer from dataMapping
             const mappingValues = Object.values(effectiveDataMapping).filter(v => v)
-            dataKey = Array.isArray(mappingValues) ? mappingValues.flat() : mappingValues as string[]
+            dataKey = Array.isArray(mappingValues) ? mappingValues.flat() as string[] : mappingValues as string[]
         }
 
         // Create the final chart config with customization data

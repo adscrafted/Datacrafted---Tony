@@ -1,6 +1,7 @@
-import { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/store'
 import { fileDataCache, getCacheKey } from './cache-manager'
-import { parseExcelAllSheets, SheetData } from './file-parser-multi-sheet'
+import type { SheetData } from './file-parser-multi-sheet'
+import { parseExcelAllSheets } from './file-parser-multi-sheet'
 import { parseCSV } from './file-parser'
 
 export interface ParseProgress {

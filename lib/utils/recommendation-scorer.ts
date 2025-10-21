@@ -10,8 +10,8 @@
  * Total possible score: 100 points
  */
 
-import { ChartSuggestion } from '@/lib/types/chart-suggestion'
-import { ColumnSchema, DataSchema, DataRow } from '@/lib/store'
+import type { ChartSuggestion } from '@/lib/types/chart-suggestion'
+import type { ColumnSchema, DataSchema, DataRow } from '@/lib/store'
 
 /**
  * Extended chart recommendation with scoring data

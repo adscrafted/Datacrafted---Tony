@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/store'
 import { logger } from '@/lib/utils/logger'
 
 interface ProgressiveDataOptions {

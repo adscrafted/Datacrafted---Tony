@@ -1,5 +1,5 @@
-import { DataRow, AnalysisResult } from '@/lib/store'
-import { ChartConfig } from '@/lib/types/chart-types'
+import type { DataRow, AnalysisResult } from '@/lib/store'
+import type { ChartConfig } from '@/lib/types/chart-types'
 import { auth, DEBUG_MODE } from '@/lib/config/firebase'
 
 /**

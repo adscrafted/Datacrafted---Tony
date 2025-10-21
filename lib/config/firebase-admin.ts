@@ -8,8 +8,8 @@
  * IMPORTANT: Never import this file in client-side code.
  */
 
-import { initializeApp, getApps, cert, App } from 'firebase-admin/app'
-import { getAuth, Auth } from 'firebase-admin/auth'
+import { initializeApp, getApps, cert, type App } from 'firebase-admin/app'
+import { getAuth, type Auth } from 'firebase-admin/auth'
 
 /**
  * SECURITY: Triple-Layer Production Environment Detection (Server-side)

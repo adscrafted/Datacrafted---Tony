@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react'
-import { ChartType, DataRow } from '@/lib/store'
+import type { ChartType, DataRow } from '@/lib/store'
 import { CHART_MINIMUMS, RESPONSIVE_BREAKPOINTS } from '../constants'
-import {
+import type {
   ResponsiveFeatures,
   ContainerSizing,
   SmartAxisScaling,
@@ -35,7 +35,7 @@ interface UseResponsiveDesignOptions {
 }
 
 interface UseResponsiveDesignReturn {
-  chartContainerRef: React.RefObject<HTMLDivElement>
+  chartContainerRef: React.RefObject<HTMLDivElement | null>
   containerSizing: ContainerSizing
   responsiveFeatures: ResponsiveFeatures
   smartAxisScaling: SmartAxisScaling

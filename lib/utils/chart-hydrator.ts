@@ -9,7 +9,7 @@
  * - Migrates legacy formats to current dataMapping structure
  */
 
-import { DataSchema, ColumnSchema } from '@/lib/store'
+import type { DataSchema, ColumnSchema } from '@/lib/store'
 
 /**
  * Supported chart types

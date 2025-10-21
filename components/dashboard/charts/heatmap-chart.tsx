@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useMemo, Component, ReactNode } from 'react'
+import React, { useMemo, Component, type ReactNode } from 'react'
 import {
   ScatterChart,
   Scatter,

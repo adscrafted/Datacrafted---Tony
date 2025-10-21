@@ -5,7 +5,7 @@ import { Table, Database, FileText, X, Info, Hash, Calendar, ToggleLeft, Type, F
 import { cn } from '@/lib/utils/cn'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useDataStore, DataRow } from '@/lib/store'
+import { useDataStore, type DataRow } from '@/lib/store'
 
 interface SchemaViewerProps {
   className?: string

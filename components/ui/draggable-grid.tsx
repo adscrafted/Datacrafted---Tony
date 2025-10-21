@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useCallback } from 'react'
-import { Responsive, WidthProvider, Layout, Layouts } from 'react-grid-layout'
+import { Responsive, WidthProvider, type Layout, type Layouts } from 'react-grid-layout'
 import { cn } from '@/lib/utils/cn'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'

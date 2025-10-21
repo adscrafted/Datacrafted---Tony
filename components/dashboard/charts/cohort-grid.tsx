@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useMemo, Component, ReactNode, useState } from 'react'
+import React, { useMemo, Component, useState, type ReactNode } from 'react'
 import {
   Tooltip,
   TooltipContent,

@@ -1,4 +1,4 @@
-import { DataRow, DataSchema } from '@/lib/store'
+import type { DataRow, DataSchema } from '@/lib/store'
 
 interface CacheEntry<T> {
   data: T

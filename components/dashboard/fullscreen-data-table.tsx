@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useMemo } from 'react'
-import { DataRow, ChartType } from '@/lib/store'
+import type { DataRow, ChartType } from '@/lib/store'
 import { TableChart } from './charts/table-chart'
 
 interface FullscreenDataTableProps {

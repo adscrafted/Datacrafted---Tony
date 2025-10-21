@@ -10,7 +10,7 @@
 
 import { NextRequest } from 'next/server'
 import { getAdminAuth, DEBUG_MODE, DEBUG_USER } from '@/lib/config/firebase-admin'
-import { AuthUser, AuthError, AuthErrorCode, TokenPayload } from '@/lib/types/auth'
+import { AuthError, AuthErrorCode, type AuthUser, type TokenPayload } from '@/lib/types/auth'
 
 /**
  * Extract Bearer token from Authorization header

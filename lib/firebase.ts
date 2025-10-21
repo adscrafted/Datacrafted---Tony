@@ -1,6 +1,6 @@
 // Firebase configuration and initialization
-import { initializeApp, getApps, FirebaseApp } from 'firebase/app'
-import { getAnalytics, Analytics } from 'firebase/analytics'
+import { initializeApp, getApps, type FirebaseApp } from 'firebase/app'
+import { getAnalytics, type Analytics } from 'firebase/analytics'
 
 // Firebase configuration from environment variables
 const firebaseConfig = {

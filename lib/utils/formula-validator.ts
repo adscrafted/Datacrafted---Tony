@@ -9,7 +9,7 @@
  * - Complexity is within limits
  */
 
-import { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/store'
 import {
   parseFormula,
   validateFormula as basicValidateFormula,

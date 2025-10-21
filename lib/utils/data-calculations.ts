@@ -11,7 +11,7 @@
  * Designed to integrate with chart components and AI recommendations.
  */
 
-import { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/store'
 
 // ============================================================================
 // Security Constants

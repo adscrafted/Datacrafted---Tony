@@ -3,7 +3,7 @@
 import React from 'react'
 import { Button } from '@/components/ui/button'
 import { BarChart3, TrendingUp, PieChart, Activity, GitBranch } from 'lucide-react'
-import { ChartSuggestion } from '@/lib/services/chat-service'
+import type { ChartSuggestion } from '@/lib/services/chat-service'
 
 interface ChartSuggestionsProps {
   suggestions: ChartSuggestion[]

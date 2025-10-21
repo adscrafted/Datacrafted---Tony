@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { Button } from '@/components/ui/button'
-import { AnalysisResult } from '@/lib/store'
+import type { AnalysisResult } from '@/lib/store'
 import { TrendingUp, PieChart, AlertTriangle, Lightbulb } from 'lucide-react'
 
 interface ExampleQuestionsProps {

@@ -36,7 +36,7 @@ import { cn } from '@/lib/utils/cn'
 import { QualityBadge } from '../quality-indicator'
 
 // Import types
-import { EnhancedChartWrapperProps, ScatterData } from './types'
+import type { EnhancedChartWrapperProps, ScatterData } from './types'
 
 // Import constants
 import { COLORS } from './constants'
@@ -655,7 +655,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                   title={title}
                   description={description}
                   chartType={type}
-                  customization={customization}
+                  customization={customization as any}
                   onCustomizationChange={updateChartCustomization}
                   initialTab={initialTab}
                   configDataMapping={configDataMapping}
@@ -867,7 +867,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                   title={title}
                   description={description}
                   chartType={type}
-                  customization={customization}
+                  customization={customization as any}
                   onCustomizationChange={updateChartCustomization}
                   initialTab={initialTab}
                   configDataMapping={configDataMapping}

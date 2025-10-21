@@ -3,7 +3,7 @@
  * Ensures required fields are configured before generating charts
  */
 
-import { ChartType, DataMapping, ValidationResult } from '../types'
+import type { ChartType, DataMapping, ValidationResult } from '../types'
 
 /**
  * Validate chart data mapping based on chart type
@@ -150,6 +150,7 @@ export function getRequiredFields(chartType: ChartType): string[] {
     cohort: ['cohort', 'period', 'value'],
     bullet: ['actual', 'comparative'],
     treemap: ['category', 'value'],
+    sankey: ['source', 'target', 'value'],
     sparkline: ['trend']
   }
 
@@ -176,6 +177,7 @@ export function getOptionalFields(chartType: ChartType): string[] {
     cohort: [],
     bullet: ['category'],
     treemap: [],
+    sankey: [],
     sparkline: []
   }
 

@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react'
 import {
-  User,
+  type User,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,

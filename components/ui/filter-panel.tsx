@@ -5,7 +5,7 @@ import { Filter, Plus, X, Calendar, Hash, Type, ToggleLeft } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { Button } from './button'
 import { Card, CardContent, CardHeader, CardTitle } from './card'
-import { DashboardFilter, DataRow } from '@/lib/store'
+import type { DashboardFilter, DataRow } from '@/lib/store'
 
 interface FilterPanelProps {
   filters: DashboardFilter[]

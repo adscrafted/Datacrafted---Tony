@@ -9,7 +9,7 @@ import {
   Tooltip,
   Legend
 } from 'recharts'
-import { ChartRendererProps } from '../types'
+import type { ChartRendererProps } from '../types'
 import { renderCollapsibleLegend } from '../../collapsible-legend'
 
 type BarRendererProps = Pick<ChartRendererProps,

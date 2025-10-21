@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useMemo, Component, ReactNode, useEffect, useState, lazy } from 'react'
+import React, { useMemo, Component, useEffect, useState, lazy, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
   LineChart,
@@ -25,12 +25,15 @@ import { Maximize2, Download, X, Settings, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Scorecard } from './scorecard'
-import { DataRow, ChartCustomization, useDataStore, ChartType } from '@/lib/store'
+import { useDataStore, type DataRow } from '@/lib/stores/data-store'
+import { useChartStore, type ChartCustomization, type ChartType } from '@/lib/stores/chart-store'
+import { useUIStore } from '@/lib/stores/ui-store'
+import { getFilteredData } from '@/lib/stores/filtered-data'
 import { cn } from '@/lib/utils/cn'
 import { usePerformanceMonitor } from '@/lib/hooks/use-performance-monitor'
 import { renderCollapsibleLegend } from './collapsible-legend'
-import { processChartData, ChartDataMapping } from '@/lib/utils/chart-data-processor'
-import { AggregationType } from '@/lib/utils/data-calculations'
+import { processChartData, type ChartDataMapping } from '@/lib/utils/chart-data-processor'
+import type { AggregationType } from '@/lib/utils/data-calculations'
 
 // Lazy load table and waterfall components for better performance
 const TableChartLazy = lazy(() => import('./charts/table-chart').then(m => ({ default: m.TableChart })))
@@ -144,7 +147,7 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
   })
   // PERFORMANCE FIX: Separate selectors to prevent unnecessary re-renders
   // Only subscribe to the specific chart's customization, not all customizations
-  const customization = useDataStore(
+  const customization = useChartStore(
     (state) => state.chartCustomizations[chartId]
   )
 
@@ -160,30 +163,23 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
     }
   }, [customization, type, chartId])
 
-  const currentTheme = useDataStore((state) => state.currentTheme)
-  const updateChartCustomization = useDataStore((state) => state.updateChartCustomization)
-  const setFullScreen = useDataStore((state) => state.setFullScreen)
-  const exportChart = useDataStore((state) => state.exportChart)
-  const isCustomizing = useDataStore((state) => state.isCustomizing)
-  const setSelectedChartId = useDataStore((state) => state.setSelectedChartId)
-  const selectedChartId = useDataStore((state) => state.selectedChartId)
-  const setShowChartSettings = useDataStore((state) => state.setShowChartSettings)
+  const currentTheme = useChartStore((state) => state.currentTheme)
+  const updateChartCustomization = useChartStore((state) => state.updateChartCustomization)
+  const setFullScreen = useUIStore((state) => state.setFullScreen)
+  const exportChart = useChartStore((state) => state.exportChart)
+  const isCustomizing = useUIStore((state) => state.isCustomizing)
+  const setSelectedChartId = useUIStore((state) => state.setSelectedChartId)
+  const selectedChartId = useUIStore((state) => state.selectedChartId)
+  const setShowChartSettings = useUIStore((state) => state.setShowChartSettings)
   const analysis = useDataStore((state) => state.analysis)
   const setAnalysis = useDataStore((state) => state.setAnalysis)
 
   // CRITICAL: Get filter data separately to control re-renders
-  const { rawData, dateRange, granularity, selectedDateColumn, dashboardFilters } = useDataStore(
-    (state) => ({
-      rawData: state.rawData,
-      dateRange: state.dateRange,
-      granularity: state.granularity,
-      selectedDateColumn: state.selectedDateColumn,
-      dashboardFilters: state.dashboardFilters
-    })
-  )
-
-  // Get the filtering function (stable reference)
-  const getFilteredData = useDataStore((state) => state.getFilteredData)
+  const rawData = useDataStore((state) => state.rawData)
+  const dateRange = useChartStore((state) => state.dateRange)
+  const granularity = useChartStore((state) => state.granularity)
+  const selectedDateColumn = useUIStore((state) => state.selectedDateColumn)
+  const dashboardFilters = useChartStore((state) => state.dashboardFilters)
 
   // PERFORMANCE OPTIMIZATION: Compute filtered data only when filter dependencies change
   // This ensures we re-render on date changes but NOT on unrelated store changes

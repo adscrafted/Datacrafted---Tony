@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useCallback, useRef, useEffect } from 'react'
-import GridLayout, { Layout } from 'react-grid-layout'
+import GridLayout, { type Layout } from 'react-grid-layout'
 import { cn } from '@/lib/utils/cn'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'

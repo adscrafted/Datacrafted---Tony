@@ -2,7 +2,7 @@
  * TypeScript type definitions for Chart Customization Panel
  */
 
-import { ChartCustomization } from '@/lib/store'
+import type { ChartCustomization } from '@/lib/store'
 
 export type ChartType = 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo' | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline'
 

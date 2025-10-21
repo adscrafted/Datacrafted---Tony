@@ -1,5 +1,5 @@
 import React from 'react'
-import { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/store'
 
 const HeatmapChart = React.lazy(() => import('../../charts/heatmap-chart'))
 

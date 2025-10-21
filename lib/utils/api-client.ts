@@ -2,7 +2,7 @@
  * API Client utilities for authenticated requests
  */
 
-import { User } from 'firebase/auth'
+import type { User } from 'firebase/auth'
 
 /**
  * Get Firebase ID token from authenticated user

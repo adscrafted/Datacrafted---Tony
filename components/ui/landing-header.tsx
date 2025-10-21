@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { User } from 'firebase/auth'
+import type { User } from 'firebase/auth'
 import { Button } from '@/components/ui/button'
 import { BarChart3, LogOut } from 'lucide-react'
 

@@ -12,7 +12,7 @@ import { useProjectStore } from '@/lib/stores/project-store'
 import { ChatMessages } from './chat-messages'
 import { ExampleQuestions } from './example-questions'
 import { ChartSuggestions } from './chart-suggestions'
-import { extractChartSuggestions, ChartSuggestion, stripChartSuggestions } from '@/lib/services/chat-service'
+import { extractChartSuggestions, stripChartSuggestions, type ChartSuggestion } from '@/lib/services/chat-service'
 import { useChartRegeneration } from '@/lib/hooks/use-chart-regeneration'
 import { auth } from '@/lib/config/firebase'
 
@@ -455,7 +455,7 @@ export const ChatInterface = React.memo(function ChatInterface() {
                 {chatMessages.length === 0 ? (
                   <ExampleQuestions
                     onQuestionClick={handleExampleQuestion}
-                    analysis={analysis}
+                    analysis={analysis as any}
                   />
                 ) : (
                   <ChatMessages messages={chatMessages} streamingMessage={streamingMessage} />

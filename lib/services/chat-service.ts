@@ -1,4 +1,4 @@
-import { DataRow, AnalysisResult, ChatMessage } from '@/lib/store'
+import type { DataRow, AnalysisResult, ChatMessage } from '@/lib/store'
 
 export interface ChatResponse {
   message: string

@@ -2,7 +2,7 @@
 
 import React, { useRef, useEffect, useState, memo } from 'react'
 import { ChartWrapper } from './chart-wrapper'
-import { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/store'
 import { Card, CardContent } from '@/components/ui/card'
 import { Loader2 } from 'lucide-react'
 import { logger } from '@/lib/utils/logger'

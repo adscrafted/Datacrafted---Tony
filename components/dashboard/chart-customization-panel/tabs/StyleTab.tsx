@@ -8,7 +8,7 @@
 import React from 'react'
 import { cn } from '@/lib/utils/cn'
 import { ColorPicker } from '@/components/ui/color-picker'
-import { ChartCustomization } from '@/lib/store'
+import type { ChartCustomization } from '@/lib/store'
 import { THEME_OPTIONS, DEFAULT_CHART_COLORS } from '../constants'
 
 interface StyleTabProps {

@@ -1,5 +1,5 @@
 import React from 'react'
-import { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/store'
 
 const CohortGrid = React.lazy(() => import('../../charts/cohort-grid'))
 

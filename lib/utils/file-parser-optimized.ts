@@ -1,4 +1,4 @@
-import { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/store'
 import { fileDataCache, getCacheKey } from './cache-manager'
 import { parseCSV, parseExcel } from './file-parser'
 import { parseFileStreaming } from './streaming-parser'

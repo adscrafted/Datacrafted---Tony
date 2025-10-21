@@ -1,5 +1,5 @@
 import React from 'react'
-import { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/store'
 
 const WaterfallChart = React.lazy(() => import('../../charts/waterfall-chart'))
 

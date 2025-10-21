@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { cn } from '@/lib/utils/cn'
-import { AggregationType } from '@/lib/utils/data-calculations'
+import type { AggregationType } from '@/lib/utils/data-calculations'
 
 interface ScorecardCalculationDetailsProps {
   aggregationType?: AggregationType

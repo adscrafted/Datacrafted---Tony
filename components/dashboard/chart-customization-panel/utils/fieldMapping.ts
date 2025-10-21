@@ -3,7 +3,13 @@
  * Maps existing fields to appropriate fields when changing chart types
  */
 
-import { ChartType, DataMapping } from '../types'
+import type { ChartType, DataMapping } from '../types'
+
+// Helper to safely get first value from array or string
+const getFirstValue = (val: string | string[] | undefined): string | undefined => {
+  if (Array.isArray(val)) return val[0]
+  return val
+}
 
 /**
  * Intelligently map existing fields when changing chart types
@@ -19,79 +25,79 @@ export function mapFieldsForChartType(
     case 'funnel':
       // Map xAxis/category → stage, yAxis/value → value
       newMapping = {
-        stage: currentMapping.xAxis || currentMapping.category || currentMapping.stage,
-        value: currentMapping.yAxis || currentMapping.value || currentMapping.values?.[0]
+        stage: getFirstValue(currentMapping.xAxis) || currentMapping.category || currentMapping.stage,
+        value: getFirstValue(currentMapping.yAxis) || currentMapping.value || getFirstValue(currentMapping.values)
       }
       break
 
     case 'waterfall':
       // Map xAxis/category → category, yAxis/value → value
       newMapping = {
-        category: currentMapping.xAxis || currentMapping.category,
-        value: currentMapping.yAxis || currentMapping.value || currentMapping.values?.[0]
+        category: getFirstValue(currentMapping.xAxis) || currentMapping.category,
+        value: getFirstValue(currentMapping.yAxis) || currentMapping.value || getFirstValue(currentMapping.values)
       }
       break
 
     case 'gauge':
       // Map metric/yAxis/value → value
       newMapping = {
-        value: currentMapping.metric || currentMapping.yAxis || currentMapping.value || currentMapping.values?.[0]
+        value: currentMapping.metric || getFirstValue(currentMapping.yAxis) || currentMapping.value || getFirstValue(currentMapping.values)
       }
       break
 
     case 'heatmap':
       // Map xAxis → xAxis, yAxis → yAxis, value → value
       newMapping = {
-        xAxis: currentMapping.xAxis || currentMapping.category,
-        yAxis: currentMapping.yAxis || currentMapping.metric,
-        value: currentMapping.value || currentMapping.values?.[0]
+        xAxis: getFirstValue(currentMapping.xAxis) || currentMapping.category,
+        yAxis: getFirstValue(currentMapping.yAxis) || currentMapping.metric,
+        value: currentMapping.value || getFirstValue(currentMapping.values)
       }
       break
 
     case 'treemap':
       // Map xAxis/category → category, yAxis/value → value
       newMapping = {
-        category: currentMapping.xAxis || currentMapping.category,
-        value: currentMapping.yAxis || currentMapping.value || currentMapping.values?.[0]
+        category: getFirstValue(currentMapping.xAxis) || currentMapping.category,
+        value: getFirstValue(currentMapping.yAxis) || currentMapping.value || getFirstValue(currentMapping.values)
       }
       break
 
     case 'bullet':
       // Map metrics to actual/comparative
       newMapping = {
-        actual: currentMapping.actual || currentMapping.metric || currentMapping.yAxis,
-        comparative: currentMapping.comparative || currentMapping.target
+        actual: currentMapping.actual || currentMapping.metric || getFirstValue(currentMapping.yAxis),
+        comparative: currentMapping.comparative
       }
       break
 
     case 'cohort':
       // Try to preserve cohort fields
       newMapping = {
-        cohort: currentMapping.cohort || currentMapping.xAxis,
+        cohort: currentMapping.cohort || getFirstValue(currentMapping.xAxis),
         period: currentMapping.period || currentMapping.category,
-        value: currentMapping.value || currentMapping.yAxis
+        value: currentMapping.value || getFirstValue(currentMapping.yAxis)
       }
       break
 
     case 'sparkline':
       // Map xAxis/trend → trend
       newMapping = {
-        trend: currentMapping.trend || currentMapping.xAxis || currentMapping.metric
+        trend: currentMapping.trend || getFirstValue(currentMapping.xAxis) || currentMapping.metric
       }
       break
 
     case 'pie':
       // Map xAxis/category → category, yAxis/value → value
       newMapping = {
-        category: currentMapping.xAxis || currentMapping.category,
-        value: currentMapping.yAxis || currentMapping.value || currentMapping.values?.[0]
+        category: getFirstValue(currentMapping.xAxis) || currentMapping.category,
+        value: getFirstValue(currentMapping.yAxis) || currentMapping.value || getFirstValue(currentMapping.values)
       }
       break
 
     case 'scorecard':
       // Map yAxis/value → metric
       newMapping = {
-        metric: currentMapping.metric || currentMapping.yAxis || currentMapping.value || currentMapping.values?.[0]
+        metric: currentMapping.metric || getFirstValue(currentMapping.yAxis) || currentMapping.value || getFirstValue(currentMapping.values)
       }
       break
 

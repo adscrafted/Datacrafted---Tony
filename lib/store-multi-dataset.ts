@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { DataRow, DataSchema, AnalysisResult, useDataStore } from './store'
+import type { DataRow, DataSchema, AnalysisResult } from './store'
+import { useDataStore } from './store'
 
 export interface DatasetInfo {
   id: string

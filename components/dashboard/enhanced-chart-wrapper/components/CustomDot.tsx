@@ -1,5 +1,5 @@
 import React from 'react'
-import { CustomDotProps } from '../types'
+import type { CustomDotProps } from '../types'
 
 // Custom dot component with onClick support for Line charts
 export const CustomActiveDot: React.FC<CustomDotProps> = ({ cx, cy, fill, r = 4, payload, onClick }) => {

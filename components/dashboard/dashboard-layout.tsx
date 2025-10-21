@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect } from 'react'
 import { Layout, Grid3x3, Settings, BarChart3 } from 'lucide-react'
-import { Layout as GridLayout, Layouts } from 'react-grid-layout'
+import { type Layout as GridLayout, type Layouts } from 'react-grid-layout'
 import { cn } from '@/lib/utils/cn'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { FixedGridLayout } from '@/components/ui/fixed-grid-layout'
 import { MinimalChartWrapper } from './minimal-chart-wrapper'
-import { useDataStore, DashboardLayout, AnalysisResult, DataRow } from '@/lib/store'
+import { useDataStore, type DashboardLayout, type AnalysisResult, type DataRow } from '@/lib/store'
 import { filterValidCharts } from '@/lib/utils/chart-validator'
 
 interface DashboardLayoutComponentProps {

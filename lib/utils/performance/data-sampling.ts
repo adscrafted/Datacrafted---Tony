@@ -5,7 +5,7 @@
  * while preserving the visual shape and trends of the data.
  */
 
-import { DataRow } from '@/lib/store';
+import type { DataRow } from '@/lib/store';
 
 /**
  * Simple downsampling: Take every nth point

@@ -1,5 +1,5 @@
-import { ChartConfig } from '@/lib/types/chart-types'
-import { DataRow } from '@/lib/store'
+import type { ChartConfig } from '@/lib/types/chart-types'
+import type { DataRow } from '@/lib/store'
 import { parseNumericValue } from './data-calculations'
 
 interface ChartValidationResult {

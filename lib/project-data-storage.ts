@@ -1,5 +1,5 @@
 // IndexedDB storage for project data
-import { DataRow, AnalysisResult, DataSchema } from '@/lib/store'
+import type { DataRow, AnalysisResult, DataSchema } from '@/lib/store'
 
 interface StoredProjectData {
   id: string

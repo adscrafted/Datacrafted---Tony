@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { useDataStore, ChartTemplate } from '@/lib/store'
+import { useDataStore, type ChartTemplate } from '@/lib/store'
 import { cn } from '@/lib/utils/cn'
 import { QualityIndicator } from './quality-indicator'
 

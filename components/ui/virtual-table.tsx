@@ -1,8 +1,8 @@
 'use client'
 
 import React, { useMemo, useRef, useCallback, useState, useEffect } from 'react'
-import { FixedSizeList as List, VariableSizeList, ListChildComponentProps } from 'react-window'
-import { DataRow } from '@/lib/store'
+import { FixedSizeList as List, VariableSizeList, type ListChildComponentProps } from 'react-window'
+import type { DataRow } from '@/lib/store'
 import { cn } from '@/lib/utils/cn'
 
 interface VirtualTableProps {

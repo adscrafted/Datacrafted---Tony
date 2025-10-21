@@ -9,7 +9,7 @@ import React from 'react'
 import { Download, Copy } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { Button } from '@/components/ui/button'
-import { ChartCustomization } from '@/lib/store'
+import type { ChartCustomization } from '@/lib/store'
 import { EXPORT_FORMATS } from '../constants'
 
 interface ActionsTabProps {

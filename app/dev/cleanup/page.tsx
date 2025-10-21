@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { cleanupLocalProjects, getLocalProjects, CleanupResult } from '@/lib/utils/cleanup-local-projects'
+import { cleanupLocalProjects, getLocalProjects, type CleanupResult } from '@/lib/utils/cleanup-local-projects'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 

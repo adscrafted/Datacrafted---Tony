@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils/cn'
 import { Button } from './button'
 import { Card, CardContent, CardHeader, CardTitle } from './card'
 import { ColorPicker } from './color-picker'
-import { DashboardTheme } from '@/lib/store'
+import type { DashboardTheme } from '@/lib/store'
 
 interface ThemeSelectorProps {
   themes: DashboardTheme[]

@@ -1,4 +1,4 @@
-import { DataRow, DataSchema, ColumnSchema } from '@/lib/store'
+import type { DataRow, DataSchema, ColumnSchema } from '@/lib/store'
 import { schemaCache, getCacheKey } from './cache-manager'
 
 // Enhanced date format patterns for better detection

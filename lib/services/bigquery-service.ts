@@ -1,4 +1,4 @@
-import { DataRow, AnalysisResult } from '@/lib/store'
+import type { DataRow, AnalysisResult } from '@/lib/store'
 import { DEBUG_MODE } from '@/lib/config/firebase'
 
 // BigQuery table schemas

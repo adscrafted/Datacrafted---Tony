@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/store'
 
 export interface SheetData {
   name: string

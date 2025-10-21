@@ -1,5 +1,5 @@
 import React from 'react'
-import { CustomScatterShapeProps } from '../types'
+import type { CustomScatterShapeProps } from '../types'
 
 // Custom shape component for Scatter charts
 export const CustomScatterShape: React.FC<CustomScatterShapeProps> = ({ cx, cy, fill, payload, onClick }) => {

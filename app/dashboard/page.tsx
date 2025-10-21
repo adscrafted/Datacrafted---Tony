@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useDataStore } from '@/lib/stores/data-store'
 import { useUIStore } from '@/lib/stores/ui-store'
-import { useChartStore } from '@/lib/stores/chart-store'
+import { useChartStore, type ChartType } from '@/lib/stores/chart-store'
 import { useChatStore } from '@/lib/stores/chat-store'
 import { useSessionStore } from '@/lib/stores/session-store'
 import { getFilteredData } from '@/lib/stores/filtered-data'
@@ -513,7 +513,7 @@ function DashboardContent() {
 
   // Auto-open chat interface when on dashboard
   useEffect(() => {
-    const store = useDataStore.getState()
+    const store = useChatStore.getState()
     if (!store.isChatOpen) {
       store.setIsChatOpen(true)
     }
@@ -750,7 +750,7 @@ function DashboardContent() {
                 <div className="flex-shrink-0 overflow-hidden" style={{ height: '65%' }}>
                   <EnhancedChartWrapper
                     id={showFullScreen}
-                    type={fullScreenChart.type}
+                    type={fullScreenChart.type as ChartType}
                     title={fullScreenChart.title}
                     description={fullScreenChart.description}
                     data={filteredData}
@@ -883,7 +883,7 @@ function DashboardContent() {
                 </div>
                 <div className="border rounded-lg overflow-hidden bg-white flex-1 min-h-0">
                   <FullscreenDataTable
-                    chartType={fullScreenChart.type}
+                    chartType={fullScreenChart.type as ChartType}
                     data={filteredData}
                     dataMapping={fullScreenChart.dataMapping}
                     dataKey={fullScreenChart.dataKey}
@@ -1074,7 +1074,7 @@ function DashboardContent() {
 
                     return (
                       <FlexibleDashboardLayout
-                        analysis={analysis}
+                        analysis={analysis as any}
                         data={rawData}
                         className=""
                       />
