@@ -22,14 +22,6 @@ export function mapFieldsForChartType(
   let newMapping: DataMapping = {}
 
   switch (newChartType) {
-    case 'funnel':
-      // Map xAxis/category → stage, yAxis/value → value
-      newMapping = {
-        stage: getFirstValue(currentMapping.xAxis) || currentMapping.category || currentMapping.stage,
-        value: getFirstValue(currentMapping.yAxis) || currentMapping.value || getFirstValue(currentMapping.values)
-      }
-      break
-
     case 'waterfall':
       // Map xAxis/category → category, yAxis/value → value
       newMapping = {
@@ -141,7 +133,6 @@ export function getFieldLabel(fieldKey: string): string {
     value: 'Value',
     values: 'Values',
     metric: 'Metric',
-    stage: 'Stage',
     cohort: 'Cohort',
     period: 'Period',
     actual: 'Actual',

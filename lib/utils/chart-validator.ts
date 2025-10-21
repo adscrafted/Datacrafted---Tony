@@ -25,15 +25,6 @@ export function validateChartConfig(config: ChartConfig): ChartValidationResult 
   }
 
   switch ((config as any).type) {
-    case 'funnel':
-      if (!dm.stage) {
-        return { isValid: false, errors: ['Funnel chart requires stage field in dataMapping'] }
-      }
-      if (!dm.value) {
-        return { isValid: false, errors: ['Funnel chart requires value field in dataMapping'] }
-      }
-      break
-
     case 'heatmap':
       if (!dm.xAxis) {
         return { isValid: false, errors: ['Heatmap requires xAxis field in dataMapping'] }
@@ -158,10 +149,6 @@ export function validateChartData(
         break
       case 'waterfall':
         if (dm.category) dataKeys.push(dm.category)
-        if (dm.value) dataKeys.push(dm.value)
-        break
-      case 'funnel':
-        if (dm.stage) dataKeys.push(dm.stage)
         if (dm.value) dataKeys.push(dm.value)
         break
       case 'heatmap':

@@ -231,9 +231,10 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       return true
     })
 
-    // Separate scorecards from other charts
+    // Separate into three groups: scorecards, tables, and other charts
     // CRITICAL FIX: Use EFFECTIVE chart type (considering customization overrides)
     const scorecards: typeof chartsToDisplay = []
+    const tables: typeof chartsToDisplay = []
     const otherCharts: typeof chartsToDisplay = []
 
     chartsToDisplay.forEach((chart: any) => {
@@ -243,6 +244,8 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
 
       if (effectiveType === 'scorecard') {
         scorecards.push(chart)
+      } else if (effectiveType === 'table') {
+        tables.push(chart)
       } else {
         otherCharts.push(chart)
       }
@@ -255,8 +258,8 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       return scoreB - scoreA // Descending order
     })
 
-    // Return scorecards first, then sorted other charts
-    return [...scorecards, ...sortedOthers]
+    // Return in proper order: scorecards at top, charts in middle (2 per row), tables at bottom
+    return [...scorecards, ...sortedOthers, ...tables]
   }, [validCharts, draftChart, analysis.chartConfig, chartCustomizations])
 
   // Extract quality scores from enhanced analysis if available
@@ -313,9 +316,10 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
   const calculateDefaultPositions = useCallback((charts: typeof sortedCharts) => {
     const positions: Record<string, { x: number, y: number, w: number, h: number }> = {}
     const scorecards: Array<{ config: any, chartId: string }> = []
+    const tables: Array<{ config: any, chartId: string }> = []
     const otherCharts: Array<{ config: any, chartId: string }> = []
 
-    // Separate scorecards from other charts
+    // Separate into three groups: scorecards, tables, and other charts
     // CRITICAL FIX: Use EFFECTIVE chart type (considering customization overrides)
     charts.forEach(config => {
       const originalIndex = analysis.chartConfig.indexOf(config)
@@ -327,6 +331,8 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
 
       if (effectiveType === 'scorecard') {
         scorecards.push({ config, chartId })
+      } else if (effectiveType === 'table') {
+        tables.push({ config, chartId })
       } else {
         otherCharts.push({ config, chartId })
       }
@@ -359,11 +365,13 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       currentX += SCORECARD_WIDTH
     })
 
-    // CRITICAL FIX: Start other charts AFTER the last scorecard row
+    // Position other charts (bar, line, area, etc.) AFTER scorecards
     // If we have scorecards, start at maxScorecardY + 1 (the row after the last scorecard)
     // If we have no scorecards, start at 0
     currentX = 0
     currentY = scorecards.length > 0 ? maxScorecardY + SCORECARD_HEIGHT : 0
+
+    let maxOtherChartsY = currentY // Track bottom of other charts section
 
     otherCharts.forEach(({ config, chartId }) => {
       const dims = getFixedDimensions(config, chartId)
@@ -381,7 +389,28 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         h: dims.h
       }
 
+      // Track the maximum Y value for other charts
+      maxOtherChartsY = Math.max(maxOtherChartsY, currentY + dims.h)
+
       currentX += dims.w
+    })
+
+    // Position tables ALWAYS at the bottom, AFTER all other content
+    // Tables are full-width (12 columns) and stacked vertically
+    currentX = 0
+    currentY = maxOtherChartsY
+
+    tables.forEach(({ config, chartId }) => {
+      const dims = getFixedDimensions(config, chartId)
+
+      positions[chartId] = {
+        x: 0,           // Always start at left edge (full width)
+        y: currentY,    // Stack vertically at bottom
+        w: 12,          // Full width
+        h: dims.h       // Use calculated height (typically 6)
+      }
+
+      currentY += dims.h // Move down for next table
     })
 
     return positions

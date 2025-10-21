@@ -74,12 +74,6 @@ export function validateChartMapping(
       else if (!mapping.value) missingFields = 'Please select a value field'
       break
 
-    case 'funnel':
-      isValid = !!(mapping.stage && mapping.value)
-      if (!mapping.stage) missingFields = 'Please select a stage field'
-      else if (!mapping.value) missingFields = 'Please select a value field'
-      break
-
     case 'heatmap':
       isValid = !!(mapping.xAxis && mapping.yAxis && mapping.value)
       if (!mapping.xAxis) missingFields = 'Please select an X-axis field'
@@ -144,7 +138,6 @@ export function getRequiredFields(chartType: ChartType): string[] {
     table: ['columns'],
     combo: ['xAxis', 'yAxis'],
     waterfall: ['category', 'value'],
-    funnel: ['stage', 'value'],
     heatmap: ['xAxis', 'yAxis', 'value'],
     gauge: ['metric'],
     cohort: ['cohort', 'period', 'value'],
@@ -171,7 +164,6 @@ export function getOptionalFields(chartType: ChartType): string[] {
     table: [],
     combo: ['yAxis2'],
     waterfall: ['type'],
-    funnel: [],
     heatmap: [],
     gauge: ['aggregation', 'max', 'min'],
     cohort: [],

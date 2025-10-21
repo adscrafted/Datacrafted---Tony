@@ -38,7 +38,6 @@ import type { AggregationType } from '@/lib/utils/data-calculations'
 // Lazy load table and waterfall components for better performance
 const TableChartLazy = lazy(() => import('./charts/table-chart').then(m => ({ default: m.TableChart })))
 const WaterfallChartLazy = lazy(() => import('./charts/waterfall-chart'))
-const FunnelChart = lazy(() => import('./charts/funnel-chart'))
 const HeatmapChart = lazy(() => import('./charts/heatmap-chart'))
 const GaugeChart = lazy(() => import('./charts/gauge-chart'))
 const CohortGrid = lazy(() => import('./charts/cohort-grid'))
@@ -64,7 +63,6 @@ interface ChartWrapperProps {
     category?: string
     value?: string
     type?: string
-    // Funnel-specific
     stage?: string
     // Heatmap-specific
     xCategory?: string
@@ -749,23 +747,6 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
                 showGrid: showGridLocal,
                 showLabels: customization?.showLabels ?? true,
                 showConnectors: customization?.showConnectors ?? true
-              }}
-            />
-          </React.Suspense>
-        )
-
-      case 'funnel':
-        return (
-          <React.Suspense fallback={<ChartSkeleton />}>
-            <FunnelChart
-              data={chartData}
-              dataMapping={{
-                stage: customization?.dataMapping?.stage || safeDataKey[0] || 'stage',
-                value: customization?.dataMapping?.value || safeDataKey[1] || 'value'
-              }}
-              customization={{
-                colors: customization?.colors,
-                showPercentages: true
               }}
             />
           </React.Suspense>

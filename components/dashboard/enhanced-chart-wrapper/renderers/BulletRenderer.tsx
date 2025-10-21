@@ -18,6 +18,12 @@ export const BulletRenderer: React.FC<BulletRendererProps> = ({
 }) => {
   const effectiveDataMapping = customization?.dataMapping || configDataMapping
 
+  // Handle flexible field mapping for bullet charts
+  // Support: category, actual, target OR metric, aggregation, target
+  const categoryField = effectiveDataMapping?.category || safeDataKey[0] || 'category'
+  const actualField = effectiveDataMapping?.actual || effectiveDataMapping?.metric || safeDataKey[1] || 'actual'
+  const targetField = effectiveDataMapping?.target || effectiveDataMapping?.comparative || safeDataKey[2]
+
   return (
     <React.Suspense fallback={
       <div className="flex items-center justify-center h-64">
@@ -27,9 +33,9 @@ export const BulletRenderer: React.FC<BulletRendererProps> = ({
       <BulletChart
         data={chartData}
         dataMapping={{
-          category: effectiveDataMapping?.category || safeDataKey[0] || 'category',
-          actual: effectiveDataMapping?.actual || safeDataKey[1] || 'actual',
-          target: effectiveDataMapping?.comparative || effectiveDataMapping?.target || safeDataKey[2] || 'target',
+          category: categoryField,
+          actual: actualField,
+          target: targetField,
           ranges: effectiveDataMapping?.ranges
         }}
         customization={{

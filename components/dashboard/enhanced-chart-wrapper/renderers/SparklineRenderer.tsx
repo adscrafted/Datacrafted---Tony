@@ -20,10 +20,14 @@ export const SparklineRenderer: React.FC<SparklineRendererProps> = ({
 }) => {
   const effectiveDataMapping = customization?.dataMapping || configDataMapping
 
-  // For sparkline, if trend field is specified, use it as both x and y
-  // Otherwise use first two columns as x and y
-  const xField = effectiveDataMapping?.xAxis || safeDataKey[0] || 'x'
-  const yField = effectiveDataMapping?.trend || effectiveDataMapping?.yAxis || safeDataKey[1] || 'y'
+  // Handle flexible field mapping for sparklines
+  // Support: xAxis, yAxis OR trend, metric OR just use first two columns
+  const xField = effectiveDataMapping?.xAxis || effectiveDataMapping?.x || safeDataKey[0] || 'x'
+  const yField = effectiveDataMapping?.yAxis || effectiveDataMapping?.y || effectiveDataMapping?.trend || effectiveDataMapping?.metric || safeDataKey[1] || 'y'
+
+  // For sparklines with aggregation, we should pre-aggregate the data
+  // But if no aggregation is specified, use raw data
+  const aggregationType = effectiveDataMapping?.aggregation
 
   return (
     <React.Suspense fallback={
@@ -37,7 +41,7 @@ export const SparklineRenderer: React.FC<SparklineRendererProps> = ({
           xAxis: xField,
           yAxis: yField
         }}
-        height={customization?.height || 60}
+        height={customization?.height || 80}
         color={customization?.color || colors[0] || '#3b82f6'}
         showTooltip={customization?.showTooltip !== false}
         showDots={customization?.showDots || false}

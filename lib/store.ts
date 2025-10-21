@@ -85,7 +85,7 @@ export interface ChartCustomization {
   customDescription?: string
   axisLabels?: { x?: string; y?: string }
   isVisible?: boolean
-  chartType?: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo' | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sparkline' | 'sankey'
+  chartType?: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo' | 'waterfall' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sparkline' | 'sankey'
   animate?: boolean
   interactive?: boolean
   stacked?: boolean
@@ -127,7 +127,6 @@ export interface ChartCustomization {
       periods?: number
     }>
     // New chart types
-    stage?: string // For funnel charts
     xCategory?: string // For heatmap charts
     yCategory?: string // For heatmap charts
     intensity?: string // For heatmap charts
@@ -153,7 +152,7 @@ export interface ChartCustomization {
 
 export type ChartType =
   | 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo'
-  | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline'
+  | 'waterfall' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline'
 
 export interface ChartTemplate {
   id: string
@@ -575,18 +574,6 @@ const defaultChartTemplates: ChartTemplate[] = [
     defaultPosition: { w: 8, h: 5 },
     requiredDataTypes: ['string', 'number'],
     minColumns: 2,
-  },
-  {
-    id: 'funnel-conversion',
-    name: 'Funnel Chart',
-    type: 'funnel',
-    description: 'Visualize conversion through stages',
-    category: 'trend',
-    icon: 'Filter',
-    defaultPosition: { w: 6, h: 5 },
-    requiredDataTypes: ['string', 'number'],
-    minColumns: 2,
-    maxColumns: 10,
   },
   {
     id: 'heatmap-correlation',

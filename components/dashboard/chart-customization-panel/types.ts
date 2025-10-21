@@ -4,7 +4,7 @@
 
 import type { ChartCustomization } from '@/lib/store'
 
-export type ChartType = 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo' | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline'
+export type ChartType = 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo' | 'waterfall' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline'
 
 export type TabType = 'general' | 'data' | 'style' | 'axes' | 'actions'
 
@@ -81,9 +81,6 @@ export interface DataMapping {
 
   // Waterfall specific
   type?: string
-
-  // Funnel specific
-  stage?: string
 
   // Gauge specific
   metric?: string

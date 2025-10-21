@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle, Loader2, X } from 'lucide-react'
-import { useDataStore } from '@/lib/store'
+import { useUIStore } from '@/lib/stores/ui-store'
+import { useDataStore } from '@/lib/stores/data-store'
 import { cn } from '@/lib/utils/cn'
 
 interface UploadStage {
@@ -14,14 +15,16 @@ interface UploadStage {
 
 export function UploadStatusBar() {
   const router = useRouter()
-  const {
-    uploadProgress,
-    uploadStage,
-    uploadComplete,
-    uploadProjectId,
-    dismissUpload,
-    isAnalyzing
-  } = useDataStore()
+
+  // Upload state from UI store (modular store migration)
+  const uploadProgress = useUIStore((state) => state.uploadProgress)
+  const uploadStage = useUIStore((state) => state.uploadStage)
+  const uploadComplete = useUIStore((state) => state.uploadComplete)
+  const uploadProjectId = useUIStore((state) => state.uploadProjectId)
+  const dismissUpload = useUIStore((state) => state.dismissUpload)
+
+  // isAnalyzing from data store
+  const isAnalyzing = useDataStore((state) => state.isAnalyzing)
 
   const [isVisible, setIsVisible] = useState(false)
   const [stages, setStages] = useState<UploadStage[]>([

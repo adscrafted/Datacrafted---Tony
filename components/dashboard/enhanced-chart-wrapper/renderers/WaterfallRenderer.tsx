@@ -34,8 +34,8 @@ export const WaterfallRenderer: React.FC<WaterfallRendererProps> = ({
         customization={{
           showLegend: customization?.showLegend,
           showGrid: customization?.showGrid,
-          showLabels: customization?.showLabels,
-          showConnectors: customization?.showConnectors,
+          showLabels: customization?.showLabels ?? false, // Default to hiding labels for cleaner charts
+          showConnectors: customization?.showConnectors ?? true,
           increaseColor: '#10b981',
           decreaseColor: '#ef4444',
           totalColor: '#3b82f6'

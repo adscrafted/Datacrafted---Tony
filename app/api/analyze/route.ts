@@ -61,7 +61,7 @@ interface AIAnalysisResponse {
 // Supported chart types - SINGLE SOURCE OF TRUTH
 const SUPPORTED_CHART_TYPES = [
   'line', 'bar', 'pie', 'area', 'scatter', 'scorecard', 'table', 'combo',
-  'waterfall', 'funnel', 'heatmap', 'gauge', 'cohort', 'bullet', 'treemap',
+  'waterfall', 'heatmap', 'gauge', 'cohort', 'bullet', 'treemap',
   'sankey', 'sparkline'
 ] as const
 type SupportedChartType = typeof SUPPORTED_CHART_TYPES[number]
@@ -112,10 +112,6 @@ interface ChartRecommendation {
     // Waterfall specific
     type?: string               // Column indicating increase/decrease/total
     isTotal?: string            // Column marking total bars
-
-    // Funnel specific
-    stage?: string              // Funnel stage/step column
-    // value already covered above
 
     // Heatmap specific
     // xAxis, yAxis already covered
@@ -474,7 +470,7 @@ Create diverse analytical charts based on what the data contains:
    - Purpose: Drill-down capability, detailed exploration
 
 ### ANALYSIS PATTERNS (Based on ${context} context - use IF columns exist):
-${domain === 'advertising' ? 'Efficiency scatter (Spend vs Revenue) | Combo charts (Impressions vs Clicks) | Top/Bottom rankings | Trends over time' : ''}${domain === 'ecommerce' ? 'AOV patterns | Product rankings | Customer segments | Seasonality | Category comparison' : ''}${domain === 'sales' ? 'Pipeline distribution | Rep performance | Funnel stages | Deal velocity | Win rates' : ''}
+${domain === 'advertising' ? 'Efficiency scatter (Spend vs Revenue) | Combo charts (Impressions vs Clicks) | Top/Bottom rankings | Trends over time' : ''}${domain === 'ecommerce' ? 'AOV patterns | Product rankings | Customer segments | Seasonality | Category comparison' : ''}${domain === 'sales' ? 'Pipeline distribution | Rep performance | Deal velocity | Win rates' : ''}
 
 ### REQUIREMENTS:
 - Use ALL aggregation types (sum, avg, count, min, max, distinct)
@@ -507,17 +503,21 @@ function buildEnhancedPrompt(
 ): string {
   const domain = detectBusinessDomain(dataStructure.columns.map((c: any) => c.name))
 
-  // Domain-specific concise guidance
+  // Domain-specific concise guidance with advanced chart recommendations
   const domainHints: Record<string, string> = {
     advertising: `Common metrics: impressions, clicks, spend, ROAS, CTR, conversions
-Analysis patterns: Efficiency (spend vs revenue), performance trends, channel comparison, Top/Bottom campaigns`,
+Analysis patterns: Efficiency (spend vs revenue), performance trends, channel comparison, Top/Bottom campaigns
+Advanced charts: Use heatmap for day-of-week × hour patterns, gauge for campaign performance vs target, treemap for budget allocation across campaigns`,
     ecommerce: `Common metrics: orders, revenue, products, customers, AOV, cart value
-Analysis patterns: Product rankings, customer segments, conversion funnels, seasonal trends`,
+Analysis patterns: Product rankings, customer segments, seasonal trends
+Advanced charts: Use cohort for customer retention, treemap for product category portfolio, heatmap for purchase patterns by day/time`,
     sales: `Common metrics: deals, pipeline, quota, commission, leads, win rate
-Analysis patterns: Pipeline distribution, rep performance, funnel stages, deal velocity`,
+Analysis patterns: Pipeline distribution, rep performance, deal velocity
+Advanced charts: Use waterfall for pipeline contribution/changes, gauge for quota attainment, bullet for rep performance vs target`,
     operations: `Common metrics: shipments, fulfillment, delivery, inventory, logistics
-Analysis patterns: Operations efficiency, supply chain metrics, throughput analysis`,
-    general: 'General business data - identify key metrics and relationships'
+Analysis patterns: Operations efficiency, supply chain metrics, throughput analysis
+Advanced charts: Use sankey for fulfillment flow paths, heatmap for delivery time patterns, gauge for SLA compliance, waterfall for inventory changes`,
+    general: 'General business data - identify key metrics and relationships. Use advanced chart types (heatmap, gauge, waterfall, treemap, cohort, sankey) when data patterns match.'
   }
 
   const domainGuidance = domainHints[domain] || domainHints.general
@@ -527,14 +527,19 @@ Analyze the dataset and generate chart configuration recommendations for a busin
 </TASK>
 
 <CRITICAL_REQUIREMENTS>
-Generate minimum 18 charts (system selects best 16 after validation):
+Generate minimum 18 charts with MAXIMUM CHART TYPE DIVERSITY (system selects best 16 after validation):
 - 8-10 scorecards using diverse aggregations (sum, avg, count, min, max, distinct)
-- 2 MANDATORY ranking bar charts:
-  * Top 10 chart: {type: "bar", dataMapping: {category: "...", values: ["..."], aggregation: "sum", sortBy: "...", sortOrder: "desc", limit: 10}}
-  * Bottom 10 chart: {type: "bar", dataMapping: {category: "...", values: ["..."], aggregation: "sum", sortBy: "...", sortOrder: "asc", limit: 10}}
-- 8-10 analytical charts (scatter, combo, line, area, bar, table based on data patterns)
+- 2 MANDATORY ranking charts (can be bar OR treemap for top/bottom performers):
+  * Top 10 chart: {type: "bar" or "treemap", dataMapping: {category: "...", values: ["..."], aggregation: "sum", sortBy: "...", sortOrder: "desc", limit: 10}}
+  * Bottom 10 chart: {type: "bar" or "treemap", dataMapping: {category: "...", values: ["..."], aggregation: "sum", sortBy: "...", sortOrder: "asc", limit: 10}}
+- 8-10 analytical charts using DIVERSE chart types - prioritize advanced charts when patterns match:
+  * REQUIRED: Include at least 2-3 advanced chart types (waterfall, heatmap, gauge, cohort, bullet, treemap, sankey, sparkline)
+  * Core charts (bar, line, area, scatter, combo, pie, table) should be used ONLY when advanced types don't fit the data pattern
 
-IMPORTANT: Use ONLY column names that exist in the AVAILABLE COLUMNS list below. Charts with non-existent columns will fail validation.
+IMPORTANT:
+1. Use ONLY column names that exist in the AVAILABLE COLUMNS list below. Charts with non-existent columns will fail validation.
+2. MAXIMIZE chart type diversity - avoid generating 5+ charts of the same type unless absolutely necessary
+3. Advanced charts demonstrate analytical sophistication - use them when data patterns match
 </CRITICAL_REQUIREMENTS>
 
 <DOMAIN_CONTEXT>
@@ -544,13 +549,22 @@ Column count: ${dataStructure.columnCount}
 
 ${domainGuidance}
 
-Chart recommendations:
+Chart recommendations (PRIORITIZE ADVANCED CHART TYPES):
 - 8-10 scorecards: Create scorecards for high-value metrics using diverse aggregations
-- 2 rankings: Identify top and bottom performers on a key metric
-- Efficiency analysis: Use scatter plots (input vs output with size/color dimensions)
-- Time trends: Use line/area charts if date columns exist
-- Multi-scale comparisons: Use combo charts when scales differ by >10x
-- Detailed tables: Include 1-2 tables for drill-down capability
+- 2 rankings: Identify top/bottom performers (use treemap for hierarchical view OR bar for simple ranking)
+- Advanced charts (REQUIRED - include 2-3 minimum):
+  * Waterfall: Show cumulative changes, variance analysis, P&L breakdown
+  * Heatmap: Reveal patterns across 2 categorical dimensions (day×hour, product×region)
+  * Gauge/Bullet: Track KPIs against targets, quota attainment, performance vs goal
+  * Cohort: Analyze retention, customer lifetime patterns, time-based behavior
+  * Treemap: Visualize hierarchical composition, portfolio breakdown, nested categories
+  * Sankey: Flow between states, journey mapping, multi-step transitions
+- Core charts (use ONLY when advanced types don't fit):
+  * Scatter: Multi-dimensional efficiency (input vs output with size/color)
+  * Combo: Multi-scale time series when metrics differ by >10x
+  * Line/Area: Simple time trends when waterfall doesn't apply
+  * Pie: Simple proportions (prefer treemap for hierarchical data)
+  * Table: Detailed drill-down (1-2 maximum)
 </DOMAIN_CONTEXT>
 
 <AVAILABLE_COLUMNS>`
@@ -592,8 +606,9 @@ Chart recommendations:
   prompt += `
 
 <CHART_TYPES>
-Core types: scorecard, bar, line, area, scatter, combo, pie, table
-Advanced: waterfall, funnel, heatmap, gauge, cohort, bullet, treemap, sankey, sparkline
+All 16 supported types (PRIORITIZE ADVANCED TYPES):
+Core: scorecard, bar, line, area, scatter, combo, pie, table
+Advanced (USE THESE!): waterfall, heatmap, gauge, cohort, bullet, treemap, sankey, sparkline
 
 dataMapping patterns:
 - scorecard: {metric, aggregation} OR {formula, formulaAlias, formulaOptions}
@@ -602,18 +617,31 @@ dataMapping patterns:
 - scatter: {xAxis, yAxis, size?, color?}
 - combo: {xAxis, yAxis[], yAxis2[], yAxis1Type, yAxis2Type, aggregation}
 - table: {columns[], sortBy?, sortOrder?, limit?}
-- gauge: {metric, aggregation, max?, min?}
+- gauge: {metric, aggregation, max?, min?, target?}
+- bullet: {category, actual, target, ranges?: [poor, satisfactory, good]}
+- waterfall: {category, value, aggregation}
+- heatmap: {xAxis, yAxis, value, aggregation}
+- treemap: {category, value, aggregation, parentCategory?}
+- cohort: {cohort, period, metric, aggregation}
+- sankey: {source, target, value, aggregation}
+- sparkline: {xAxis, yAxis} (no aggregation needed - uses raw time series)
 
 Aggregations: sum, avg, count, min, max, distinct
 Formula syntax: (Col1 - Col2) / Col3 * 100 | Functions: SUM(), AVG(), COUNT(), MIN(), MAX()
 
-Examples:
+Examples (INCLUDE ADVANCED CHART TYPES):
 - Simple scorecard: {metric: "Revenue", aggregation: "sum"}
 - Formula scorecard: {formula: "SUM(Revenue) / SUM(Spend)", formulaAlias: "ROAS", formulaOptions: {round: 2}}
-- Top 10 bar: {category: "Product", values: ["Sales"], aggregation: "sum", sortBy: "Sales", sortOrder: "desc", limit: 10}
+- Top 10 treemap: {category: "Campaign", value: "Sales", aggregation: "sum", sortBy: "Sales", sortOrder: "desc", limit: 10}
 - Multi-dim scatter: {xAxis: "Spend", yAxis: "Revenue", size: "Orders", color: "Campaign"}
-- Combo chart: {xAxis: "Date", yAxis: ["Impressions"], yAxis2: ["Clicks"], yAxis1Type: "bar", yAxis2Type: "line", aggregation: "sum"}
-- Gauge chart: {metric: "Sales", aggregation: "sum", max: 100000, min: 0}
+- Combo chart: {xAxis: "Date", yAxis: ["Impressions"], yAxis2: ["CTR"], yAxis1Type: "bar", yAxis2Type: "line", aggregation: "sum"}
+- Gauge with target: {metric: "Sales", aggregation: "sum", max: 100000, min: 0, target: 75000}
+- Bullet chart KPI: {category: "Metric Name", actual: "Current Value", target: "Target Value"}
+- Waterfall variance: {category: "Month", value: "Revenue Change", aggregation: "sum"}
+- Heatmap pattern: {xAxis: "Day of Week", yAxis: "Hour", value: "Orders", aggregation: "count"}
+- Treemap hierarchy: {category: "Product Category", value: "Revenue", aggregation: "sum"}
+- Cohort retention: {cohort: "Signup Month", period: "Months Since Signup", metric: "Active Users", aggregation: "count"}
+- Sparkline trend: {xAxis: "Date", yAxis: "Metric"}
 </CHART_TYPES>
 
 <ANALYSIS_PROCESS>
@@ -650,13 +678,23 @@ RANKINGS (2): ABSOLUTELY MANDATORY - MUST INCLUDE BOTH
 
 IMPORTANT: These 2 ranking charts are REQUIRED in every analysis. Choose the most important metric for rankings.
 
-ANALYTICAL (8-10): Based on data characteristics
-- Scatter plots: Efficiency analysis with size/color dimensions
-- Combo charts: Multi-scale time series (volume vs rate)
-- Line/Area: Trends over time
-- Bar charts: Category comparisons
-- Tables: Detailed drill-down data
-- Advanced charts: If patterns match (funnel, heatmap, etc.)
+ANALYTICAL (8-10): PRIORITIZE ADVANCED CHART TYPES - use core charts only as fallback
+REQUIRED: Include at least 2-3 advanced charts from this list:
+- Waterfall: Variance analysis, cumulative changes, P&L breakdown, budget vs actual
+- Heatmap: Day×Hour patterns, Product×Region analysis, correlation matrix, 2D categorical patterns
+- Gauge/Bullet: KPI vs target, quota tracking, performance metrics with benchmarks
+- Treemap: Portfolio composition, budget allocation, hierarchical categories (10+ items)
+- Cohort: Customer retention, lifetime value patterns, time-based behavior analysis
+- Sankey: User journey flows, multi-stage transitions, source→target relationships
+- Sparkline: Compact trend indicators, embedded visualizations
+
+Core charts (use ONLY when advanced types don't fit the pattern):
+- Scatter: Multi-dimensional efficiency (when you need 4 dimensions: x, y, size, color)
+- Combo: Multi-scale time series (when metrics differ by >10x ratio)
+- Line/Area: Simple time trends (when waterfall doesn't apply)
+- Bar: Simple category comparisons (prefer treemap for 10+ categories)
+- Pie: Simple 3-5 category proportions (prefer treemap for hierarchical data)
+- Table: Detailed drill-down (1 maximum - place at bottom of dashboard)
 
 Step 5 - Validation:
 - Verify EVERY column name exists in AVAILABLE COLUMNS (exact match: spelling, capitalization, spacing)
@@ -693,26 +731,56 @@ Step 5 - Validation:
       "reasoning": "Critical KPI for budget tracking and executive reporting"
     },
     {
-      "type": "scatter",
-      "title": "Campaign Efficiency: Spend vs Sales",
-      "description": "Bubble size = Impressions (reach), Color = Campaign. Upper-left quadrant (high sales, low spend) = most efficient. Outliers indicate optimization opportunities.",
+      "type": "gauge",
+      "title": "Sales Performance vs Target",
+      "description": "Current sales performance measured against monthly target - red zone (<60%), yellow zone (60-90%), green zone (>90%)",
       "insight_level": "high",
-      "answers_question": "Which campaigns deliver best ROI and which are overspending?",
-      "dataMapping": {"xAxis": "Spend", "yAxis": "7 Day Total Sales", "size": "Impressions", "color": "Campaign Name"},
-      "confidence": 90,
-      "reasoning": "Multi-dimensional efficiency analysis reveals ROI patterns and underperforming campaigns"
+      "answers_question": "Are we on track to meet our sales target this month?",
+      "dataMapping": {"metric": "Sales", "aggregation": "sum", "max": 100000, "min": 0, "target": 75000},
+      "confidence": 95,
+      "reasoning": "Executive KPI tracking with visual performance indicator"
     },
     {
-      "type": "bar",
-      "title": "Top 10 Campaigns by Revenue",
-      "description": "Star performers generating the most sales - allocate more budget here",
+      "type": "waterfall",
+      "title": "Monthly Revenue Variance Analysis",
+      "description": "Shows cumulative revenue changes month-over-month - positive bars indicate growth, negative bars show declines",
       "insight_level": "high",
-      "answers_question": "Which campaigns should we invest more in to maximize returns?",
-      "dataMapping": {"category": "Campaign Name", "values": ["7 Day Total Sales"], "aggregation": "sum", "sortBy": "7 Day Total Sales", "sortOrder": "desc", "limit": 10},
-      "confidence": 95,
-      "reasoning": "Identifies proven winners for budget reallocation decisions"
+      "answers_question": "How is revenue trending and where are the biggest changes occurring?",
+      "dataMapping": {"category": "Month", "value": "Revenue", "aggregation": "sum"},
+      "confidence": 90,
+      "reasoning": "Waterfall reveals revenue momentum and identifies inflection points"
+    },
+    {
+      "type": "heatmap",
+      "title": "Orders by Day of Week × Hour",
+      "description": "Color intensity shows order volume - reveals peak traffic patterns for staffing and promotions",
+      "insight_level": "high",
+      "answers_question": "When should we schedule promotions and allocate resources?",
+      "dataMapping": {"xAxis": "Day of Week", "yAxis": "Hour", "value": "Orders", "aggregation": "count"},
+      "confidence": 85,
+      "reasoning": "Heatmap exposes time-based patterns invisible in standard charts"
+    },
+    {
+      "type": "treemap",
+      "title": "Revenue Portfolio by Product Category",
+      "description": "Hierarchical view of revenue distribution - larger rectangles = bigger revenue contributors",
+      "insight_level": "high",
+      "answers_question": "Which product categories drive the most revenue and deserve investment?",
+      "dataMapping": {"category": "Product Category", "value": "Revenue", "aggregation": "sum"},
+      "confidence": 90,
+      "reasoning": "Treemap shows proportional contribution better than bar charts for 10+ categories"
+    },
+    {
+      "type": "scatter",
+      "title": "Campaign Efficiency: Spend vs Sales",
+      "description": "Bubble size = Impressions (reach), Color = Campaign. Upper-left quadrant (high sales, low spend) = most efficient",
+      "insight_level": "high",
+      "answers_question": "Which campaigns deliver best ROI and which are overspending?",
+      "dataMapping": {"xAxis": "Spend", "yAxis": "Sales", "size": "Impressions", "color": "Campaign Name"},
+      "confidence": 90,
+      "reasoning": "Multi-dimensional efficiency analysis reveals ROI patterns"
     }
-    ...minimum 18 charts total...
+    ...minimum 18 charts total (include 2-3 advanced chart types)...
   ],
   "summary": {
     "dataQuality": "good|fair|poor",
@@ -967,7 +1035,6 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
 Organize insights by category:
 - Performance over time (trends, seasonality) → line/area charts
 - Efficiency & profitability (ROI, conversion) → scatter plots, dual-axis combo
-- Funnels (conversion steps, drop-off) → funnel charts
 - Segmentation (compare groups) → Top/Bottom X rankings, grouped bars
 - Distributions (outliers, variance) → scatter with size/color dimensions
 - Geographic/categorical (regional performance) → bars, pies, treemap
@@ -975,28 +1042,46 @@ Organize insights by category:
 </ANALYSIS_FRAMEWORK>
 
 <CHART_SELECTION_HEURISTICS>
-Use advanced charts when data patterns match:
-- waterfall: variance/change/delta columns, P&L data, sequential calculations
-- funnel: stage/step columns, progressive decrease, conversion flows
-- heatmap: 2 categorical dimensions, time patterns (day×hour), correlation matrix
-- gauge/bullet: actual+target pairs, KPI tracking, performance vs quota
-- cohort: cohort+period+metric dimensions, retention analysis
-- treemap: hierarchical categories, 10+ items, portfolio composition
-- sankey: source+target+flow, journey data, multi-step transitions
-- sparkline: compact trends, embedded visualization, table cells
+ALWAYS PRIORITIZE ADVANCED CHARTS - they demonstrate analytical sophistication and provide deeper insights.
 
-Default to core charts (bar/line/scatter/combo/pie/table) for standard analysis.
+STEP 1: Check for advanced chart patterns FIRST (use these whenever possible):
+- waterfall: ANY variance/change/delta columns, P&L data, budget vs actual, sequential calculations, month-over-month changes
+  Example: Revenue by month (shows waterfall of changes), Budget breakdown (contribution analysis)
+- heatmap: ANY 2 categorical dimensions (day×hour, product×region, category×segment), correlation patterns
+  Example: Orders by Day of Week × Hour, Sales by Product Category × Region
+- gauge/bullet: ANY metric that has a target/goal/quota, KPI tracking, performance benchmarks
+  Example: Sales vs Quota, Revenue vs Target, Conversion Rate vs Benchmark
+- treemap: ANY hierarchical categories, 10+ category items, portfolio/composition analysis
+  Example: Revenue by Product Category (hierarchical view better than bar), Budget by Department
+- cohort: ANY cohort+period dimensions (signup date + months since, customer vintage + quarters)
+  Example: Customer retention by signup month, Revenue by customer cohort over time
+- sankey: ANY source→target flow data, journey mapping, multi-step state transitions
+  Example: User journey (Landing Page → Category → Product → Cart), Traffic sources to conversions
+- sparkline: Compact trend indicators in scorecards, small multiples, embedded trends
+
+STEP 2: Use core charts ONLY when advanced types truly don't fit:
+- scatter: When you need 4 dimensions simultaneously (x, y, size, color) for efficiency analysis
+- combo: When time series has metrics with >10x scale difference (volume bars + rate line)
+- line/area: When showing simple time trends and waterfall doesn't apply
+- bar: When showing simple category comparison and treemap doesn't fit (<10 categories)
+- pie: When showing 3-5 simple proportions (prefer treemap for hierarchical data)
+- table: Maximum 1 per dashboard, placed at bottom for drill-down only
+
+DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in every analysis. Avoid generating 5+ charts of the same type.
 </CHART_SELECTION_HEURISTICS>
 
 <CRITICAL_RULES>
 1. Use ONLY column names from the AVAILABLE COLUMNS list
 2. Generate minimum 18 charts (8+ scorecards, 2 MANDATORY rankings, 8+ analytical)
-3. MANDATORY: Include BOTH Top 10 (desc) AND Bottom 10 (asc) bar chart rankings
-4. Use diverse aggregations: sum, avg, count, min, max, distinct
-5. Add size/color dimensions to scatter plots for multi-dimensional analysis
-6. Use combo charts when metric scales differ by >10x ratio
-7. Every chart must answer a specific business question
-8. Respond with valid JSON in the exact format specified
+3. MANDATORY: Include BOTH Top 10 (desc) AND Bottom 10 (asc) rankings (can be bar OR treemap)
+4. MANDATORY: Include at least 2-3 ADVANCED chart types (waterfall, heatmap, gauge, treemap, cohort, sankey, bullet, sparkline)
+5. MAXIMIZE chart type diversity - avoid 5+ charts of the same type unless data strongly requires it
+6. Use diverse aggregations: sum, avg, count, min, max, distinct
+7. Add size/color dimensions to scatter plots for multi-dimensional analysis
+8. Use combo charts when metric scales differ by >10x ratio
+9. Every chart must answer a specific business question
+10. Prioritize advanced charts over core charts to demonstrate analytical sophistication
+11. Respond with valid JSON in the exact format specified
 </CRITICAL_RULES>
 
 <SCORECARD_PRIORITY>
@@ -1349,20 +1434,6 @@ Generate 8-12 scorecards with diverse aggregations:
               }
               break
 
-            case 'funnel':
-              // Funnel requires: stage + value
-              if (!dm.stage) {
-                errors.push('Funnel chart missing required "stage" field')
-              } else if (!availableColumnsSet.has(dm.stage)) {
-                invalidCols.push(dm.stage)
-              }
-              if (!dm.value) {
-                errors.push('Funnel chart missing required "value" field')
-              } else if (!availableColumnsSet.has(dm.value)) {
-                invalidCols.push(dm.value)
-              }
-              break
-
             case 'heatmap':
               // Heatmap requires: xAxis + yAxis + value
               if (!dm.xAxis) {
@@ -1709,10 +1780,6 @@ Generate 8-12 scorecards with diverse aggregations:
                 if (dm.value) legacyDataKey.push(dm.value)
                 if (dm.type && typeof dm.type === 'string') legacyDataKey.push(dm.type)
                 break
-              case 'funnel':
-                if (dm.stage) legacyDataKey.push(dm.stage)
-                if (dm.value) legacyDataKey.push(dm.value)
-                break
               case 'heatmap':
                 if (dm.xAxis && typeof dm.xAxis === 'string') legacyDataKey.push(dm.xAxis)
                 if (dm.yAxis && typeof dm.yAxis === 'string') legacyDataKey.push(dm.yAxis)
@@ -1822,10 +1889,6 @@ Generate 8-12 scorecards with diverse aggregations:
                 if (dm.category) legacyDataKey.push(dm.category)
                 if (dm.value) legacyDataKey.push(dm.value)
                 if (dm.type && typeof dm.type === 'string') legacyDataKey.push(dm.type)
-                break
-              case 'funnel':
-                if (dm.stage) legacyDataKey.push(dm.stage)
-                if (dm.value) legacyDataKey.push(dm.value)
                 break
               case 'heatmap':
                 if (dm.xAxis && typeof dm.xAxis === 'string') legacyDataKey.push(dm.xAxis)

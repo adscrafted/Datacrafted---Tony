@@ -1,9 +1,8 @@
 /**
  * Comprehensive type definitions for advanced chart types
  *
- * This file defines strict TypeScript types for 10 advanced chart types:
+ * This file defines strict TypeScript types for 9 advanced chart types:
  * - Waterfall Chart
- * - Funnel Chart
  * - Heatmap Chart
  * - Gauge/Radial Chart
  * - Cohort Retention Grid
@@ -33,7 +32,6 @@ export type ExtendedChartType =
   | 'table'
   | 'combo'
   | 'waterfall'
-  | 'funnel'
   | 'heatmap'
   | 'gauge'
   | 'cohort'
@@ -104,66 +102,7 @@ export interface WaterfallChartConfig {
 }
 
 // ============================================================================
-// 2. Funnel Chart Types
-// ============================================================================
-
-/**
- * Data point for funnel charts showing conversion stages
- */
-export interface FunnelDataPoint {
-  /** Stage name */
-  readonly stage: string
-  /** Number of items at this stage */
-  readonly value: number
-  /** Conversion rate from previous stage */
-  readonly conversionRate?: number
-  /** Dropout rate from previous stage */
-  readonly dropoutRate?: number
-  /** Optional color */
-  readonly color?: string
-  /** Optional metadata */
-  readonly metadata?: Record<string, string | number>
-}
-
-/**
- * Configuration for funnel chart data mapping
- */
-export interface FunnelDataMapping {
-  /** Column containing stage names */
-  readonly stage: string
-  /** Column containing values */
-  readonly value: string
-  /** Optional column for custom ordering */
-  readonly order?: string
-  /** Optional column for grouping (for comparing funnels) */
-  readonly group?: string
-}
-
-/**
- * Configuration options for funnel charts
- */
-export interface FunnelChartConfig {
-  readonly chartType: 'funnel'
-  /** Funnel orientation */
-  readonly orientation?: 'vertical' | 'horizontal'
-  /** Funnel shape style */
-  readonly shape?: 'trapezoid' | 'pyramid' | 'rectangle'
-  /** Show conversion rates between stages */
-  readonly showConversionRates?: boolean
-  /** Show value labels */
-  readonly showValueLabels?: boolean
-  /** Label format */
-  readonly labelFormat?: 'value' | 'percentage' | 'both'
-  /** Align funnel segments */
-  readonly align?: 'left' | 'center' | 'right'
-  /** Gap between segments */
-  readonly segmentGap?: number
-  /** Sort order */
-  readonly sortOrder?: 'descending' | 'ascending' | 'custom'
-}
-
-// ============================================================================
-// 3. Heatmap Chart Types
+// 2. Heatmap Chart Types
 // ============================================================================
 
 /**
@@ -236,7 +175,7 @@ export interface HeatmapChartConfig {
 }
 
 // ============================================================================
-// 4. Gauge/Radial Chart Types
+// 3. Gauge/Radial Chart Types
 // ============================================================================
 
 /**
@@ -308,7 +247,7 @@ export interface GaugeChartConfig {
 }
 
 // ============================================================================
-// 5. Cohort Retention Grid Types
+// 4. Cohort Retention Grid Types
 // ============================================================================
 
 /**
@@ -369,7 +308,7 @@ export interface CohortChartConfig {
 }
 
 // ============================================================================
-// 6. Bullet Chart Types
+// 5. Bullet Chart Types
 // ============================================================================
 
 /**
@@ -442,7 +381,7 @@ export interface BulletChartConfig {
 }
 
 // ============================================================================
-// 7. Treemap Chart Types
+// 6. Treemap Chart Types
 // ============================================================================
 
 /**
@@ -511,7 +450,7 @@ export interface TreemapChartConfig {
 }
 
 // ============================================================================
-// 8. Sparkline Chart Types
+// 7. Sparkline Chart Types
 // ============================================================================
 
 /**
@@ -575,7 +514,7 @@ export interface SparklineChartConfig {
 }
 
 // ============================================================================
-// 10. 100% Stacked Charts Types
+// 8. 100% Stacked Charts Types
 // ============================================================================
 
 /**
@@ -639,7 +578,6 @@ export interface Stacked100ChartConfig {
  */
 export type ChartConfig =
   | WaterfallChartConfig
-  | FunnelChartConfig
   | HeatmapChartConfig
   | GaugeChartConfig
   | CohortChartConfig
@@ -653,7 +591,6 @@ export type ChartConfig =
  */
 export type ChartDataMapping =
   | WaterfallDataMapping
-  | FunnelDataMapping
   | HeatmapDataMapping
   | GaugeDataMapping
   | CohortDataMapping
@@ -667,7 +604,6 @@ export type ChartDataMapping =
  */
 export type ChartDataPoint =
   | WaterfallDataPoint
-  | FunnelDataPoint
   | HeatmapDataPoint
   | GaugeDataPoint
   | CohortDataPoint
@@ -752,13 +688,6 @@ export function isWaterfallConfig(config: ChartConfig): config is WaterfallChart
 }
 
 /**
- * Type guard for funnel chart config
- */
-export function isFunnelConfig(config: ChartConfig): config is FunnelChartConfig {
-  return config.chartType === 'funnel'
-}
-
-/**
  * Type guard for heatmap chart config
  */
 export function isHeatmapConfig(config: ChartConfig): config is HeatmapChartConfig {
@@ -816,7 +745,6 @@ export function isStacked100Config(config: ChartConfig): config is Stacked100Cha
  */
 export type ChartConfigForType<T extends ExtendedChartType> =
   T extends 'waterfall' ? WaterfallChartConfig :
-  T extends 'funnel' ? FunnelChartConfig :
   T extends 'heatmap' ? HeatmapChartConfig :
   T extends 'gauge' ? GaugeChartConfig :
   T extends 'cohort' ? CohortChartConfig :
@@ -831,7 +759,6 @@ export type ChartConfigForType<T extends ExtendedChartType> =
  */
 export type DataMappingForType<T extends ExtendedChartType> =
   T extends 'waterfall' ? WaterfallDataMapping :
-  T extends 'funnel' ? FunnelDataMapping :
   T extends 'heatmap' ? HeatmapDataMapping :
   T extends 'gauge' ? GaugeDataMapping :
   T extends 'cohort' ? CohortDataMapping :
@@ -846,7 +773,6 @@ export type DataMappingForType<T extends ExtendedChartType> =
  */
 export type DataPointForType<T extends ExtendedChartType> =
   T extends 'waterfall' ? WaterfallDataPoint :
-  T extends 'funnel' ? FunnelDataPoint :
   T extends 'heatmap' ? HeatmapDataPoint :
   T extends 'gauge' ? GaugeDataPoint :
   T extends 'cohort' ? CohortDataPoint :

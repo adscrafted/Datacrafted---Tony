@@ -56,8 +56,6 @@ export function useChartValidation({
         return !!(effectiveMapping.xAxis && (effectiveMapping.yAxis || effectiveMapping.yAxis1))
       case 'waterfall':
         return !!(effectiveMapping.category && effectiveMapping.value)
-      case 'funnel':
-        return !!(effectiveMapping.stage && effectiveMapping.value)
       case 'heatmap':
         return !!(effectiveMapping.xAxis && effectiveMapping.yAxis && effectiveMapping.value)
       case 'gauge':
@@ -65,11 +63,20 @@ export function useChartValidation({
       case 'cohort':
         return !!(effectiveMapping.cohort && effectiveMapping.period && effectiveMapping.value)
       case 'bullet':
-        return !!(effectiveMapping.actual && effectiveMapping.comparative)
+        // Support: {actual, target} OR {actual, comparative} OR {metric, target}
+        return !!(
+          (effectiveMapping.actual || effectiveMapping.metric) &&
+          (effectiveMapping.target || effectiveMapping.comparative)
+        )
       case 'treemap':
         return !!(effectiveMapping.category && effectiveMapping.value)
       case 'sparkline':
-        return !!effectiveMapping.trend
+        // Support: {xAxis, yAxis} OR {trend} OR {metric}
+        return !!(
+          effectiveMapping.trend ||
+          (effectiveMapping.xAxis && effectiveMapping.yAxis) ||
+          effectiveMapping.metric
+        )
       default:
         return true // Unknown chart types are considered configured
     }

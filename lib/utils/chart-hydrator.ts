@@ -16,7 +16,7 @@ import type { DataSchema, ColumnSchema } from '@/lib/store'
  */
 type ChartType =
   | 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo'
-  | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap'
+  | 'waterfall' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap'
   | 'sankey' | 'sparkline'
 
 /**
@@ -184,13 +184,6 @@ function applyChartTypeDefaults(config: HydratableChartConfig, schema: DataSchem
       break
 
     case 'waterfall':
-      // Default aggregation to 'sum'
-      if (!dm.aggregation && dm.value) {
-        dm.aggregation = 'sum'
-      }
-      break
-
-    case 'funnel':
       // Default aggregation to 'sum'
       if (!dm.aggregation && dm.value) {
         dm.aggregation = 'sum'
@@ -367,17 +360,6 @@ export function inferDataMapping(chartType: ChartType, schema: DataSchema): Data
       // Waterfall: category + value
       if (categoricalColumns.length > 0) {
         dataMapping.category = categoricalColumns[0]
-      }
-      if (numericColumns.length > 0) {
-        dataMapping.value = numericColumns[0]
-      }
-      dataMapping.aggregation = 'sum'
-      break
-
-    case 'funnel':
-      // Funnel: stage + value
-      if (categoricalColumns.length > 0) {
-        dataMapping.stage = categoricalColumns[0]
       }
       if (numericColumns.length > 0) {
         dataMapping.value = numericColumns[0]
@@ -596,7 +578,6 @@ export function migrateLegacyFormat(config: HydratableChartConfig): DataMapping 
       break
 
     case 'waterfall':
-    case 'funnel':
     case 'treemap':
       // Similar to bar: category + value
       if (xAxis) {

@@ -14,7 +14,7 @@ interface ChartCustomizationPanelProps {
   chartId: string
   title: string
   description: string
-  chartType: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo' | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline'
+  chartType: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo' | 'waterfall' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline'
   customization?: ChartCustomization
   onCustomizationChange: (chartId: string, customization: Partial<ChartCustomization>) => void
   className?: string
@@ -33,7 +33,6 @@ const chartTypeOptions = [
   { value: 'table', label: 'Data Table', icon: '📋' },
   { value: 'combo', label: 'Combo Chart', icon: '📊📈' },
   { value: 'waterfall', label: 'Waterfall Chart', icon: '💧' },
-  { value: 'funnel', label: 'Funnel Chart', icon: '🔽' },
   { value: 'heatmap', label: 'Heatmap', icon: '🔥' },
   { value: 'gauge', label: 'Gauge Chart', icon: '🎯' },
   { value: 'cohort', label: 'Cohort Analysis', icon: '👥' },
@@ -385,14 +384,6 @@ export function ChartCustomizationPanel({
 
                             // Intelligent field mapping based on new chart type
                             switch (option.value) {
-                              case 'funnel':
-                                // Map xAxis/category → stage, yAxis/value → value
-                                newMapping = {
-                                  stage: currentMapping.xAxis || currentMapping.category || currentMapping.stage,
-                                  value: currentMapping.yAxis || currentMapping.value || currentMapping.values?.[0]
-                                }
-                                break
-
                               case 'waterfall':
                                 // Map xAxis/category → category, yAxis/value → value
                                 newMapping = {
@@ -1695,146 +1686,6 @@ export function ChartCustomizationPanel({
                       </div>
                     )}
 
-                    {/* Funnel Chart Data Mapping */}
-                    {effectiveChartType === 'funnel' && (
-                      <div className="flex gap-6">
-                        <div className="w-1/3 flex-shrink-0">
-                          <label className="text-sm font-medium mb-3 block">Available Fields</label>
-                          <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-[380px] overflow-y-auto">
-                            <div className="grid grid-cols-1 gap-2">
-                              {columnsByType.all.map((col) => {
-                                const columnType = dataSchema?.columns.find(c => c.name === col)?.type || 'string'
-                                const icon = columnType === 'number' ? '🔢' : columnType === 'date' ? '📅' : '📝'
-                                return (
-                                  <div
-                                    key={col}
-                                    draggable
-                                    onDragStart={(e) => {
-                                      e.dataTransfer.setData('application/json', JSON.stringify({
-                                        fieldName: col,
-                                        fieldType: columnType
-                                      }))
-                                    }}
-                                    className="flex items-center space-x-2 p-2 bg-white border border-gray-200 rounded cursor-move hover:bg-blue-50 hover:border-blue-300 transition-all"
-                                  >
-                                    <span className="text-xs">{icon}</span>
-                                    <span className="text-sm font-medium text-gray-700">{col}</span>
-                                    <span className="text-xs text-gray-500 ml-auto">{columnType}</span>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          </div>
-                          <p className="text-xs text-blue-600 mt-2 font-medium flex items-center">
-                            <span className="mr-1">💡</span>
-                            Tip: Drag fields to the right →
-                          </p>
-                        </div>
-
-                        <div className="flex-1 space-y-4">
-                          <div
-                            onDragOver={(e) => {
-                              e.preventDefault()
-                              e.currentTarget.classList.add('border-blue-400', 'bg-blue-50')
-                            }}
-                            onDragLeave={(e) => {
-                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
-                            }}
-                            onDrop={(e) => {
-                              e.preventDefault()
-                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
-                              try {
-                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                handleUpdate({
-                                  dataMapping: {
-                                    ...customization?.dataMapping,
-                                    stage: data.fieldName
-                                  }
-                                })
-                              } catch (error) {
-                                console.error('Failed to parse drop data:', error)
-                              }
-                            }}
-                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
-                          >
-                            <div className="text-sm font-medium text-gray-600 mb-2">Stage Field (Required)</div>
-                            {effectiveDataMapping?.stage ? (
-                              <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
-                                <span className="text-sm text-blue-800">{effectiveDataMapping.stage}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      stage: undefined
-                                    }
-                                  })}
-                                  className="text-blue-600 hover:text-blue-800 text-xs"
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a field from the left for funnel stages
-                              </div>
-                            )}
-                          </div>
-
-                          <div
-                            onDragOver={(e) => {
-                              e.preventDefault()
-                              e.currentTarget.classList.add('border-green-400', 'bg-green-50')
-                            }}
-                            onDragLeave={(e) => {
-                              e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
-                            }}
-                            onDrop={(e) => {
-                              e.preventDefault()
-                              e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
-                              try {
-                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                if (data.fieldType === 'number') {
-                                  handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      value: data.fieldName
-                                    }
-                                  })
-                                }
-                              } catch (error) {
-                                console.error('Failed to parse drop data:', error)
-                              }
-                            }}
-                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
-                          >
-                            <div className="text-sm font-medium text-gray-600 mb-2">Value Field (Required - Numeric)</div>
-                            {effectiveDataMapping?.value ? (
-                              <div className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
-                                <span className="text-sm text-green-800">{effectiveDataMapping.value}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      value: undefined
-                                    }
-                                  })}
-                                  className="text-green-600 hover:text-green-800 text-xs"
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="text-center py-3 text-gray-500 text-sm">
-                                <span className="block text-lg mb-1">👈</span>
-                                Drag a numeric field from the left for values
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
                     {/* Heatmap Chart Data Mapping */}
                     {effectiveChartType === 'heatmap' && (
                       <div className="flex gap-6">
@@ -3071,11 +2922,6 @@ export function ChartCustomizationPanel({
                             case 'waterfall':
                               isValid = !!(mapping.category && mapping.value)
                               if (!mapping.category) missingFields = 'Please select a category field'
-                              else if (!mapping.value) missingFields = 'Please select a value field'
-                              break
-                            case 'funnel':
-                              isValid = !!(mapping.stage && mapping.value)
-                              if (!mapping.stage) missingFields = 'Please select a stage field'
                               else if (!mapping.value) missingFields = 'Please select a value field'
                               break
                             case 'heatmap':

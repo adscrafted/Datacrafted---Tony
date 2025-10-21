@@ -69,8 +69,7 @@ export const ChatInterface = React.memo(function ChatInterface() {
     { id: 'scorecard', name: 'Scorecard', icon: '🏆' },
     { id: 'table', name: 'Table', icon: '📋' },
     { id: 'pivot', name: 'Pivot Table', icon: '🗂️' },
-    { id: 'gauge', name: 'Gauge', icon: '⏲️' },
-    { id: 'funnel', name: 'Funnel', icon: '🔽' }
+    { id: 'gauge', name: 'Gauge', icon: '⏲️' }
   ]
 
   const scrollToBottom = () => {

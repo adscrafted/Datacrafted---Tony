@@ -60,7 +60,6 @@ import { AreaRenderer } from './renderers/AreaRenderer'
 import { ScatterRenderer } from './renderers/ScatterRenderer'
 import { TableRenderer } from './renderers/TableRenderer'
 import { ComboRenderer } from './renderers/ComboRenderer'
-import { FunnelRenderer } from './renderers/FunnelRenderer'
 import { HeatmapRenderer } from './renderers/HeatmapRenderer'
 import { GaugeRenderer } from './renderers/GaugeRenderer'
 import { CohortRenderer } from './renderers/CohortRenderer'
@@ -514,17 +513,6 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
             enhancedAxisLabels={enhancedAxisLabels}
             truncateLabel={truncateLabel}
             onDataPointClick={onDataPointClick}
-          />
-        )
-
-      case 'funnel':
-        return (
-          <FunnelRenderer
-            chartData={chartData}
-            safeDataKey={safeDataKey}
-            customization={customization}
-            configDataMapping={configDataMapping}
-            colors={colors}
           />
         )
 

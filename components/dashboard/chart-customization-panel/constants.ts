@@ -12,7 +12,6 @@ export const chartTypeOptions = [
   { value: 'table', label: 'Data Table', icon: '📋' },
   { value: 'combo', label: 'Combo Chart', icon: '📊📈' },
   { value: 'waterfall', label: 'Waterfall Chart', icon: '💧' },
-  { value: 'funnel', label: 'Funnel Chart', icon: '🔽' },
   { value: 'heatmap', label: 'Heatmap', icon: '🔥' },
   { value: 'gauge', label: 'Gauge Chart', icon: '🎯' },
   { value: 'cohort', label: 'Cohort Analysis', icon: '👥' },

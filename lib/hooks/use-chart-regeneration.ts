@@ -17,7 +17,6 @@ function getDefaultChartDimensions(chartType: string): { w: number; h: number } 
     case 'scatter':
     case 'combo':
     case 'waterfall':
-    case 'funnel':
       return { w: 6, h: 4 }
     default:
       return { w: 6, h: 4 }

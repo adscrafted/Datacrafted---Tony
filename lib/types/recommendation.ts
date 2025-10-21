@@ -37,7 +37,7 @@ export interface ChartRecommendation {
   };
 
   /** Chart type to render */
-  type: 'scorecard' | 'bar' | 'line' | 'pie' | 'area' | 'scatter' | 'table' | 'combo' | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline';
+  type: 'scorecard' | 'bar' | 'line' | 'pie' | 'area' | 'scatter' | 'table' | 'combo' | 'waterfall' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline';
 
   /** Display title for the chart */
   title: string;
@@ -178,7 +178,7 @@ export interface EnhancedAnalysisResult {
   /** Chart configurations (alias for recommendations for backward compatibility) */
   chartConfig: Array<{
     id?: string
-    type: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo' | 'waterfall' | 'funnel' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline'
+    type: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo' | 'waterfall' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline'
     title: string
     description: string
     dataMapping?: {
