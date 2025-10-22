@@ -1,5 +1,6 @@
 import React from 'react'
 import type { DataRow } from '@/lib/store'
+import { logger } from '@/lib/utils/logger'
 
 const GaugeChart = React.lazy(() => import('../../charts/gauge-chart'))
 
@@ -10,7 +11,7 @@ interface GaugeRendererProps {
   configDataMapping: any
 }
 
-export const GaugeRenderer: React.FC<GaugeRendererProps> = ({
+const GaugeRendererComponent: React.FC<GaugeRendererProps> = ({
   chartData,
   safeDataKey,
   customization,
@@ -18,15 +19,11 @@ export const GaugeRenderer: React.FC<GaugeRendererProps> = ({
 }) => {
   const effectiveDataMapping = customization?.dataMapping || configDataMapping
 
-  // DEBUG: Log what we're passing to gauge
-  console.log('🎯 [GaugeRenderer] Rendering gauge with:', {
-    'effectiveDataMapping.max': effectiveDataMapping?.max,
-    'effectiveDataMapping.min': effectiveDataMapping?.min,
-    'customization.max': customization?.max,
-    'customization.min': customization?.min,
-    'Will use max': effectiveDataMapping?.max ?? 100,
-    'Will use min': effectiveDataMapping?.min ?? 0
-  })
+  // Ensure aggregation is always defined (default to 'sum')
+  const aggregation = effectiveDataMapping?.aggregation || 'sum'
+  const metric = effectiveDataMapping?.metric || safeDataKey[0] || 'value'
+  const min = effectiveDataMapping?.min ?? 0
+  const max = effectiveDataMapping?.max ?? 100
 
   return (
     <React.Suspense fallback={
@@ -37,14 +34,25 @@ export const GaugeRenderer: React.FC<GaugeRendererProps> = ({
       <GaugeChart
         data={chartData}
         dataMapping={{
-          metric: effectiveDataMapping?.metric || safeDataKey[0] || 'value',
-          aggregation: (effectiveDataMapping as any)?.aggregation || 'sum'
+          metric: metric,
+          aggregation: aggregation as 'sum' | 'average' | 'avg' | 'median' | 'min' | 'max' | 'count'
         }}
         customization={{
-          min: effectiveDataMapping?.min ?? 0,
-          max: effectiveDataMapping?.max ?? 100
+          min: min,
+          max: max
         }}
       />
     </React.Suspense>
   )
 }
+
+export const GaugeRenderer = React.memo(GaugeRendererComponent, (prevProps, nextProps) => {
+  // Return true if props are equal (skip re-render), false if changed (re-render)
+  return (
+    prevProps.chartData === nextProps.chartData &&
+    prevProps.customization === nextProps.customization &&
+    prevProps.configDataMapping === nextProps.configDataMapping &&
+    (prevProps.safeDataKey === nextProps.safeDataKey ||
+      prevProps.safeDataKey?.[0] === nextProps.safeDataKey?.[0])
+  )
+})

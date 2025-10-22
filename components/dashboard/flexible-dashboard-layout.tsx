@@ -25,6 +25,10 @@ import { format } from 'date-fns'
 // Make responsive grid layout
 const ResponsiveGridLayout = WidthProvider(Responsive)
 
+// PERFORMANCE: Stable empty array to prevent unnecessary re-renders
+// Used as default when config.dataKey is undefined
+const EMPTY_DATA_KEY: string[] = []
+
 interface FlexibleDashboardLayoutProps {
   analysis: AnalysisResult | EnhancedAnalysisResult
   data: DataRow[]
@@ -285,10 +289,22 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     const customization = chartId ? chartCustomizations[chartId] : undefined
     const effectiveType = customization?.chartType || config.type
 
+    console.log('📐 [getFixedDimensions]', {
+      chartId,
+      configType: config.type,
+      customizationType: customization?.chartType,
+      effectiveType
+    })
+
     switch (effectiveType) {
       case 'scorecard':
         // Scorecards: compact size - 2 columns wide, 1 row tall
         return { w: 2, h: 1 }
+
+      case 'sparkline':
+        // Sparklines: compact trend indicators - 3 columns wide, 2 rows tall (300x400px)
+        console.log('📐 [getFixedDimensions] Returning sparkline size: { w: 3, h: 2 }')
+        return { w: 3, h: 2 }
 
       case 'table':
         // Tables need full width and more height: 960x1200px
@@ -525,6 +541,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       // This fixes the sizing issue where scorecards were sized as regular charts
       const effectiveType = customization?.chartType || config.type
       const isScorecard = effectiveType === 'scorecard'
+      const isSparkline = effectiveType === 'sparkline'
       const isTable = effectiveType === 'table'
 
       items.push({
@@ -533,10 +550,10 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         y: position.y,
         w: position.w,
         h: position.h,
-        minW: isScorecard ? 2 : isTable ? 8 : 4,
-        minH: isScorecard ? 1 : 2,
+        minW: isScorecard ? 2 : isSparkline ? 3 : isTable ? 8 : 4,
+        minH: isScorecard ? 1 : isSparkline ? 2 : 2,
         maxW: isScorecard ? 2 : isTable ? 12 : 12,
-        maxH: isScorecard ? 1 : 10,
+        maxH: isScorecard ? 1 : isSparkline ? 3 : 10,
         isResizable: !isScorecard,
         static: false
       })
@@ -619,7 +636,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
             theme: currentTheme
           }
           saveDashboardConfig(currentProjectId, config).catch(console.error)
-        }, 5000) // PERFORMANCE: Increased to 5 seconds to significantly reduce database writes
+        }, 10000) // PERFORMANCE: Increased to 10 seconds to reduce re-render triggers from auto-save
       }
     }, 150) // 150ms throttle - balance between responsiveness and performance
   }, [batchUpdateChartCustomizations, autoSaveLayouts, validateLayout, currentProjectId, chartCustomizations, currentLayout, dashboardFilters, currentTheme, saveDashboardConfig, sortedCharts, analysis.chartConfig])
@@ -664,6 +681,12 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       setNewlyAddedChartId(null)
     }
   }, [newlyAddedChartId, isCustomizing])
+
+  // PERFORMANCE: Stable onEdit callback to prevent unnecessary re-renders
+  const handleChartEdit = useCallback((id: string) => {
+    setSelectedChartId(id)
+    setIsCustomizing(true)
+  }, [])
 
   // Handle drag start/stop
   const handleDragStart = useCallback(() => {
@@ -803,13 +826,8 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
                 return null
               }
 
-              // PERFORMANCE: Memoize props to prevent unnecessary re-renders
-              // Stabilize array and object references
-              const dataKey = config.dataKey || []
-              const configDataMapping = config.dataMapping
-              const chartClassName = "h-full cursor-move"
-              const chartTitle = config.title || `Chart ${index + 1}`
-              const chartDescription = config.description || ''
+              // PERFORMANCE: Use stable references to prevent unnecessary re-renders
+              const dataKey = config.dataKey || EMPTY_DATA_KEY
 
               return (
                 <div
@@ -820,20 +838,17 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
                   <EnhancedChartWrapper
                     id={chartId}
                     type={config.type}
-                    title={chartTitle}
-                    description={chartDescription}
+                    title={config.title || `Chart ${index + 1}`}
+                    description={config.description || ''}
                     data={filteredData}
                     dataKey={dataKey}
-                    configDataMapping={configDataMapping}
+                    configDataMapping={config.dataMapping}
                     isDragging={isDragging}
                     isSelected={isSelected}
                     onSelect={handleChartSelect}
-                    onEdit={(id) => {
-                      setSelectedChartId(id)
-                      setIsCustomizing(true)
-                    }}
+                    onEdit={handleChartEdit}
                     qualityScore={qualityScores[chartId]}
-                    className={chartClassName}
+                    className="h-full cursor-move"
                     initialTab={newlyAddedChartId === chartId ? 'data' : undefined}
                   />
                 </div>

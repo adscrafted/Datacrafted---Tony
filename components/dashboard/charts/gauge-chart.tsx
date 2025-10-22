@@ -7,6 +7,8 @@ import {
   PolarAngleAxis,
   ResponsiveContainer,
 } from 'recharts';
+import { logger } from '@/lib/utils/logger';
+import { parseNumericValue } from '@/lib/utils/data-calculations';
 
 interface GaugeChartProps {
   data: any[];
@@ -44,36 +46,23 @@ const GaugeChart = React.memo(function GaugeChart({
     thresholds = DEFAULT_THRESHOLDS,
   } = customization;
 
-  // DEBUG: Log what customization values we're receiving
-  console.log('🎯 [GaugeChart] Received props:', {
-    customization,
-    min,
-    customMax,
-    dataMapping
-  });
-
-  // CRITICAL: Log actual values inline for debugging
-  console.log('🎯 [GaugeChart] EXACT VALUES:',
-    'customMax =', customMax,
-    'min =', min,
-    'customization.min =', customization?.min,
-    'customization.max =', customization?.max
-  );
+  // Removed excessive debug logging
 
   // Transform and calculate gauge data
   const gaugeData = useMemo(() => {
     if (!data || data.length === 0) {
+      logger.warn('GaugeChart: No data or empty data array');
       return null;
     }
 
     try {
-      // Extract all metric values from data
+      // Extract all metric values from data using proper number parsing
       const values = data
-        .map(row => Number(row[dataMapping.metric]))
-        .filter(val => !isNaN(val));
+        .map(row => parseNumericValue(row[dataMapping.metric]))
+        .filter((val): val is number => val !== null);
 
       if (values.length === 0) {
-        console.warn('GaugeChart: No valid numeric values found');
+        logger.warn('GaugeChart: No valid numeric values found');
         return null;
       }
 
@@ -113,29 +102,17 @@ const GaugeChart = React.memo(function GaugeChart({
       // Priority: 1. Custom max (required now), 2. Fallback to 100
       const max = customMax !== undefined && customMax !== null ? customMax : 100;
 
-      // DEBUG: Log calculation values
-      console.log('🎯 [GaugeChart] Calculation:', {
-        metricValue,
-        min,
-        max,
-        customMax,
-        aggregation: dataMapping.aggregation,
-        formula: `((${metricValue} - ${min}) / (${max} - ${min})) * 100`
-      });
-
       // Validate values
-      if (isNaN(metricValue) || metricValue < 0) {
-        console.warn('GaugeChart: Invalid metric value');
+      if (isNaN(metricValue)) {
+        logger.warn('GaugeChart: Invalid metric value (NaN)');
         return null;
       }
 
+      // Allow negative values - they're valid for financial data
+      // The gauge will just show them as 0% if below min
+
       // Calculate percentage
       const percentage = Math.min(Math.max(((metricValue - min) / (max - min)) * 100, 0), 100);
-
-      console.log('🎯 [GaugeChart] Result:', {
-        percentage: percentage.toFixed(2) + '%',
-        displayValue: metricValue.toLocaleString()
-      });
 
       // Determine color based on thresholds
       const sortedThresholds = [...thresholds].sort((a, b) => a.value - b.value);
@@ -271,7 +248,8 @@ const GaugeChart = React.memo(function GaugeChart({
 
   const customizationEqual =
     prevProps.customization?.min === nextProps.customization?.min &&
-    prevProps.customization?.max === nextProps.customization?.max;
+    prevProps.customization?.max === nextProps.customization?.max &&
+    JSON.stringify(prevProps.customization?.thresholds) === JSON.stringify(nextProps.customization?.thresholds);
 
   return dataEqual && mappingEqual && customizationEqual;
 });

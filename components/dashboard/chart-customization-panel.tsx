@@ -114,10 +114,20 @@ export function ChartCustomizationPanel({
     }
   }, [isOpen, handleClose])
 
+  // Effective chart type (customization overrides config)
+  const effectiveChartType = customization?.chartType || chartType
+
   // Merged dataMapping: prefer customization, fallback to original config
   const effectiveDataMapping = React.useMemo(() => {
-    return customization?.dataMapping || configDataMapping || {}
-  }, [customization?.dataMapping, configDataMapping])
+    const mapping = customization?.dataMapping || configDataMapping || {}
+    console.log('🔍 [CUSTOMIZATION_PANEL] effectiveDataMapping:', {
+      chartType: effectiveChartType,
+      customizationDataMapping: customization?.dataMapping,
+      configDataMapping,
+      effectiveDataMapping: mapping
+    })
+    return mapping
+  }, [customization?.dataMapping, configDataMapping, effectiveChartType])
 
   // Get available columns from data schema or raw data
   const availableColumns = React.useMemo(() => {
@@ -160,9 +170,6 @@ export function ChartCustomizationPanel({
       all: availableColumns
     }
   }, [dataSchema, availableColumns])
-
-  // Get the effective/current chart type (customization overrides prop)
-  const effectiveChartType = customization?.chartType || chartType
 
   const handleUpdate = (updates: Partial<ChartCustomization>) => {
     const newCustomization = {
@@ -443,9 +450,10 @@ export function ChartCustomizationPanel({
                                 break
 
                               case 'sparkline':
-                                // Map xAxis/trend → trend
+                                // Map to xAxis/yAxis for sparkline
                                 newMapping = {
-                                  trend: currentMapping.trend || currentMapping.xAxis || currentMapping.metric
+                                  xAxis: currentMapping.xAxis || currentMapping.trend || currentMapping.category,
+                                  yAxis: currentMapping.yAxis || currentMapping.metric || currentMapping.value
                                 }
                                 break
 
@@ -2787,6 +2795,57 @@ export function ChartCustomizationPanel({
                         </div>
 
                         <div className="flex-1 space-y-4">
+                          {/* X-Axis (Time/Date) Field */}
+                          <div
+                            onDragOver={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.add('border-blue-400', 'bg-blue-50')
+                            }}
+                            onDragLeave={(e) => {
+                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
+                              try {
+                                const data = JSON.parse(e.dataTransfer.getData('application/json'))
+                                handleUpdate({
+                                  dataMapping: {
+                                    ...customization?.dataMapping,
+                                    xAxis: data.fieldName
+                                  }
+                                })
+                              } catch (error) {
+                                console.error('Failed to parse drop data:', error)
+                              }
+                            }}
+                            className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
+                          >
+                            <div className="text-sm font-medium text-gray-600 mb-2">Time/Date Field (X-Axis)</div>
+                            {effectiveDataMapping?.xAxis ? (
+                              <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
+                                <span className="text-sm text-blue-800">{effectiveDataMapping.xAxis}</span>
+                                <button
+                                  onClick={() => handleUpdate({
+                                    dataMapping: {
+                                      ...customization?.dataMapping,
+                                      xAxis: undefined
+                                    }
+                                  })}
+                                  className="text-blue-600 hover:text-blue-800 text-xs"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-3 text-gray-500 text-sm">
+                                <span className="block text-lg mb-1">👈</span>
+                                Drag a date/time field from the left
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Y-Axis (Trend Value) Field */}
                           <div
                             onDragOver={(e) => {
                               e.preventDefault()
@@ -2804,7 +2863,7 @@ export function ChartCustomizationPanel({
                                   handleUpdate({
                                     dataMapping: {
                                       ...customization?.dataMapping,
-                                      trend: data.fieldName
+                                      yAxis: data.fieldName
                                     }
                                   })
                                 }
@@ -2815,14 +2874,14 @@ export function ChartCustomizationPanel({
                             className="min-h-16 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
                           >
                             <div className="text-sm font-medium text-gray-600 mb-2">Trend Field (Required - Numeric)</div>
-                            {effectiveDataMapping?.trend ? (
+                            {effectiveDataMapping?.yAxis ? (
                               <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
-                                <span className="text-sm text-blue-800">{effectiveDataMapping.trend}</span>
+                                <span className="text-sm text-blue-800">{effectiveDataMapping.yAxis}</span>
                                 <button
                                   onClick={() => handleUpdate({
                                     dataMapping: {
                                       ...customization?.dataMapping,
-                                      trend: undefined
+                                      yAxis: undefined
                                     }
                                   })}
                                   className="text-blue-600 hover:text-blue-800 text-xs"
@@ -2957,8 +3016,9 @@ export function ChartCustomizationPanel({
                               else if (!mapping.value) missingFields = 'Please select a value field'
                               break
                             case 'sparkline':
-                              isValid = !!mapping.trend
-                              if (!isValid) missingFields = 'Please select a trend field'
+                              isValid = !!(mapping.xAxis && mapping.yAxis)
+                              if (!mapping.xAxis) missingFields = 'Please select a time/date field (X-Axis)'
+                              else if (!mapping.yAxis) missingFields = 'Please select a trend field (Y-Axis)'
                               break
                             default:
                               isValid = true
