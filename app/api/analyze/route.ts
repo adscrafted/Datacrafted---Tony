@@ -486,7 +486,7 @@ ${domain === 'advertising' ? 'Efficiency scatter (Spend vs Revenue) | Combo char
  * Deployed: 2025-10-06
  * Token Savings: ~5,625 tokens (58% reduction from ~9,625 to ~4,000)
  * Changes:
- * - XML structure for better GPT-5 compliance (+35% adherence)
+ * - XML structure for better GPT-4 compliance (+35% adherence)
  * - Removed redundancy (chart count 7x → 1x, column validation 5x → 1x)
  * - Removed emoji spam (27 ⚠️ → 0)
  * - Removed verification checklist (400 tokens saved)
@@ -527,14 +527,14 @@ Analyze the dataset and generate chart configuration recommendations for a busin
 </TASK>
 
 <CRITICAL_REQUIREMENTS>
-Generate minimum 18 charts with MAXIMUM CHART TYPE DIVERSITY (system selects best 16 after validation):
-- 8-10 scorecards using diverse aggregations (sum, avg, count, min, max, distinct)
-- 2 MANDATORY ranking charts (can be bar OR treemap for top/bottom performers):
+Generate 12-16 charts with MAXIMUM CHART TYPE DIVERSITY (system selects best 16 after validation):
+- 6-10 scorecards (based on meaningful KPIs) using diverse aggregations (sum, avg, count, min, max, distinct)
+- 2 ranking charts (Top/Bottom performers where applicable) (can be bar OR treemap):
   * Top 10 chart: {type: "bar" or "treemap", dataMapping: {category: "...", values: ["..."], aggregation: "sum", sortBy: "...", sortOrder: "desc", limit: 10}}
   * Bottom 10 chart: {type: "bar" or "treemap", dataMapping: {category: "...", values: ["..."], aggregation: "sum", sortBy: "...", sortOrder: "asc", limit: 10}}
-- 8-10 analytical charts using DIVERSE chart types - prioritize advanced charts when patterns match:
-  * REQUIRED: Include at least 2-3 advanced chart types (waterfall, heatmap, gauge, cohort, bullet, treemap, sankey, sparkline)
-  * Core charts (bar, line, area, scatter, combo, pie, table) should be used ONLY when advanced types don't fit the data pattern
+- 6-10 analytical charts using DIVERSE chart types - prioritize advanced charts when patterns match:
+  * CONSIDER including 2-3 advanced chart types when data patterns match (waterfall, heatmap, gauge, cohort, bullet, treemap, sankey, sparkline)
+  * Core charts (bar, line, area, scatter, combo, pie, table) should be used based on data characteristics
 
 IMPORTANT:
 1. Use ONLY column names that exist in the AVAILABLE COLUMNS list below. Charts with non-existent columns will fail validation.
@@ -662,9 +662,9 @@ Step 3 - Metric Identification:
 - Identify segmentation dimensions (campaign, date, category, location)
 
 Step 4 - Visualization Strategy:
-Generate 18+ charts across these categories:
+Generate 12-16 charts across these categories:
 
-SCORECARDS (8-10): One for each aggregation type applied to high-value metrics
+SCORECARDS (6-10): Based on meaningful KPIs applied to high-value metrics
 - sum: "Total Revenue", "Total Ad Spend", "Total Orders"
 - avg: "Average Order Value", "Average Campaign ROAS", "Average Conversion Rate"
 - count: "Total Campaigns", "Number of Products", "Active Customers"
@@ -672,14 +672,14 @@ SCORECARDS (8-10): One for each aggregation type applied to high-value metrics
 - min: "Lowest Inventory Level", "Minimum Spend", "Earliest Date"
 - distinct: "Unique Product Categories", "Markets Covered", "Customer Segments"
 
-RANKINGS (2): ABSOLUTELY MANDATORY - MUST INCLUDE BOTH
+RANKINGS (2 recommended): Include when data has clear hierarchies
 - Top 10 bar chart: Best performers (type="bar", sortOrder="desc", limit=10) - shows top performers to invest in
 - Bottom 10 bar chart: Worst performers (type="bar", sortOrder="asc", limit=10) - shows underperformers needing attention
 
-IMPORTANT: These 2 ranking charts are REQUIRED in every analysis. Choose the most important metric for rankings.
+NOTE: Include these when comparing performance across entities. Choose the most important metric for rankings.
 
-ANALYTICAL (8-10): PRIORITIZE ADVANCED CHART TYPES - use core charts only as fallback
-REQUIRED: Include at least 2-3 advanced charts from this list:
+ANALYTICAL (6-10): Consider advanced chart types when patterns match
+CONSIDER including 2-3 advanced charts when appropriate from this list:
 - Waterfall: Variance analysis, cumulative changes, P&L breakdown, budget vs actual
 - Heatmap: Day×Hour patterns, Product×Region analysis, correlation matrix, 2D categorical patterns
 - Gauge/Bullet: KPI vs target, quota tracking, performance metrics with benchmarks
@@ -688,7 +688,7 @@ REQUIRED: Include at least 2-3 advanced charts from this list:
 - Sankey: User journey flows, multi-stage transitions, source→target relationships
 - Sparkline: Compact trend indicators, embedded visualizations
 
-Core charts (use ONLY when advanced types don't fit the pattern):
+Core charts (use based on data characteristics):
 - Scatter: Multi-dimensional efficiency (when you need 4 dimensions: x, y, size, color)
 - Combo: Multi-scale time series (when metrics differ by >10x ratio)
 - Line/Area: Simple time trends (when waterfall doesn't apply)
@@ -698,7 +698,7 @@ Core charts (use ONLY when advanced types don't fit the pattern):
 
 Step 5 - Validation:
 - Verify EVERY column name exists in AVAILABLE COLUMNS (exact match: spelling, capitalization, spacing)
-- Count charts: Ensure minimum 18 total
+- Count charts: Ensure 12-16 total charts that best represent insights
 - Check diversity: Multiple chart types, all aggregations used
 - Confirm business value: Each chart answers a specific question
 </ANALYSIS_PROCESS>
@@ -798,7 +798,7 @@ Step 5 - Validation:
     prompt += `\n</SAMPLE_DATA>`
   }
 
-  prompt += `\n\nRemember: Generate minimum 18 charts. Use only columns from AVAILABLE COLUMNS. Every chart answers a business question.`
+  prompt += `\n\nRemember: Generate 12-16 charts that best represent insights. Use only columns from AVAILABLE COLUMNS. Every chart answers a business question.`
 
   return prompt
 }
@@ -959,6 +959,9 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
     // No need for manual rate limit checks here
 
     // Parse request body with enhanced interface
+    console.log('[API-ANALYZE] ===== REQUEST RECEIVED =====')
+    console.log('[API-ANALYZE] Starting to parse request body...')
+
     const {
       data,
       schema,
@@ -966,6 +969,15 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
       feedback,
       fileName
     }: AnalyzeRequest = await request.json()
+
+    console.log('[API-ANALYZE] Request parsed successfully:', {
+      dataLength: data?.length,
+      columnCount: data?.[0] ? Object.keys(data[0]).length : 0,
+      hasSchema: !!schema,
+      hasCorrectedSchema: !!correctedSchema,
+      correctedSchemaLength: correctedSchema?.length,
+      feedback: feedback?.substring(0, 50)
+    })
 
     logger.info('[API-ANALYZE] Request parsed successfully:', {
       dataLength: data?.length,
@@ -1012,13 +1024,23 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
 
     // Get OpenAI client and call API with timeout
     const openai = getOpenAIClient()
-    logger.info('[API-ANALYZE] Making OpenAI API call...')
+    const promptLength = prompt.length
+    const promptTokensEst = Math.ceil(promptLength / 4) // Rough estimate: 1 token ≈ 4 characters
+    logger.info('[API-ANALYZE] Making OpenAI API call...', {
+      model: 'gpt-4o-mini',
+      promptLength,
+      promptTokensEstimate: promptTokensEst,
+      maxTokens: 16000,
+      timeout: '4 minutes (240 seconds)',
+      datasetSize: `${data.length} rows, ${schema?.length || 0} columns`,
+      timestamp: new Date().toISOString()
+    })
     const startTime = Date.now()
 
     // PERFORMANCE: Use timeout utility wrapper for cleaner timeout handling
     const completion = await withTimeout(
       openai.chat.completions.create({
-        model: "gpt-5-mini-2025-08-07", // Using GPT-5-mini for improved analysis
+        model: "gpt-4o-mini", // Using GPT-4o-mini for fast and efficient analysis
         messages: [
           {
             role: "system",
@@ -1042,9 +1064,9 @@ Organize insights by category:
 </ANALYSIS_FRAMEWORK>
 
 <CHART_SELECTION_HEURISTICS>
-ALWAYS PRIORITIZE ADVANCED CHARTS - they demonstrate analytical sophistication and provide deeper insights.
+CONSIDER ADVANCED CHARTS when they clarify patterns - they demonstrate analytical sophistication and provide deeper insights.
 
-STEP 1: Check for advanced chart patterns FIRST (use these whenever possible):
+STEP 1: Check for advanced chart patterns when appropriate (use these when data patterns match):
 - waterfall: ANY variance/change/delta columns, P&L data, budget vs actual, sequential calculations, month-over-month changes
   Example: Revenue by month (shows waterfall of changes), Budget breakdown (contribution analysis)
 - heatmap: ANY 2 categorical dimensions (day×hour, product×region, category×segment), correlation patterns
@@ -1059,7 +1081,7 @@ STEP 1: Check for advanced chart patterns FIRST (use these whenever possible):
   Example: User journey (Landing Page → Category → Product → Cart), Traffic sources to conversions
 - sparkline: Compact trend indicators in scorecards, small multiples, embedded trends
 
-STEP 2: Use core charts ONLY when advanced types truly don't fit:
+STEP 2: Use appropriate chart types based on data characteristics:
 - scatter: When you need 4 dimensions simultaneously (x, y, size, color) for efficiency analysis
 - combo: When time series has metrics with >10x scale difference (volume bars + rate line)
 - line/area: When showing simple time trends and waterfall doesn't apply
@@ -1072,9 +1094,9 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
 
 <CRITICAL_RULES>
 1. Use ONLY column names from the AVAILABLE COLUMNS list
-2. Generate minimum 18 charts (8+ scorecards, 2 MANDATORY rankings, 8+ analytical)
-3. MANDATORY: Include BOTH Top 10 (desc) AND Bottom 10 (asc) rankings (can be bar OR treemap)
-4. MANDATORY: Include at least 2-3 ADVANCED chart types (waterfall, heatmap, gauge, treemap, cohort, sankey, bullet, sparkline)
+2. Generate 12-16 charts (6-10 scorecards, 2 recommended rankings (when applicable), 6-10 analytical)
+3. Include BOTH Top 10 (desc) AND Bottom 10 (asc) rankings when comparing performance across entities (can be bar OR treemap)
+4. CONSIDER including 2-3 advanced chart types when appropriate (waterfall, heatmap, gauge, treemap, cohort, sankey, bullet, sparkline)
 5. MAXIMIZE chart type diversity - avoid 5+ charts of the same type unless data strongly requires it
 6. Use diverse aggregations: sum, avg, count, min, max, distinct
 7. Add size/color dimensions to scatter plots for multi-dimensional analysis
@@ -1085,12 +1107,14 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
 </CRITICAL_RULES>
 
 <SCORECARD_PRIORITY>
-Generate 8-12 scorecards with diverse aggregations:
+Generate 6-10 scorecards based on meaningful KPIs with diverse aggregations:
 - sum: totals (revenue, spend, sales)
 - avg: benchmarks (AOV, conversion rate, efficiency)
 - count: volume (orders, campaigns, transactions)
 - min/max: extremes (peak sales, lowest cost, date ranges)
 - distinct: variety (unique customers, product categories, regions)
+
+NOTE: Use aggregations that make sense for each metric's business context
 </SCORECARD_PRIORITY>
 
 <QUALITY_STANDARDS>
@@ -1106,11 +1130,11 @@ Generate 8-12 scorecards with diverse aggregations:
             content: prompt
           }
       ],
-        // temperature: 1, // GPT-5-mini only supports default temperature of 1
+        // temperature: 0.7, // Using default temperature for balanced creativity and consistency
         max_completion_tokens: 16000, // Increased to 16k to prevent truncation (PHASE 3 OPTIMIZED: prompt ~4k + completion 16k = 20k total, 56% token reduction)
       }),
-      180000, // 3 minute timeout (180 seconds)
-      'OpenAI API call timed out after 180 seconds'
+      240000, // 4 minute timeout (240 seconds) - increased from 3 minutes to handle slower OpenAI responses
+      'OpenAI API call timed out after 240 seconds'
     )
 
     const endTime = Date.now()
@@ -1620,17 +1644,17 @@ Generate 8-12 scorecards with diverse aggregations:
       }
 
       // Check for expected chart count
-      if (aiAnalysis.chartConfig.length < 16) {
-        logger.warn('[VALIDATION] Chart count below minimum:', {
+      if (aiAnalysis.chartConfig.length < 12) {
+        logger.warn('[VALIDATION] Chart count below recommended minimum:', {
           count: aiAnalysis.chartConfig.length,
-          minimum: 16
+          recommended: '12-16'
         })
       }
 
-      if (scorecardCount !== 6) {
-        logger.warn('[VALIDATION] Incorrect scorecard count:', {
+      if (scorecardCount < 6 || scorecardCount > 10) {
+        logger.info('[VALIDATION] Scorecard count outside recommended range:', {
           actual: scorecardCount,
-          expected: 6
+          recommended: '6-10'
         })
       }
 
@@ -2199,3 +2223,7 @@ Generate 8-12 scorecards with diverse aggregations:
 export const POST = withRateLimit(RATE_LIMITS.ANALYSIS, handler)
 
 // Fallback function removed - OpenAI API key is now required
+
+// Next.js 15 Route Segment Configuration
+export const maxDuration = 300 // 5 minutes timeout
+export const runtime = 'nodejs' // Node.js runtime for full API support

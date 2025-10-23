@@ -1,12 +1,13 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { flushSync } from 'react-dom'
 import { Edit2, Save, X, Database, Key, Type, Hash, Calendar, CheckCircle, FileText, Brain, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useDataStore } from '@/lib/store'
+import { useDataStore } from '@/lib/stores/data-store'
 import { cn } from '@/lib/utils/cn'
 import { auth, DEBUG_MODE } from '@/lib/config/firebase'
 
@@ -38,7 +39,15 @@ interface EditableSchemaViewerProps {
 }
 
 export function EditableSchemaViewer({ onAIUpdateComplete }: EditableSchemaViewerProps = {}) {
-  const { rawData, dataSchema, setDataSchema, setAnalysis, setIsAnalyzing, setError } = useDataStore()
+  const rawData = useDataStore((state) => state.rawData)
+  const dataSchema = useDataStore((state) => state.dataSchema)
+  const setDataSchema = useDataStore((state) => state.setDataSchema)
+  const setAnalysis = useDataStore((state) => state.setAnalysis)
+  const setIsAnalyzing = useDataStore((state) => state.setIsAnalyzing)
+  const setAnalysisProgress = useDataStore((state) => state.setAnalysisProgress)
+  const setError = useDataStore((state) => state.setError)
+  const isAnalyzing = useDataStore((state) => state.isAnalyzing)
+  const setCorrectedSchema = useDataStore((state) => state.setCorrectedSchema)
   const [schema, setSchema] = useState<SchemaField[]>([])
   const [editingField, setEditingField] = useState<EditingField | null>(null)
   const [isAddingField, setIsAddingField] = useState(false)
@@ -99,10 +108,57 @@ export function EditableSchemaViewer({ onAIUpdateComplete }: EditableSchemaViewe
     }
 
     setIsPushingToAI(true)
-    // Set analyzing state to show the loading screen
-    setIsAnalyzing(true)
+
+    // Track timing for minimum loading duration
+    const startTime = performance.now()
+    const minimumLoadingDuration = 800 // ms - ensure user sees loading screen
+
+    // CRITICAL: Use flushSync to force synchronous state updates
+    // This ensures the dashboard sees the updated state immediately
+    console.log('🔄 [PUSH-TO-AI] Flushing state updates synchronously')
+    flushSync(() => {
+      console.log('🔄 [PUSH-TO-AI] Clearing old analysis to show loading screen')
+      setAnalysis(null)
+
+      console.log('🔄 [PUSH-TO-AI] Setting isAnalyzing=true')
+      setIsAnalyzing(true)
+
+      console.log('🔄 [PUSH-TO-AI] Resetting progress to 0')
+      setAnalysisProgress(0)
+    })
+
+    console.log('✅ [PUSH-TO-AI] State updates flushed - isAnalyzing should be true now')
+
+    // Start progress simulation
+    const progressInterval = setInterval(() => {
+      // Get current progress from store (Zustand doesn't support functional updates)
+      const currentProgress = useDataStore.getState().analysisProgress
+      // Simulate progress with diminishing returns (slower as it approaches 99%)
+      // Changed from 90% cap to 99% to prevent getting stuck
+      const increment = Math.max(0.5, (99 - currentProgress) / 30)
+      const newProgress = Math.min(99, currentProgress + increment)
+      // Round to whole number for clean display
+      setAnalysisProgress(Math.round(newProgress))
+    }, 500) // Update every 500ms
+
+    // Small delay to let progress interval start
+    await new Promise(resolve => setTimeout(resolve, 50))
+
+    // Navigate to dashboard - loading screen WILL show now because state is flushed
+    console.log('🔄 [PUSH-TO-AI] Switching to dashboard view (state is guaranteed synced)')
+    if (onAIUpdateComplete) {
+      onAIUpdateComplete()
+    }
+
+    // Brief delay for view to switch
+    await new Promise(resolve => setTimeout(resolve, 100))
+
+    // Track API timing (needs to be outside try block for error handling)
+    const apiStartTime = performance.now()
 
     try {
+      console.log('⏱️ [PUSH-TO-AI] API call starting at:', apiStartTime)
+
       // Prepare the corrected schema information
       const correctedSchema = schema.map(field => ({
         name: field.name,
@@ -121,8 +177,7 @@ export function EditableSchemaViewer({ onAIUpdateComplete }: EditableSchemaViewe
       // Get Firebase auth token for API authentication
       const currentUser = auth.currentUser
       if (!currentUser && !DEBUG_MODE) {
-        console.warn('⚠️ [PUSH-TO-AI] No authenticated user for schema update')
-        return
+        throw new Error('Authentication required. Please sign in to continue.')
       }
 
       let authToken: string | undefined
@@ -131,10 +186,7 @@ export function EditableSchemaViewer({ onAIUpdateComplete }: EditableSchemaViewe
           authToken = await currentUser.getIdToken()
           console.log('✅ [PUSH-TO-AI] Got Firebase auth token for API request')
         } catch (authError) {
-          if (!DEBUG_MODE) {
-            console.warn('⚠️ [PUSH-TO-AI] Failed to get auth token')
-          }
-          return
+          throw new Error('Failed to get authentication token. Please try again.')
         }
       }
 
@@ -148,20 +200,57 @@ export function EditableSchemaViewer({ onAIUpdateComplete }: EditableSchemaViewe
       }
 
       // Send sample data (same as initial upload) with corrected schema
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          data: rawData.slice(0, 100), // Send sample (first 100 rows) just like initial upload
-          schema: dataSchema, // Send current schema
-          correctedSchema: correctedSchema,
-          feedback: 'User has corrected column types and descriptions. Please re-analyze with this updated schema information.',
-          fileName: dataSchema?.fileName || 'data.csv'
-        }),
-      })
+      // Prepare the request body
+      const requestBody = {
+        data: rawData.slice(0, 100), // Send sample (first 100 rows) just like initial upload
+        schema: dataSchema, // Send current schema
+        correctedSchema: correctedSchema,
+        feedback: 'User has corrected column types and descriptions. Please re-analyze with this updated schema information.',
+        fileName: dataSchema?.fileName || 'data.csv'
+      }
+
+      const bodyString = JSON.stringify(requestBody)
+      const bodySizeKB = (new Blob([bodyString]).size / 1024).toFixed(2)
+
+      console.log('🚀 [PUSH-TO-AI] About to send fetch request to /api/analyze')
+      console.log('📦 [PUSH-TO-AI] Request body size:', bodySizeKB, 'KB')
+
+      // Create AbortController for timeout
+      const abortController = new AbortController()
+      const timeout = setTimeout(() => {
+        console.log('⏱️ [PUSH-TO-AI] Request timeout after 4.5 minutes, aborting...')
+        abortController.abort()
+      }, 270000) // 4.5 minute timeout (270 seconds) - slightly longer than API's 4 minutes to allow for network delays
+
+      let response: Response
+      try {
+        console.log('🔄 [PUSH-TO-AI] Fetch starting...')
+        response = await fetch('/api/analyze', {
+          method: 'POST',
+          headers,
+          body: bodyString,
+          signal: abortController.signal
+        })
+        clearTimeout(timeout) // Clear timeout on successful fetch
+        console.log('✅ [PUSH-TO-AI] Fetch completed without error')
+      } catch (fetchError) {
+        clearTimeout(timeout)
+        console.error('❌ [PUSH-TO-AI] Network error during fetch:', fetchError)
+        console.error('❌ [PUSH-TO-AI] Error type:', fetchError instanceof Error ? fetchError.constructor.name : typeof fetchError)
+        console.error('❌ [PUSH-TO-AI] Error name:', fetchError instanceof Error ? fetchError.name : 'N/A')
+        console.error('❌ [PUSH-TO-AI] Error message:', fetchError instanceof Error ? fetchError.message : String(fetchError))
+
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+          throw new Error('AI analysis timed out after 5 minutes. Please try again with a smaller dataset.')
+        }
+        throw new Error(`Network error: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`)
+      }
+
+      console.log('📡 [PUSH-TO-AI] Fetch completed, response status:', response.status, response.ok)
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
+        console.error('❌ [PUSH-TO-AI] API error response:', errorData)
         throw new Error(errorData.error || 'Failed to push to AI')
       }
 
@@ -172,10 +261,32 @@ export function EditableSchemaViewer({ onAIUpdateComplete }: EditableSchemaViewe
         hasInsights: !!result.insights
       })
 
+      // Clear progress simulation and set to 100%
+      clearInterval(progressInterval)
+      setAnalysisProgress(100)
+
       // Update the analysis result in store
       if (result) {
         setAnalysis(result)
         console.log('✅ [PUSH-TO-AI] Analysis updated in store')
+      }
+
+      // CRITICAL: Persist correctedSchema to data-store so it can be used for future operations
+      setCorrectedSchema(correctedSchema)
+      console.log('✅ [PUSH-TO-AI] Corrected schema persisted to data-store:', correctedSchema.length, 'corrections')
+
+      // CRITICAL: Clear all chart customizations so new AI analysis can be applied fresh
+      // This ensures that user's old data mappings (from incorrect schema) don't override the new AI recommendations
+      const { useChartStore } = await import('@/lib/stores/chart-store')
+      const chartStore = useChartStore.getState()
+
+      // Clear all existing customizations
+      const chartIds = Object.keys(chartStore.chartCustomizations)
+      if (chartIds.length > 0) {
+        console.log('🧹 [PUSH-TO-AI] Clearing', chartIds.length, 'chart customizations to apply fresh AI analysis')
+        chartIds.forEach(chartId => {
+          chartStore.removeChartCustomization(chartId)
+        })
       }
 
       // Update the dataSchema if AI provided additional insights
@@ -193,18 +304,59 @@ export function EditableSchemaViewer({ onAIUpdateComplete }: EditableSchemaViewe
       }
 
       setHasUnsavedChanges(false)
+      const apiEndTime = performance.now()
+      const apiDuration = apiEndTime - apiStartTime
+      console.log('✅ [PUSH-TO-AI] AI analysis complete, dashboard will update automatically')
+      console.log('⏱️ [PUSH-TO-AI] API call took:', apiDuration, 'ms')
 
-      // Call the callback to switch back to Dashboard tab
-      if (onAIUpdateComplete) {
-        console.log('🔄 [PUSH-TO-AI] Calling onAIUpdateComplete callback to switch to Dashboard')
-        onAIUpdateComplete()
+      // Ensure minimum loading duration AFTER successful API call
+      const elapsedTime = performance.now() - startTime
+      const remainingTime = Math.max(0, minimumLoadingDuration - elapsedTime)
+      if (remainingTime > 0) {
+        console.log('⏱️ [PUSH-TO-AI] Waiting', remainingTime, 'ms to meet minimum loading duration')
+        await new Promise(resolve => setTimeout(resolve, remainingTime))
       }
-    } catch (error) {
-      console.error('❌ [PUSH-TO-AI] Error pushing to AI:', error)
-      setError(error instanceof Error ? error.message : 'Failed to push to AI')
-    } finally {
+
+      // Cleanup after successful completion
       setIsPushingToAI(false)
       setIsAnalyzing(false)
+      console.log('🧹 [PUSH-TO-AI] Cleanup: cleared states after', performance.now() - startTime, 'ms total')
+
+    } catch (error) {
+      // Clear progress simulation on error
+      clearInterval(progressInterval)
+
+      const apiEndTime = performance.now()
+      const apiDuration = apiEndTime - apiStartTime
+      console.error('❌ [PUSH-TO-AI] Error pushing to AI:', error)
+      console.log('⏱️ [PUSH-TO-AI] API call failed after:', apiDuration, 'ms')
+
+      // Reset progress to 0 on error to show that the operation failed
+      setAnalysisProgress(0)
+
+      // Set a more user-friendly error message based on the error type
+      let errorMessage = 'Failed to push to AI'
+      if (error instanceof Error) {
+        if (error.name === 'AbortError' || error.message.includes('abort')) {
+          errorMessage = 'Request timed out. Please try again with a smaller dataset or simpler query.'
+        } else {
+          errorMessage = error.message
+        }
+      }
+      setError(errorMessage)
+
+      // Ensure minimum loading duration AFTER error
+      const elapsedTime = performance.now() - startTime
+      const remainingTime = Math.max(0, minimumLoadingDuration - elapsedTime)
+      if (remainingTime > 0) {
+        console.log('⏱️ [PUSH-TO-AI] Waiting', remainingTime, 'ms to meet minimum loading duration after error')
+        await new Promise(resolve => setTimeout(resolve, remainingTime))
+      }
+
+      // Cleanup after error
+      setIsPushingToAI(false)
+      setIsAnalyzing(false)
+      console.log('🧹 [PUSH-TO-AI] Cleanup after error, progress reset to 0')
     }
   }
 
