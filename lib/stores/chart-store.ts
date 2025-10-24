@@ -30,10 +30,25 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { DateRange } from 'react-day-picker'
+import { logger } from '@/lib/utils/logger'
 
 export type ChartType =
   | 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo'
-  | 'waterfall' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline'
+  | 'waterfall' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sparkline'
+
+export interface ChartFilter {
+  id: string
+  type: 'date_aggregation' | 'categorical' | 'numeric_range'
+  column: string
+  isActive: boolean
+  // For date aggregation
+  dateGranularity?: 'day' | 'week' | 'month' | 'quarter' | 'year'
+  // For categorical filtering
+  selectedValues?: string[]
+  // For numeric range (future)
+  min?: number
+  max?: number
+}
 
 export interface ChartCustomization {
   id: string
@@ -60,6 +75,8 @@ export interface ChartCustomization {
   minHeight?: number
   maxHeight?: number
   labelRotation?: 'auto' | 'horizontal' | 'diagonal' | 'vertical'
+  // Chart-level filters
+  filters?: ChartFilter[]
 }
 
 export interface ChartTemplate {
@@ -256,7 +273,7 @@ const defaultLayout: DashboardLayout = {
   chartPositions: {}
 }
 
-// Default chart templates (subset for brevity - full list from original store)
+// Default chart templates - full list restored from original store
 const defaultChartTemplates: ChartTemplate[] = [
   {
     id: 'line-trend',
@@ -295,6 +312,30 @@ const defaultChartTemplates: ChartTemplate[] = [
     maxColumns: 2,
   },
   {
+    id: 'area-filled',
+    name: 'Area Chart',
+    type: 'area',
+    description: 'Visualize cumulative trends',
+    category: 'trend',
+    icon: 'Activity',
+    defaultPosition: { w: 6, h: 4 },
+    requiredDataTypes: ['number'],
+    minColumns: 2,
+    maxColumns: 4,
+  },
+  {
+    id: 'scatter-relationship',
+    name: 'Scatter Plot',
+    type: 'scatter',
+    description: 'Explore relationships between variables',
+    category: 'relationship',
+    icon: 'Scatter',
+    defaultPosition: { w: 6, h: 4 },
+    requiredDataTypes: ['number'],
+    minColumns: 2,
+    maxColumns: 3,
+  },
+  {
     id: 'scorecard-kpi',
     name: 'Scorecard',
     type: 'scorecard',
@@ -316,6 +357,87 @@ const defaultChartTemplates: ChartTemplate[] = [
     defaultPosition: { w: 12, h: 6 },
     requiredDataTypes: ['string', 'number'],
     minColumns: 1,
+    maxColumns: undefined,
+  },
+  {
+    id: 'waterfall-variance',
+    name: 'Waterfall Chart',
+    type: 'waterfall',
+    description: 'Show sequential positive and negative changes',
+    category: 'comparison',
+    icon: 'TrendingDown',
+    defaultPosition: { w: 8, h: 5 },
+    requiredDataTypes: ['string', 'number'],
+    minColumns: 2,
+  },
+  {
+    id: 'heatmap-correlation',
+    name: 'Heatmap',
+    type: 'heatmap',
+    description: 'Show data density and correlations',
+    category: 'relationship',
+    icon: 'Grid3x3',
+    defaultPosition: { w: 8, h: 6 },
+    requiredDataTypes: ['string', 'number'],
+    minColumns: 3,
+  },
+  {
+    id: 'gauge-kpi',
+    name: 'Gauge Chart',
+    type: 'gauge',
+    description: 'Display progress toward a goal',
+    category: 'summary',
+    icon: 'Gauge',
+    defaultPosition: { w: 4, h: 4 },
+    requiredDataTypes: ['number'],
+    minColumns: 1,
+    maxColumns: 1,
+  },
+  {
+    id: 'cohort-retention',
+    name: 'Cohort Analysis',
+    type: 'cohort',
+    description: 'Track user retention over time',
+    category: 'trend',
+    icon: 'Users',
+    defaultPosition: { w: 10, h: 6 },
+    requiredDataTypes: ['date', 'string', 'number'],
+    minColumns: 3,
+  },
+  {
+    id: 'bullet-performance',
+    name: 'Bullet Chart',
+    type: 'bullet',
+    description: 'Compare performance against targets',
+    category: 'comparison',
+    icon: 'Target',
+    defaultPosition: { w: 6, h: 3 },
+    requiredDataTypes: ['string', 'number'],
+    minColumns: 2,
+    maxColumns: 4,
+  },
+  {
+    id: 'treemap-hierarchy',
+    name: 'Treemap',
+    type: 'treemap',
+    description: 'Visualize hierarchical data structures',
+    category: 'distribution',
+    icon: 'LayoutGrid',
+    defaultPosition: { w: 8, h: 6 },
+    requiredDataTypes: ['string', 'number'],
+    minColumns: 2,
+  },
+  {
+    id: 'sparkline-trend',
+    name: 'Sparkline',
+    type: 'sparkline',
+    description: 'Compact line chart for trends',
+    category: 'trend',
+    icon: 'TrendingUp',
+    defaultPosition: { w: 3, h: 2 },
+    requiredDataTypes: ['number'],
+    minColumns: 1,
+    maxColumns: 1,
   },
 ]
 
@@ -339,7 +461,7 @@ export const useChartStore = create<ChartStore>()(
 
       // Chart customization actions
       updateChartCustomization: (chartId, customization) => {
-        console.log('🎨 [CHART_STORE] Updating chart customization:', chartId)
+        logger.log('🎨 [CHART_STORE] Updating chart customization:', chartId)
         set(state => ({
           chartCustomizations: {
             ...state.chartCustomizations,
@@ -354,7 +476,7 @@ export const useChartStore = create<ChartStore>()(
       },
 
       batchUpdateChartCustomizations: (updates) => {
-        console.log('🎨 [CHART_STORE] Batch updating chart customizations:', Object.keys(updates).length)
+        logger.log('🎨 [CHART_STORE] Batch updating chart customizations:', Object.keys(updates).length)
         set(state => {
           const newCustomizations = { ...state.chartCustomizations }
           Object.entries(updates).forEach(([chartId, customization]) => {
@@ -379,7 +501,7 @@ export const useChartStore = create<ChartStore>()(
       },
 
       removeChartCustomization: (chartId) => {
-        console.log('🗑️ [CHART_STORE] Removing chart customization:', chartId)
+        logger.log('🗑️ [CHART_STORE] Removing chart customization:', chartId)
         set(state => {
           const { [chartId]: removed, ...rest } = state.chartCustomizations
           return { chartCustomizations: rest }
@@ -389,18 +511,18 @@ export const useChartStore = create<ChartStore>()(
 
       // Draft chart actions
       setDraftChart: (chart) => {
-        console.log('📝 [CHART_STORE] Setting draft chart:', chart?.id)
+        logger.log('📝 [CHART_STORE] Setting draft chart:', chart?.id)
         set({ draftChart: chart })
       },
 
       commitDraftChart: () => {
         const state = get()
         if (!state.draftChart) {
-          console.warn('⚠️ [CHART_STORE] No draft chart to commit')
+          logger.warn('⚠️ [CHART_STORE] No draft chart to commit')
           return
         }
 
-        console.log('✅ [CHART_STORE] Committing draft chart:', state.draftChart.id)
+        logger.log('✅ [CHART_STORE] Committing draft chart:', state.draftChart.id)
         // Note: This would typically update the data-store's analysis.chartConfig
         // For now, we just clear the draft
         set({ draftChart: null })
@@ -409,13 +531,13 @@ export const useChartStore = create<ChartStore>()(
 
       // Theme actions
       setCurrentTheme: (theme) => {
-        console.log('🎨 [CHART_STORE] Setting theme:', theme.name)
+        logger.log('🎨 [CHART_STORE] Setting theme:', theme.name)
         set({ currentTheme: theme })
         get().addToHistory('theme_change', { theme: theme.name })
       },
 
       addCustomTheme: (theme) => {
-        console.log('➕ [CHART_STORE] Adding custom theme:', theme.name)
+        logger.log('➕ [CHART_STORE] Adding custom theme:', theme.name)
         set(state => ({
           availableThemes: [...state.availableThemes, theme],
           currentTheme: theme
@@ -425,13 +547,13 @@ export const useChartStore = create<ChartStore>()(
 
       // Layout actions
       setCurrentLayout: (layout) => {
-        console.log('📐 [CHART_STORE] Setting layout:', layout.name)
+        logger.log('📐 [CHART_STORE] Setting layout:', layout.name)
         set({ currentLayout: layout })
         get().addToHistory('layout_change', { layout: layout.name })
       },
 
       addCustomLayout: (layout) => {
-        console.log('➕ [CHART_STORE] Adding custom layout:', layout.name)
+        logger.log('➕ [CHART_STORE] Adding custom layout:', layout.name)
         set(state => ({
           availableLayouts: [...state.availableLayouts, layout],
           currentLayout: layout
@@ -441,7 +563,7 @@ export const useChartStore = create<ChartStore>()(
 
       saveLayout: (name) => {
         const state = get()
-        console.log('💾 [CHART_STORE] Saving layout:', name)
+        logger.log('💾 [CHART_STORE] Saving layout:', name)
         const newLayout: DashboardLayout = {
           id: `layout-${Date.now()}`,
           name,
@@ -458,20 +580,20 @@ export const useChartStore = create<ChartStore>()(
         const state = get()
         const layout = state.availableLayouts.find(l => l.id === layoutId)
         if (layout) {
-          console.log('📥 [CHART_STORE] Loading layout:', layout.name)
+          logger.log('📥 [CHART_STORE] Loading layout:', layout.name)
           get().setCurrentLayout(layout)
         }
       },
 
       resetToDefaultLayout: () => {
-        console.log('🔄 [CHART_STORE] Resetting to default layout')
+        logger.log('🔄 [CHART_STORE] Resetting to default layout')
         set({ currentLayout: defaultLayout, chartCustomizations: {} })
         get().addToHistory('layout_reset', { layout: 'default' })
       },
 
       exportLayoutConfig: async () => {
         const state = get()
-        console.log('📤 [CHART_STORE] Exporting layout config')
+        logger.log('📤 [CHART_STORE] Exporting layout config')
         const config = {
           layout: state.currentLayout,
           customizations: state.chartCustomizations,
@@ -494,7 +616,7 @@ export const useChartStore = create<ChartStore>()(
       },
 
       importLayoutConfig: async (configFile) => {
-        console.log('📥 [CHART_STORE] Importing layout config')
+        logger.log('📥 [CHART_STORE] Importing layout config')
         try {
           const text = await configFile.text()
           const config = JSON.parse(text)
@@ -526,18 +648,18 @@ export const useChartStore = create<ChartStore>()(
 
           get().addToHistory('layout_import', { fileName: configFile.name })
         } catch (error) {
-          console.error('❌ [CHART_STORE] Failed to import layout config:', error)
+          logger.error('❌ [CHART_STORE] Failed to import layout config:', error)
         }
       },
 
       setAutoSaveLayouts: (enabled) => {
-        console.log('💾 [CHART_STORE] Setting auto-save layouts:', enabled)
+        logger.log('💾 [CHART_STORE] Setting auto-save layouts:', enabled)
         set({ autoSaveLayouts: enabled })
       },
 
       // Filter actions
       addDashboardFilter: (filter) => {
-        console.log('🔍 [CHART_STORE] Adding dashboard filter:', filter.column)
+        logger.log('🔍 [CHART_STORE] Adding dashboard filter:', filter.column)
         set(state => ({
           dashboardFilters: [...state.dashboardFilters, filter]
         }))
@@ -545,7 +667,7 @@ export const useChartStore = create<ChartStore>()(
       },
 
       updateDashboardFilter: (filterId, updates) => {
-        console.log('🔍 [CHART_STORE] Updating dashboard filter:', filterId)
+        logger.log('🔍 [CHART_STORE] Updating dashboard filter:', filterId)
         set(state => ({
           dashboardFilters: state.dashboardFilters.map(filter =>
             filter.id === filterId ? { ...filter, ...updates } : filter
@@ -555,7 +677,7 @@ export const useChartStore = create<ChartStore>()(
       },
 
       removeDashboardFilter: (filterId) => {
-        console.log('🗑️ [CHART_STORE] Removing dashboard filter:', filterId)
+        logger.log('🗑️ [CHART_STORE] Removing dashboard filter:', filterId)
         set(state => ({
           dashboardFilters: state.dashboardFilters.filter(filter => filter.id !== filterId)
         }))
@@ -563,19 +685,19 @@ export const useChartStore = create<ChartStore>()(
       },
 
       clearAllFilters: () => {
-        console.log('🗑️ [CHART_STORE] Clearing all filters')
+        logger.log('🗑️ [CHART_STORE] Clearing all filters')
         const currentFilters = get().dashboardFilters
         set({ dashboardFilters: [] })
         get().addToHistory('filters_clear', { previousFilters: currentFilters })
       },
 
       setDateRange: (range) => {
-        console.log('📅 [CHART_STORE] Setting date range:', range)
+        logger.log('📅 [CHART_STORE] Setting date range:', range)
         set({ dateRange: range })
       },
 
       setGranularity: (granularity) => {
-        console.log('📊 [CHART_STORE] Setting granularity:', granularity)
+        logger.log('📊 [CHART_STORE] Setting granularity:', granularity)
         set({ granularity })
       },
 
@@ -600,7 +722,7 @@ export const useChartStore = create<ChartStore>()(
         const lastAction = state.customizationHistory[state.customizationHistory.length - 1]
         if (!lastAction) return
 
-        console.log('↩️ [CHART_STORE] Undoing action:', lastAction.action)
+        logger.log('↩️ [CHART_STORE] Undoing action:', lastAction.action)
         // Implementation would depend on action type
         set(state => ({
           customizationHistory: state.customizationHistory.slice(0, -1),
@@ -613,7 +735,7 @@ export const useChartStore = create<ChartStore>()(
         const lastRedoAction = state.redoHistory[state.redoHistory.length - 1]
         if (!lastRedoAction) return
 
-        console.log('↪️ [CHART_STORE] Redoing action:', lastRedoAction.action)
+        logger.log('↪️ [CHART_STORE] Redoing action:', lastRedoAction.action)
         // Implementation would depend on action type
         set(state => ({
           customizationHistory: [...state.customizationHistory, lastRedoAction],
@@ -621,11 +743,16 @@ export const useChartStore = create<ChartStore>()(
         }))
       },
 
-      // Chart management actions (these would interact with data-store in full implementation)
+      // Chart management actions
       addChart: (template, position) => {
         const chartId = `chart-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-        console.log('➕ [CHART_STORE] Adding chart:', chartId)
+        logger.log('➕ [CHART_STORE] Adding chart:', {
+          chartId,
+          type: template.type,
+          defaultPosition: template.defaultPosition
+        })
 
+        // Create chart customization with template's default size
         const customization: ChartCustomization = {
           id: chartId,
           position: position
@@ -635,18 +762,49 @@ export const useChartStore = create<ChartStore>()(
           chartType: template.type,
         }
 
+        logger.log('📐 [CHART_STORE] Chart position set to:', customization.position)
         get().updateChartCustomization(chartId, customization)
+
+        // CRITICAL: Also add the chart to data-store's analysis.chartConfig
+        // The dashboard displays charts from analysis.chartConfig
+        const { useDataStore } = require('@/lib/stores/data-store')
+        const dataState = useDataStore.getState()
+
+        if (dataState.analysis) {
+          // Create new chart object with empty dataMapping - user must configure
+          const newChart = {
+            id: chartId,
+            type: template.type,
+            title: template.name,
+            description: template.description,
+            dataKey: [], // Empty - user must configure
+            dataMapping: {}, // Empty - user must configure in customization panel
+          }
+
+          // Add to analysis.chartConfig
+          const updatedAnalysis = {
+            ...dataState.analysis,
+            chartConfig: [
+              ...(dataState.analysis.chartConfig || []),
+              newChart
+            ]
+          }
+
+          dataState.setAnalysis(updatedAnalysis)
+          logger.log('✅ [CHART_STORE] Added chart to analysis.chartConfig:', chartId)
+        }
+
         return chartId
       },
 
       removeChart: (chartId) => {
-        console.log('🗑️ [CHART_STORE] Removing chart:', chartId)
+        logger.log('🗑️ [CHART_STORE] Removing chart:', chartId)
         get().removeChartCustomization(chartId)
         get().addToHistory('chart_remove', { chartId })
       },
 
       duplicateChart: (chartId) => {
-        console.log('📋 [CHART_STORE] Duplicating chart:', chartId)
+        logger.log('📋 [CHART_STORE] Duplicating chart:', chartId)
         const state = get()
         const originalCustomization = state.chartCustomizations[chartId]
         if (!originalCustomization) return
@@ -666,30 +824,30 @@ export const useChartStore = create<ChartStore>()(
       },
 
       updateChartType: (chartId, type) => {
-        console.log('🔄 [CHART_STORE] Updating chart type:', { chartId, type })
+        logger.log('🔄 [CHART_STORE] Updating chart type:', { chartId, type })
         get().updateChartCustomization(chartId, { chartType: type })
         get().addToHistory('chart_type_change', { chartId, newType: type })
       },
 
       // Export actions (simplified - full implementation in original store)
       exportChart: async (chartId, format) => {
-        console.log('📤 [CHART_STORE] Exporting chart:', { chartId, format })
+        logger.log('📤 [CHART_STORE] Exporting chart:', { chartId, format })
         // Implementation would use html2canvas or similar
       },
 
       exportDashboard: async (format) => {
-        console.log('📤 [CHART_STORE] Exporting dashboard:', format)
+        logger.log('📤 [CHART_STORE] Exporting dashboard:', format)
         // Implementation would use html2canvas, jsPDF, or similar
       },
 
       generateShareableLink: async () => {
-        console.log('🔗 [CHART_STORE] Generating shareable link')
+        logger.log('🔗 [CHART_STORE] Generating shareable link')
         // Implementation would call API endpoint
         return 'shareable-link-placeholder'
       },
 
       clearCharts: () => {
-        console.log('🗑️ [CHART_STORE] Clearing all charts')
+        logger.log('🗑️ [CHART_STORE] Clearing all charts')
         set({
           chartCustomizations: {},
           draftChart: null,

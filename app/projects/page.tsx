@@ -9,7 +9,7 @@ import { AuthGateModal } from '@/components/auth/auth-gate-modal'
 import { useProjectStore } from '@/lib/stores/project-store'
 import { FileUploadCore } from '@/components/upload/file-upload-core'
 import { formatDistanceToNow } from 'date-fns'
-import { useDataStore } from '@/lib/store'
+import { useDataStore } from '@/lib/stores/data-store'
 import { MinimalHeader } from '@/components/ui/minimal-header'
 
 function ProjectsContent() {

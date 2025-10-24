@@ -4,8 +4,8 @@ import React, { useState } from 'react'
 import { Copy, Check, Mail, Link, Download, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useDataStore } from '@/lib/store'
 import { useSessionStore } from '@/lib/stores/session-store'
+import { useChartStore } from '@/lib/stores/chart-store'
 
 interface ShareDialogProps {
   isOpen: boolean
@@ -19,11 +19,9 @@ export function ShareDialog({ isOpen, onClose }: ShareDialogProps) {
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'link' | 'export'>('link')
 
-  // Modular store migration
+  // Modular store imports
   const currentSession = useSessionStore((state) => state.currentSession)
-
-  // These functions are still in monolithic store (to be migrated later)
-  const { generateShareableLink, exportDashboard } = useDataStore()
+  const { exportDashboard } = useChartStore()
 
   const handleGenerateLink = async () => {
     setIsGenerating(true)
@@ -37,12 +35,12 @@ export function ShareDialog({ isOpen, onClose }: ShareDialogProps) {
         setShareLink(fullUrl)
         return
       }
-      
+
       // Generate a shareable link
       const shareId = `${currentSession.id.slice(0, 8)}-${Date.now().toString(36)}`
       const fullUrl = `${window.location.origin}/dashboard?share=${shareId}`
       setShareLink(fullUrl)
-      
+
       // Store share data in localStorage for demo
       const shareData = {
         sessionId: currentSession.id,
@@ -81,25 +79,25 @@ export function ShareDialog({ isOpen, onClose }: ShareDialogProps) {
   if (!isOpen) return null
 
   return (
-    <div 
+    <div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <div 
+      <div
         className="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-xl font-semibold mb-4">Share Dashboard</h2>
-        
+
         {/* Tabs */}
         <div className="flex space-x-1 mb-4 p-1 bg-gray-100 rounded-lg">
           <button
             onClick={() => setActiveTab('link')}
             className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'link' 
-                ? 'bg-white text-gray-900 shadow-sm' 
+              activeTab === 'link'
+                ? 'bg-white text-gray-900 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >
@@ -109,8 +107,8 @@ export function ShareDialog({ isOpen, onClose }: ShareDialogProps) {
           <button
             onClick={() => setActiveTab('export')}
             className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'export' 
-                ? 'bg-white text-gray-900 shadow-sm' 
+              activeTab === 'export'
+                ? 'bg-white text-gray-900 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >
@@ -124,14 +122,14 @@ export function ShareDialog({ isOpen, onClose }: ShareDialogProps) {
             <p className="text-sm text-gray-600">
               Generate a shareable link to your dashboard. Anyone with the link can view your dashboard and charts.
             </p>
-            
+
             {error && (
               <div className="flex items-center space-x-2 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-600">
                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
                 <span>{error}</span>
               </div>
             )}
-            
+
             {!shareLink ? (
               <Button
                 onClick={handleGenerateLink}
@@ -161,7 +159,7 @@ export function ShareDialog({ isOpen, onClose }: ShareDialogProps) {
                     )}
                   </Button>
                 </div>
-                
+
                 <div className="flex space-x-2">
                   <Button
                     variant="outline"
@@ -184,7 +182,7 @@ export function ShareDialog({ isOpen, onClose }: ShareDialogProps) {
                 </div>
               </div>
             )}
-            
+
             <div className="pt-2 border-t">
               <p className="text-xs text-gray-500">
                 This link will be active for 30 days. {currentSession ? 'Your dashboard data is securely stored.' : 'Save your session to keep the link active.'}
@@ -196,7 +194,7 @@ export function ShareDialog({ isOpen, onClose }: ShareDialogProps) {
             <p className="text-sm text-gray-600">
               Export your dashboard as an image or data file.
             </p>
-            
+
             <div className="space-y-2">
               <Button
                 variant="outline"
@@ -225,7 +223,7 @@ export function ShareDialog({ isOpen, onClose }: ShareDialogProps) {
             </div>
           </div>
         )}
-        
+
         <div className="mt-6 flex justify-end">
           <Button variant="outline" onClick={onClose}>
             Close

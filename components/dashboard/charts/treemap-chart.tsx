@@ -56,7 +56,11 @@ export default function TreemapChart({
   dataMapping,
   customization = {},
 }: TreemapChartProps) {
-  const colors = customization.colors || DEFAULT_COLORS;
+  // Stabilize colors to prevent unnecessary recalculation
+  const colors = useMemo(() =>
+    customization.colors || DEFAULT_COLORS,
+    [customization.colors]
+  );
 
   const treeData = useMemo((): TreeNode => {
     if (!data || data.length === 0) {
@@ -68,9 +72,8 @@ export default function TreemapChart({
       data.some(row => row[dataMapping.parentCategory!]);
 
     if (hasParent && dataMapping.parentCategory) {
-      // Build hierarchical structure
+      // Build hierarchical structure WITH 80/20 rule applied at each level
       const parentMap = new Map<string, TreeNode>();
-      const orphans: TreeNode[] = [];
 
       data.forEach((row, index) => {
         const category = String(row[dataMapping.category] || 'Unknown');
@@ -107,6 +110,47 @@ export default function TreemapChart({
         }
       });
 
+      // Apply 80/20 rule to each parent's children (but keep at least top 3)
+      parentMap.forEach((parentNode) => {
+        if (parentNode.children && parentNode.children.length > 1) {
+          // Sort children by size
+          const sortedChildren = [...parentNode.children].sort((a, b) =>
+            (b.size || 0) - (a.size || 0)
+          );
+
+          // Always keep at least top 3-5 items OR items that make up 80% of value
+          const minItemsToShow = Math.min(5, sortedChildren.length);
+          const total = sortedChildren.reduce((sum, child) => sum + (child.size || 0), 0);
+          const threshold = total * 0.8;
+
+          let cumulative = 0;
+          const mainChildren: TreeNode[] = [];
+          const otherChildren: TreeNode[] = [];
+
+          sortedChildren.forEach((child, index) => {
+            // Keep item if: (1) it's in top 5 OR (2) we haven't reached 80% threshold yet
+            if (index < minItemsToShow || cumulative < threshold) {
+              mainChildren.push(child);
+              cumulative += child.size || 0;
+            } else {
+              otherChildren.push(child);
+            }
+          });
+
+          // Group remaining into "Others" (only if there are items to group)
+          if (otherChildren.length > 0) {
+            const othersTotal = otherChildren.reduce((sum, child) => sum + (child.size || 0), 0);
+            mainChildren.push({
+              name: 'Others',
+              size: othersTotal,
+              color: '#94a3b8', // gray
+            });
+          }
+
+          parentNode.children = mainChildren;
+        }
+      });
+
       // Collect all root nodes
       const roots = Array.from(parentMap.values()).filter(node => {
         // A node is root if it's not a child of any other node
@@ -116,12 +160,53 @@ export default function TreemapChart({
         return !isChild;
       });
 
+      // Also apply 80/20 rule to root level (but keep at least top 5-8 roots)
+      const sortedRoots = roots.sort((a, b) => {
+        const aTotal = a.size || (a.children?.reduce((sum, c) => sum + (c.size || 0), 0) || 0);
+        const bTotal = b.size || (b.children?.reduce((sum, c) => sum + (c.size || 0), 0) || 0);
+        return bTotal - aTotal;
+      });
+
+      const minRootsToShow = Math.min(8, sortedRoots.length);
+      const rootTotal = sortedRoots.reduce((sum, node) => {
+        const nodeTotal = node.size || (node.children?.reduce((s, c) => s + (c.size || 0), 0) || 0);
+        return sum + nodeTotal;
+      }, 0);
+
+      const rootThreshold = rootTotal * 0.8;
+      let rootCumulative = 0;
+      const mainRoots: TreeNode[] = [];
+      const otherRoots: TreeNode[] = [];
+
+      sortedRoots.forEach((root, index) => {
+        const rootValue = root.size || (root.children?.reduce((s, c) => s + (c.size || 0), 0) || 0);
+        // Keep item if: (1) it's in top 8 OR (2) we haven't reached 80% threshold yet
+        if (index < minRootsToShow || rootCumulative < rootThreshold) {
+          mainRoots.push(root);
+          rootCumulative += rootValue;
+        } else {
+          otherRoots.push(root);
+        }
+      });
+
+      // Group other roots (only if there are items to group)
+      if (otherRoots.length > 0) {
+        const othersTotal = otherRoots.reduce((sum, root) => {
+          return sum + (root.size || (root.children?.reduce((s, c) => s + (c.size || 0), 0) || 0));
+        }, 0);
+        mainRoots.push({
+          name: 'Others',
+          size: othersTotal,
+          color: '#94a3b8',
+        });
+      }
+
       return {
         name: 'root',
-        children: roots.length > 0 ? roots : orphans,
+        children: mainRoots,
       };
     } else {
-      // Flat structure - group by category
+      // Flat structure - group by category with 80/20 rule
       const categoryMap = new Map<string, number>();
 
       data.forEach((row) => {
@@ -134,13 +219,45 @@ export default function TreemapChart({
         );
       });
 
-      const children: TreeNode[] = Array.from(categoryMap.entries()).map(
-        ([name, size], index) => ({
-          name,
-          size,
-          color: colors[index % colors.length],
-        })
+      // Sort categories by value (descending)
+      const sortedCategories = Array.from(categoryMap.entries()).sort(
+        ([, a], [, b]) => b - a
       );
+
+      // Calculate total value
+      const totalValue = sortedCategories.reduce((sum, [, value]) => sum + value, 0);
+
+      // Apply 80/20 rule: keep categories until we reach 80% of total value
+      let cumulativeValue = 0;
+      const threshold = totalValue * 0.8;
+      const mainCategories: TreeNode[] = [];
+      const otherCategories: Array<[string, number]> = [];
+
+      sortedCategories.forEach(([name, size], index) => {
+        if (cumulativeValue < threshold) {
+          // Add to main categories
+          mainCategories.push({
+            name,
+            size,
+            color: colors[index % colors.length],
+          });
+          cumulativeValue += size;
+        } else {
+          // Add to "Others" group
+          otherCategories.push([name, size]);
+        }
+      });
+
+      // Create "Others" category if there are grouped items
+      const children: TreeNode[] = [...mainCategories];
+      if (otherCategories.length > 0) {
+        const othersTotal = otherCategories.reduce((sum, [, value]) => sum + value, 0);
+        children.push({
+          name: 'Others',
+          size: othersTotal,
+          color: '#94a3b8', // gray color for "Others"
+        });
+      }
 
       return {
         name: 'root',
@@ -160,11 +277,18 @@ export default function TreemapChart({
   const CustomContent = (props: any) => {
     const { x, y, width, height, name, value, depth, color } = props;
 
-    // Don't render if too small
-    if (width < 20 || height < 20) return null;
+    // Don't render the root node wrapper (depth 0)
+    if (depth === 0 || name === 'root') {
+      return null;
+    }
 
-    // Lighten child nodes
-    const fillColor = depth > 1 ? lightenColor(color, 20) : color;
+    // Don't render boxes that are too small
+    if (width < 20 || height < 20) {
+      return null;
+    }
+
+    // Use the provided color, or fallback
+    const fillColor = color || DEFAULT_COLORS[0];
 
     // Calculate if we can show text
     const showText = width > 40 && height > 25;
@@ -242,11 +366,13 @@ export default function TreemapChart({
     <div className="w-full h-full">
       <ResponsiveContainer width="100%" height="100%">
         <Treemap
-          data={treeData.children}
+          data={[treeData]}
           dataKey="size"
+          aspectRatio={4 / 3}
           stroke="#fff"
-          fill="#3b82f6"
+          fill="transparent"
           content={<CustomContent />}
+          isAnimationActive={false}
         >
           <Tooltip content={<CustomTooltip />} />
         </Treemap>

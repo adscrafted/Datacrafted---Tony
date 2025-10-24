@@ -5,12 +5,13 @@ import { Calendar, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils/cn'
+import { detectDateColumns, getBestDateColumn } from '@/lib/utils/date-detection'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, subDays, subMonths, startOfYear, endOfYear, subYears } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
 import { Calendar as CalendarComponent } from '@/components/ui/calendar'
-import { useDataStore as useMonolithicStore } from '@/lib/store'
 import { useDataStore } from '@/lib/stores/data-store'
 import { useChartStore } from '@/lib/stores/chart-store'
+import { useUIStore } from '@/lib/stores/ui-store'
 
 type Granularity = 'day' | 'week' | 'month' | 'quarter' | 'year'
 
@@ -25,10 +26,8 @@ export function DateRangeSelector({ className }: DateRangeSelectorProps) {
   const setDateRange = useChartStore((state) => state.setDateRange)
   const granularity = useChartStore((state) => state.granularity)
   const setGranularity = useChartStore((state) => state.setGranularity)
-
-  // selectedDateColumn still in monolithic store (to be migrated later)
-  const selectedDateColumn = useMonolithicStore((state) => state.selectedDateColumn)
-  const setSelectedDateColumn = useMonolithicStore((state) => state.setSelectedDateColumn)
+  const selectedDateColumn = useUIStore((state) => state.selectedDateColumn)
+  const setSelectedDateColumn = useUIStore((state) => state.setSelectedDateColumn)
 
   const [date, setDate] = useState<DateRange | undefined>(dateRange || undefined)
   const [isOpen, setIsOpen] = useState(false)
@@ -48,41 +47,12 @@ export function DateRangeSelector({ className }: DateRangeSelectorProps) {
   useEffect(() => {
     console.log('🔍 [DateRangeSelector] Checking for date columns:', {
       hasRawData: !!rawData,
-      rawDataLength: rawData?.length || 0
+      rawDataLength: rawData?.length || 0,
+      firstRow: rawData?.[0]
     })
     if (rawData && rawData.length > 0) {
-      // Check if data has date columns
-      const firstRow = rawData[0]
-      const foundDateColumns = Object.keys(firstRow).filter(key => {
-        const value = firstRow[key]
-        if (!value) return false
-
-        // Check if it's a Date object first (most reliable)
-        if (value instanceof Date) return true
-
-        // For strings, use strict date pattern matching
-        if (typeof value === 'string') {
-          // Strict patterns for common date formats
-          const strictDatePattern = /^\d{4}-\d{2}-\d{2}(T|\s|$)|^\d{2}\/\d{2}\/\d{4}$|^\d{4}\/\d{2}\/\d{2}$/
-          if (strictDatePattern.test(value.trim())) return true
-
-          // Also check if Date.parse works AND the parsed date is reasonable (year 1900-2100)
-          const parsed = Date.parse(value)
-          if (!isNaN(parsed)) {
-            const date = new Date(parsed)
-            const year = date.getFullYear()
-            // Only accept dates between 1900-2100 to filter out numeric IDs
-            if (year >= 1900 && year <= 2100) {
-              // Additional check: must contain date separators (-, /) or time indicators
-              if (/[-\/T:]/.test(value)) {
-                return true
-              }
-            }
-          }
-        }
-
-        return false
-      })
+      // Use shared utility to detect date columns
+      const foundDateColumns = detectDateColumns(rawData)
 
       console.log('✅ [DateRangeSelector] Found date columns:', foundDateColumns)
       setDateColumns(foundDateColumns)

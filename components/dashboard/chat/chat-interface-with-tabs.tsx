@@ -4,7 +4,9 @@ import React, { useState, useRef, useEffect } from 'react'
 import { MessageCircle, X, Send, RotateCcw, Download, Loader2, Sparkles, BarChart3, ChevronDown, Zap, PanelLeftClose } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useDataStore, type ChatMessage } from '@/lib/store'
+import { useDataStore } from '@/lib/stores/data-store'
+import { useChatStore, type ChatMessage } from '@/lib/stores/chat-store'
+import { useChartStore } from '@/lib/stores/chart-store'
 import { ChatMessages } from './chat-messages'
 import { ExampleQuestions } from './example-questions'
 import { ChartSuggestions } from './chart-suggestions'
@@ -22,22 +24,25 @@ export const ChatInterfaceWithTabs = React.memo(function ChatInterfaceWithTabs({
   tabAnalyses,
   setTabAnalyses
 }: ChatInterfaceWithTabsProps) {
-  const {
-    fileName,
-    rawData,
-    analysis,
-    chatMessages,
-    isChatOpen,
-    isChatLoading,
-    chatError,
-    setIsChatOpen,
-    setIsChatLoading,
-    setChatError,
-    addChatMessage,
-    clearChatHistory,
-    selectedChartId,
-    chartCustomizations
-  } = useDataStore()
+  // Data store - selective subscriptions
+  const fileName = useDataStore((state) => state.fileName)
+  const rawData = useDataStore((state) => state.rawData)
+  const analysis = useDataStore((state) => state.analysis)
+
+  // Chat store - selective subscriptions
+  const chatMessages = useChatStore((state) => state.chatMessages)
+  const isChatOpen = useChatStore((state) => state.isChatOpen)
+  const isChatLoading = useChatStore((state) => state.isChatLoading)
+  const chatError = useChatStore((state) => state.chatError)
+  const setIsChatOpen = useChatStore((state) => state.setIsChatOpen)
+  const setIsChatLoading = useChatStore((state) => state.setIsChatLoading)
+  const setChatError = useChatStore((state) => state.setChatError)
+  const addChatMessage = useChatStore((state) => state.addChatMessage)
+  const clearChatHistory = useChatStore((state) => state.clearChatHistory)
+
+  // Chart store - selective subscriptions
+  const selectedChartId = useChartStore((state) => state.selectedChartId)
+  const chartCustomizations = useChartStore((state) => state.chartCustomizations)
 
   const [message, setMessage] = useState('')
   const [isExpanded, setIsExpanded] = useState(false)
@@ -49,7 +54,7 @@ export const ChatInterfaceWithTabs = React.memo(function ChatInterfaceWithTabs({
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
-  
+
   const { regenerateChartFromSuggestion } = useChartRegenerationWithTabs({
     activeTabId,
     tabAnalyses,
@@ -162,7 +167,7 @@ export const ChatInterfaceWithTabs = React.memo(function ChatInterfaceWithTabs({
       })
 
       if (!response.ok) {
-        throw new Error(response.status === 429 
+        throw new Error(response.status === 429
           ? 'Too many requests. Please wait a moment before trying again.'
           : 'Failed to get response from AI assistant'
         )
@@ -200,7 +205,7 @@ export const ChatInterfaceWithTabs = React.memo(function ChatInterfaceWithTabs({
                     addChatMessage(assistantMessage)
                     setStreamingMessage('')
                     setIsStreaming(false)
-                    
+
                     // Extract chart suggestions from the final message
                     const suggestions = extractChartSuggestions(accumulatedContent)
                     setChartSuggestions(suggestions)
@@ -229,16 +234,16 @@ export const ChatInterfaceWithTabs = React.memo(function ChatInterfaceWithTabs({
       } else {
         // Handle non-streaming response
         const data = await response.json()
-        
+
         const assistantMessage: ChatMessage = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
           content: data.message,
           timestamp: data.timestamp
         }
-        
+
         addChatMessage(assistantMessage)
-        
+
         // Extract and set chart suggestions
         const suggestions = extractChartSuggestions(data.message)
         setChartSuggestions(suggestions)
@@ -284,16 +289,16 @@ export const ChatInterfaceWithTabs = React.memo(function ChatInterfaceWithTabs({
         timestamp: new Date().toISOString()
       }
       addChatMessage(chartMessage)
-      
+
       // Clear suggestions after applying
       setChartSuggestions([])
-      
+
       // Show success feedback
       const successToast = document.createElement('div')
       successToast.className = 'fixed bottom-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-fade-in'
       successToast.textContent = 'Chart added to dashboard!'
       document.body.appendChild(successToast)
-      
+
       setTimeout(() => {
         successToast.remove()
       }, 3000)
@@ -356,7 +361,7 @@ export const ChatInterfaceWithTabs = React.memo(function ChatInterfaceWithTabs({
         <div className="flex-1 overflow-y-auto">
           {chatMessages.length === 0 && !streamingMessage ? (
             <div className="p-4 space-y-4">
-              <ExampleQuestions 
+              <ExampleQuestions
                 onQuestionClick={(question) => {
                   // Send the question directly without relying on state
                   handleSendMessage(question)
@@ -365,8 +370,8 @@ export const ChatInterfaceWithTabs = React.memo(function ChatInterfaceWithTabs({
               />
             </div>
           ) : (
-            <ChatMessages 
-              messages={chatMessages} 
+            <ChatMessages
+              messages={chatMessages}
               streamingMessage={streamingMessage}
               isStreaming={isStreaming}
             />
@@ -383,7 +388,7 @@ export const ChatInterfaceWithTabs = React.memo(function ChatInterfaceWithTabs({
 
         {/* Chart Suggestions */}
         {chartSuggestions.length > 0 && (
-          <ChartSuggestions 
+          <ChartSuggestions
             suggestions={chartSuggestions}
             onApplySuggestion={handleApplyChartSuggestion}
           />
@@ -404,7 +409,7 @@ export const ChatInterfaceWithTabs = React.memo(function ChatInterfaceWithTabs({
               </span>
               <ChevronDown className={`h-3 w-3 transition-transform ${showChartSelector ? 'rotate-180' : ''}`} />
             </button>
-            
+
             {showChartSelector && (
               <div className="absolute bottom-full left-0 mb-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
                 {chartTypes.map(type => (

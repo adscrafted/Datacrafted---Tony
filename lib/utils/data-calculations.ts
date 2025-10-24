@@ -12,6 +12,7 @@
  */
 
 import type { DataRow } from '@/lib/store'
+import { isValidDate } from '@/lib/utils/date-detection'
 
 // ============================================================================
 // Security Constants
@@ -905,7 +906,7 @@ export function calculateScorecardValue(
 
   // Check if this is a date column
   const sampleValue = rawValues[0]
-  const isDateColumn = typeof sampleValue === 'string' && !isNaN(Date.parse(sampleValue))
+  const isDateColumn = isValidDate(sampleValue)
 
   // Debug logging for MIN/MAX aggregations
   if (aggregationType === 'min' || aggregationType === 'max') {

@@ -76,7 +76,12 @@ async function syncUserAndMigrateProjects(user: User, setSyncing: (syncing: bool
     const syncResult = await syncUserToDatabase(user)
 
     if (!syncResult.success) {
-      console.error('❌ [AUTH] Failed to sync user to database:', syncResult.error)
+      // Only log as warning if it's a database connection issue
+      if (syncResult.error?.includes('Database temporarily unavailable')) {
+        console.warn('⚠️ [AUTH] Database sync unavailable, using local storage only')
+      } else {
+        console.error('❌ [AUTH] Failed to sync user to database:', syncResult.error)
+      }
       // Continue with project migration even if sync fails
     } else {
       console.log('✅ [AUTH] User synced to database:', syncResult.user?.id)

@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
-import { useDataStore, type AnalysisResult } from '@/lib/store'
+import { useDataStore, type AnalysisResult } from '@/lib/stores/data-store'
+import { useChartStore } from '@/lib/stores/chart-store'
 import type { ChartSuggestion } from '@/lib/services/chat-service'
 
 // Helper function to get default chart dimensions based on type
@@ -79,7 +80,9 @@ function buildDataMapping(chartType: string, columns: string[]): any {
 }
 
 export function useChartRegeneration() {
-  const { analysis, setAnalysis, updateChartCustomization } = useDataStore()
+  const analysis = useDataStore((state) => state.analysis)
+  const setAnalysis = useDataStore((state) => state.setAnalysis)
+  const updateChartCustomization = useChartStore((state) => state.updateChartCustomization)
 
   const regenerateChartFromSuggestion = useCallback((suggestion: ChartSuggestion) => {
     if (!analysis) return
@@ -149,7 +152,7 @@ export function useChartRegeneration() {
     }
 
     setAnalysis(updatedAnalysis)
-    
+
     return newChartConfig
   }, [analysis, setAnalysis])
 
@@ -157,7 +160,7 @@ export function useChartRegeneration() {
     if (!analysis || chartIndex < 0 || chartIndex >= analysis.chartConfig.length) return
 
     const updatedChartConfig = analysis.chartConfig.filter((_, index) => index !== chartIndex)
-    
+
     const updatedAnalysis: AnalysisResult = {
       ...analysis,
       chartConfig: updatedChartConfig,

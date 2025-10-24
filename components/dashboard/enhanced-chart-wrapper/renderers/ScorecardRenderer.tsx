@@ -1,6 +1,8 @@
 import React from 'react'
 import { Scorecard } from '../../scorecard'
-import type { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/stores/data-store'
+import { logger } from '@/lib/utils/logger'
+import { shallowArrayEqual } from '@/lib/utils/react-helpers'
 
 interface ScorecardRendererProps {
   chartData: DataRow[]
@@ -10,7 +12,7 @@ interface ScorecardRendererProps {
   title: string
 }
 
-export const ScorecardRenderer: React.FC<ScorecardRendererProps> = ({
+const ScorecardRendererComponent: React.FC<ScorecardRendererProps> = ({
   chartData,
   safeDataKey,
   customization,
@@ -33,7 +35,7 @@ export const ScorecardRenderer: React.FC<ScorecardRendererProps> = ({
   // Get aggregation type - check customization first, then dataMapping, default to 'sum'
   const aggregationType = customization?.aggregation || effectiveMapping?.aggregation || 'sum'
 
-  console.log(`🔍 [SCORECARD_RENDERER] ${title} - Calculating:`, {
+  logger.log(`🔍 [SCORECARD_RENDERER] ${title} - Calculating:`, {
     key,
     aggregationType,
     chartDataLength: chartData.length,
@@ -70,3 +72,28 @@ export const ScorecardRenderer: React.FC<ScorecardRendererProps> = ({
     />
   )
 }
+
+ScorecardRendererComponent.displayName = 'ScorecardRendererComponent'
+
+export const ScorecardRenderer = React.memo(ScorecardRendererComponent, (prevProps, nextProps) => {
+  // Custom comparison: only re-render if data or config actually changed
+  const shouldSkipRender = (
+    prevProps.chartData === nextProps.chartData &&
+    prevProps.customization === nextProps.customization &&
+    prevProps.configDataMapping === nextProps.configDataMapping &&
+    prevProps.title === nextProps.title &&
+    shallowArrayEqual(prevProps.safeDataKey, nextProps.safeDataKey)
+  )
+
+  if (!shouldSkipRender) {
+    logger.log(`🔍 [ScorecardRenderer] ${nextProps.title} - Re-rendering due to prop changes:`, {
+      chartDataChanged: prevProps.chartData !== nextProps.chartData,
+      customizationChanged: prevProps.customization !== nextProps.customization,
+      configDataMappingChanged: prevProps.configDataMapping !== nextProps.configDataMapping,
+      titleChanged: prevProps.title !== nextProps.title,
+      safeDataKeyChanged: !shallowArrayEqual(prevProps.safeDataKey, nextProps.safeDataKey)
+    })
+  }
+
+  return shouldSkipRender
+})

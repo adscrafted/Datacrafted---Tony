@@ -1,5 +1,5 @@
 import React from 'react'
-import type { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/stores/data-store'
 
 const SparklineChart = React.lazy(() => import('../../charts/sparkline-chart'))
 
@@ -41,7 +41,6 @@ export const SparklineRenderer: React.FC<SparklineRendererProps> = ({
           xAxis: xField,
           yAxis: yField
         }}
-        height={customization?.height || 80}
         color={customization?.color || colors[0] || '#3b82f6'}
         showTooltip={customization?.showTooltip !== false}
         showDots={customization?.showDots || false}

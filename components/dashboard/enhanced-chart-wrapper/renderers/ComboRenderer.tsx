@@ -11,7 +11,7 @@ import {
   Tooltip,
   Legend
 } from 'recharts'
-import type { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/stores/data-store'
 import { CustomActiveDot } from '../components/CustomDot'
 import { renderCollapsibleLegend } from '../../collapsible-legend'
 import { COMBO_COLORS } from '../constants'

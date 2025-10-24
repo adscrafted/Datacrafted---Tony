@@ -1,5 +1,6 @@
 import React from 'react'
-import type { ChartType, DataRow } from '@/lib/store'
+import type { ChartType } from '@/lib/stores/chart-store'
+import type { DataRow } from '@/lib/stores/data-store'
 import type { DualAxisConfig } from '../types'
 
 interface UseDualAxisOptions {

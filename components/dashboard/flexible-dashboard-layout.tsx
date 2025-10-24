@@ -10,6 +10,7 @@ import { EnhancedChartWrapper } from './enhanced-chart-wrapper'
 import { ChartTemplateGallery } from './chart-template-gallery'
 import { ChartCustomizationPanel } from './chart-customization-panel'
 import { DateRangeSelector } from './date-range-selector'
+import { AdvancedFilterSystem } from './advanced-filter-system'
 import { useDataStore } from '@/lib/stores/data-store'
 import { useChartStore } from '@/lib/stores/chart-store'
 import { useUIStore } from '@/lib/stores/ui-store'
@@ -44,6 +45,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
   const [selectedChartId, setSelectedChartId] = useState<string | null>(null)
   const [newlyAddedChartId, setNewlyAddedChartId] = useState<string | null>(null) // Track newly added chart by ID
   const [layoutKey, setLayoutKey] = useState(0) // Force re-render key
+  const [isResettingLayout, setIsResettingLayout] = useState(false) // Prevent auto-save after reset
 
   // Refs
   const layoutChangeTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -298,13 +300,17 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
 
     switch (effectiveType) {
       case 'scorecard':
-        // Scorecards: compact size - 2 columns wide, 1 row tall
+        // Scorecards: 2x1 grid size - 2 columns wide, 1 row tall for 1:1 aspect ratio
         return { w: 2, h: 1 }
 
       case 'sparkline':
-        // Sparklines: compact trend indicators - 3 columns wide, 2 rows tall (300x400px)
-        console.log('📐 [getFixedDimensions] Returning sparkline size: { w: 3, h: 2 }')
-        return { w: 3, h: 2 }
+        // Sparklines: 2 per row, half the height of regular charts - 6 columns wide, 2 rows tall
+        console.log('📐 [getFixedDimensions] Returning sparkline size:', {
+          chartId,
+          type: 'sparkline',
+          returning: { w: 6, h: 2 }
+        })
+        return { w: 6, h: 2 }
 
       case 'table':
         // Tables need full width and more height: 960x1200px
@@ -360,7 +366,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     const SCORECARD_HEIGHT = 1
     const GRID_COLS = 12
 
-    // Position scorecards in 2-column grid at top
+    // Position scorecards in grid at top (6 scorecards per row, 1 row tall)
     let maxScorecardY = 0 // Track the bottom-most scorecard Y position
     scorecards.forEach(({ config, chartId }) => {
       if (currentX + SCORECARD_WIDTH > GRID_COLS) {
@@ -374,6 +380,13 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         w: SCORECARD_WIDTH,
         h: SCORECARD_HEIGHT
       }
+
+      console.log('📊 [SCORECARD_POSITION] Setting scorecard position:', {
+        chartId,
+        position: positions[chartId],
+        SCORECARD_WIDTH,
+        SCORECARD_HEIGHT
+      })
 
       // Track the maximum Y value (bottom-most position)
       maxScorecardY = Math.max(maxScorecardY, currentY)
@@ -392,6 +405,14 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     otherCharts.forEach(({ config, chartId }) => {
       const dims = getFixedDimensions(config, chartId)
 
+      console.log('📍 [CALCULATE_POSITIONS] Processing chart:', {
+        chartId,
+        type: config.type,
+        dims,
+        currentX,
+        currentY
+      })
+
       // If current chart doesn't fit in the current row, move to next row
       if (currentX + dims.w > GRID_COLS) {
         currentX = 0
@@ -404,6 +425,8 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         w: dims.w,
         h: dims.h
       }
+
+      console.log('📍 [CALCULATE_POSITIONS] Assigned position:', positions[chartId])
 
       // Track the maximum Y value for other charts
       maxOtherChartsY = Math.max(maxOtherChartsY, currentY + dims.h)
@@ -434,6 +457,10 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
 
   // Reset layout to default positions
   const performLayoutReset = useCallback(() => {
+    // Set flag to prevent auto-save for 2 seconds after reset
+    setIsResettingLayout(true)
+    setTimeout(() => setIsResettingLayout(false), 2000)
+
     // CRITICAL FIX: Filter out invisible charts before calculating positions
     // This prevents gaps where hidden charts would be positioned
     const visibleCharts = sortedCharts.filter(config => {
@@ -476,24 +503,53 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
 
   // Initialize positions on first load - SIMPLE AND CLEAN
   const hasInitialized = useRef(false)
-  useEffect(() => {
-    // Only run once per mount
-    if (hasInitialized.current) return
+  const lastChartCount = useRef(0)
 
+  useEffect(() => {
     // Wait for charts to be available
     if (!sortedCharts || sortedCharts.length === 0) return
 
-    // Check if any visible charts are missing positions
+    // Reset initialization flag if chart count changed (new data uploaded)
+    if (sortedCharts.length !== lastChartCount.current) {
+      console.log('📊 [LAYOUT_INIT] Chart count changed:', lastChartCount.current, '→', sortedCharts.length)
+      hasInitialized.current = false
+      lastChartCount.current = sortedCharts.length
+    }
+
+    // Only run once per chart set
+    if (hasInitialized.current) return
+
+    // Check if any visible charts are missing positions OR have incorrect sparkline dimensions
     const needsLayout = sortedCharts.some(config => {
       const originalIndex = analysis.chartConfig.indexOf(config)
       const chartId = config.id || `chart-${originalIndex}`
       const customization = chartCustomizations[chartId]
       const isVisible = customization?.isVisible !== false
-      return isVisible && !customization?.position
+
+      if (!isVisible) return false
+
+      // Missing position entirely
+      if (!customization?.position) return true
+
+      // Check for sparklines with incorrect dimensions (should be w:6, h:2)
+      const effectiveType = customization?.chartType || config.type
+      if (effectiveType === 'sparkline' && (customization.position.w !== 6 || customization.position.h !== 2)) {
+        console.log('📊 [LAYOUT_INIT] Found sparkline with incorrect dimensions:', {
+          chartId,
+          currentDimensions: { w: customization.position.w, h: customization.position.h },
+          expectedDimensions: { w: 6, h: 2 }
+        })
+        return true
+      }
+
+      return false
     })
+
+    console.log('📊 [LAYOUT_INIT] needsLayout:', needsLayout, 'chartCount:', sortedCharts.length)
 
     if (needsLayout) {
       hasInitialized.current = true
+      console.log('📊 [LAYOUT_INIT] Performing initial layout reset')
       // Use same logic as Reset Layout button - no delays, no complexity
       performLayoutReset()
     }
@@ -532,10 +588,19 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       // This prevents React Grid Layout from trying to position charts with undefined positions
       // which could cause layout issues and ghost spots
       if (!customization?.position) {
+        console.warn('⚠️ [LAYOUT_ITEMS] Chart missing position, skipping:', chartId, config.type)
         return
       }
 
       const position = customization.position
+
+      console.log('🔷 [LAYOUT_ITEMS] Creating layout item:', {
+        chartId,
+        type: config.type,
+        effectiveType: customization?.chartType || config.type,
+        position,
+        isScorecard: (customization?.chartType || config.type) === 'scorecard'
+      })
 
       // CRITICAL FIX: Use EFFECTIVE type (considering customization overrides)
       // This fixes the sizing issue where scorecards were sized as regular charts
@@ -550,10 +615,10 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         y: position.y,
         w: position.w,
         h: position.h,
-        minW: isScorecard ? 2 : isSparkline ? 3 : isTable ? 8 : 4,
+        minW: isScorecard ? 2 : isSparkline ? 6 : isTable ? 8 : 4,
         minH: isScorecard ? 1 : isSparkline ? 2 : 2,
         maxW: isScorecard ? 2 : isTable ? 12 : 12,
-        maxH: isScorecard ? 1 : isSparkline ? 3 : 10,
+        maxH: isScorecard ? 1 : isSparkline ? 2 : 10,
         isResizable: !isScorecard,
         static: false
       })
@@ -623,7 +688,8 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       batchUpdateChartCustomizations(updates)
 
       // OPTIMIZATION: Debounced auto-save with cleanup
-      if (autoSaveLayouts && currentProjectId) {
+      // CRITICAL FIX: Don't auto-save if we're resetting layout
+      if (autoSaveLayouts && currentProjectId && !isResettingLayout) {
         if (autoSaveTimerRef.current) {
           clearTimeout(autoSaveTimerRef.current)
         }
@@ -639,7 +705,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
         }, 10000) // PERFORMANCE: Increased to 10 seconds to reduce re-render triggers from auto-save
       }
     }, 150) // 150ms throttle - balance between responsiveness and performance
-  }, [batchUpdateChartCustomizations, autoSaveLayouts, validateLayout, currentProjectId, chartCustomizations, currentLayout, dashboardFilters, currentTheme, saveDashboardConfig, sortedCharts, analysis.chartConfig])
+  }, [batchUpdateChartCustomizations, autoSaveLayouts, validateLayout, currentProjectId, chartCustomizations, currentLayout, dashboardFilters, currentTheme, saveDashboardConfig, sortedCharts, analysis.chartConfig, isResettingLayout])
 
   // Auto-clear newly added chart flag after 5 seconds (safety net)
   useEffect(() => {
@@ -729,6 +795,9 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
           </Button>
         </div>
       )}
+
+      {/* Advanced Filter System */}
+      <AdvancedFilterSystem className="mb-4" />
 
       {/* No Data for Date Range Empty State */}
       {filteredData.length === 0 && data.length > 0 && (dateRange?.from || dateRange?.to) ? (

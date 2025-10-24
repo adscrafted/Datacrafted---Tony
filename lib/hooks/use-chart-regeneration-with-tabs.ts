@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { useDataStore, type AnalysisResult } from '@/lib/store'
+import { useDataStore, type AnalysisResult } from '@/lib/stores/data-store'
 import type { ChartSuggestion } from '@/lib/services/chat-service'
 
 interface UseChartRegenerationWithTabsProps {
@@ -13,7 +13,8 @@ export function useChartRegenerationWithTabs({
   tabAnalyses,
   setTabAnalyses
 }: UseChartRegenerationWithTabsProps) {
-  const { analysis, setAnalysis } = useDataStore()
+  const analysis = useDataStore((state) => state.analysis)
+  const setAnalysis = useDataStore((state) => state.setAnalysis)
 
   const regenerateChartFromSuggestion = useCallback((suggestion: ChartSuggestion) => {
     // Check if we're on a dashboard tab
@@ -58,7 +59,7 @@ export function useChartRegenerationWithTabs({
     if (activeTabId === 'dashboard-1') {
       setAnalysis(updatedTabAnalysis)
     }
-    
+
     return newChartConfig
   }, [activeTabId, tabAnalyses, setTabAnalyses, analysis, setAnalysis])
 
@@ -101,7 +102,7 @@ export function useChartRegenerationWithTabs({
     if (activeTabId === 'dashboard-1') {
       setAnalysis(updatedTabAnalysis)
     }
-    
+
     return newChartConfig
   }, [activeTabId, tabAnalyses, setTabAnalyses, setAnalysis])
 
@@ -114,16 +115,16 @@ export function useChartRegenerationWithTabs({
     const currentTabAnalysis = tabAnalyses[activeTabId]
     if (!currentTabAnalysis) return
 
-    const chartToRemove = currentTabAnalysis.chartConfig.find((c: any) => 
+    const chartToRemove = currentTabAnalysis.chartConfig.find((c: any) =>
       (c.id || `chart-${currentTabAnalysis.chartConfig.indexOf(c)}`) === chartId
     )
-    
+
     if (!chartToRemove) return
 
-    const updatedChartConfig = currentTabAnalysis.chartConfig.filter((c: any) => 
+    const updatedChartConfig = currentTabAnalysis.chartConfig.filter((c: any) =>
       (c.id || `chart-${currentTabAnalysis.chartConfig.indexOf(c)}`) !== chartId
     )
-    
+
     const updatedTabAnalysis: AnalysisResult = {
       ...currentTabAnalysis,
       chartConfig: updatedChartConfig,

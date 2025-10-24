@@ -170,7 +170,14 @@ export const useUIStore = create<UIStore>((set) => ({
 
   // Upload status actions
   setUploadProgress: (progress) => {
-    set({ uploadProgress: progress })
+    const currentProgress = useUIStore.getState().uploadProgress
+    if (progress < currentProgress) {
+      console.warn('⚠️ [UI_STORE] Progress going backwards:', currentProgress, '→', progress, '- preventing backwards jump')
+      // Prevent backwards progress by using max of current and new
+      set({ uploadProgress: Math.max(currentProgress, progress) })
+    } else {
+      set({ uploadProgress: progress })
+    }
   },
 
   setUploadStage: (stage) => {

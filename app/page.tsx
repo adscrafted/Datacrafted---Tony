@@ -21,7 +21,7 @@ export default function Home() {
   const setUploadComplete = useUIStore((state) => state.setUploadComplete)
   const setUploadProjectId = useUIStore((state) => state.setUploadProjectId)
   const setUploadProgress = useUIStore((state) => state.setUploadProgress)
-  const setUploadStage = useUIStore((state) => state.setUploadStage)
+  const setUploadStage = useUIStore((state) => state.setUploadStage) ?? (() => {})
 
   // Auth modal state
   const [showAuthModal, setShowAuthModal] = useState(false)
@@ -67,9 +67,9 @@ export default function Home() {
         hasSchema: !!currentState.dataSchema
       })
 
-      // Stage 1: Creating project
+      // Stage 1: Creating project (continue from parser completion at ~70%)
       setUploadStage('creating')
-      setUploadProgress(70)
+      setUploadProgress(71)
 
       // Create a new project with the uploaded file data
       const project = await createProject({

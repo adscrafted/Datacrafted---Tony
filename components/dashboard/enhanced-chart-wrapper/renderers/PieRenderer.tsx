@@ -1,6 +1,6 @@
 import React from 'react'
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from 'recharts'
-import type { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/stores/data-store'
 import type { ChartRendererProps } from '../types'
 import { renderCollapsibleLegend } from '../../collapsible-legend'
 

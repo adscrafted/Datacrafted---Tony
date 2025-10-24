@@ -1,14 +1,13 @@
 /**
  * Comprehensive type definitions for advanced chart types
  *
- * This file defines strict TypeScript types for 9 advanced chart types:
+ * This file defines strict TypeScript types for 8 advanced chart types:
  * - Waterfall Chart
  * - Heatmap Chart
  * - Gauge/Radial Chart
  * - Cohort Retention Grid
  * - Bullet Chart
  * - Treemap Chart
- * - Sankey Diagram
  * - Sparkline Chart
  * - 100% Stacked Charts
  *

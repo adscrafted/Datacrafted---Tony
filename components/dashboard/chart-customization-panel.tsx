@@ -2,25 +2,29 @@
 
 import React, { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Settings, Eye, EyeOff, Palette, Type, BarChart3, Move, Maximize2 as Resize, Copy, RotateCcw, Download, Save, Database, Sparkles, Loader2 } from 'lucide-react'
+import { Settings, Eye, EyeOff, Palette, Type, BarChart3, Move, Maximize2 as Resize, Copy, RotateCcw, Download, Save, Database, Sparkles, Loader2, Filter } from 'lucide-react'
+import { InlineFilter } from './chart-customization-panel/InlineFilter'
 import { cn } from '@/lib/utils/cn'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ColorPicker } from '@/components/ui/color-picker'
-import { useDataStore, type ChartCustomization } from '@/lib/store'
+import { useDataStore } from '@/lib/stores/data-store'
+import { useChartStore, type ChartCustomization } from '@/lib/stores/chart-store'
 import { debug } from '@/lib/debug'
+import { isFieldAllowedForChart, getFieldTypeHelpText } from '@/lib/utils/chart-field-validation'
 
 interface ChartCustomizationPanelProps {
   chartId: string
   title: string
   description: string
-  chartType: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo' | 'waterfall' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline'
+  chartType: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo' | 'waterfall' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sparkline'
   customization?: ChartCustomization
   onCustomizationChange: (chartId: string, customization: Partial<ChartCustomization>) => void
   className?: string
   initialTab?: 'general' | 'data' | 'style' | 'axes' | 'actions' // New prop to control initial tab
   configDataMapping?: any // Original chart config dataMapping for fallback display
   autoOpen?: boolean // Auto-open the panel
+  data?: any[] // Actual chart data passed from parent
 }
 
 const chartTypeOptions = [
@@ -38,7 +42,6 @@ const chartTypeOptions = [
   { value: 'cohort', label: 'Cohort Analysis', icon: '👥' },
   { value: 'bullet', label: 'Bullet Chart', icon: '🎯' },
   { value: 'treemap', label: 'Treemap', icon: '🗺️' },
-  { value: 'sankey', label: 'Sankey Diagram', icon: '🌊' },
   { value: 'sparkline', label: 'Sparkline', icon: '✨' }
 ] as const
 
@@ -52,14 +55,25 @@ export function ChartCustomizationPanel({
   className,
   initialTab,
   configDataMapping,
-  autoOpen
+  autoOpen,
+  data
 }: ChartCustomizationPanelProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'general' | 'data' | 'style' | 'axes' | 'actions'>(initialTab || 'general')
   const [mounted, setMounted] = useState(false)
   const [isGeneratingTitle, setIsGeneratingTitle] = useState(false)
   const [generationError, setGenerationError] = useState<string | null>(null)
-  const { exportChart, addToHistory, dataSchema, rawData, draftChart, commitDraftChart, setDraftChart } = useDataStore()
+
+  // Data store - for data schema and raw data
+  const dataSchema = useDataStore((state) => state.dataSchema)
+  const rawData = useDataStore((state) => state.rawData)
+
+  // Chart store - for draft chart, customization actions
+  const draftChart = useChartStore((state) => state.draftChart)
+  const commitDraftChart = useChartStore((state) => state.commitDraftChart)
+  const setDraftChart = useChartStore((state) => state.setDraftChart)
+  const addToHistory = useChartStore((state) => state.addToHistory)
+  const exportChart = useChartStore((state) => state.exportChart)
 
   React.useEffect(() => {
     setMounted(true)
@@ -423,15 +437,6 @@ export function ChartCustomizationPanel({
                                 }
                                 break
 
-                              case 'sankey':
-                                // Try to preserve source/target if they exist
-                                newMapping = {
-                                  source: currentMapping.source || currentMapping.xAxis,
-                                  target_node: currentMapping.target_node || currentMapping.yAxis,
-                                  value: currentMapping.value || currentMapping.values?.[0]
-                                }
-                                break
-
                               case 'bullet':
                                 // Map metrics to actual/comparative
                                 newMapping = {
@@ -648,19 +653,30 @@ export function ChartCustomizationPanel({
                             {(effectiveDataMapping?.xAxis || effectiveDataMapping?.category) ? (
                               <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
                                 <span className="text-sm text-blue-800">{effectiveDataMapping.xAxis || effectiveDataMapping.category}</span>
-                                <button
-                                  onClick={() => handleUpdate({
+                                <div className="flex items-center gap-1">
+                                  <InlineFilter
+                                    column={effectiveDataMapping.xAxis || effectiveDataMapping.category}
+                                    columnType={dataSchema?.columns.find(c => c.name === (effectiveDataMapping.xAxis || effectiveDataMapping.category))?.type as any || 'string'}
+                                    data={data || rawData || []}
+                                    filters={customization?.filters}
+                                    onFiltersChange={(filters) => {
+                                      onCustomizationChange(chartId, { filters })
+                                    }}
+                                  />
+                                  <button
+                                    onClick={() => handleUpdate({
                                     dataMapping: {
                                       ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
                                       ...customization?.dataMapping,
                                       xAxis: undefined,
                                       category: undefined
                                     }
-                                  })}
-                                  className="text-blue-600 hover:text-blue-800 text-xs"
-                                >
-                                  Remove
-                                </button>
+                                    })}
+                                    className="text-blue-600 hover:text-blue-800 text-xs"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
@@ -687,7 +703,14 @@ export function ChartCustomizationPanel({
                                   e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
                                   try {
                                     const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                    if (data.fieldType === 'number') {
+                                    // Use intelligent field validation
+                                    const allowField = isFieldAllowedForChart(
+                                      effectiveChartType as any,
+                                      'yAxis1',
+                                      data.fieldType
+                                    )
+
+                                    if (allowField) {
                                       // Support both yAxis1 and yAxis (check both sources)
                                       const currentYAxis1 = customization?.dataMapping?.yAxis1 || customization?.dataMapping?.yAxis || effectiveDataMapping?.yAxis1 || effectiveDataMapping?.yAxis
                                       let newYAxis1: string | string[]
@@ -723,7 +746,9 @@ export function ChartCustomizationPanel({
                                 }}
                                 className="min-h-20 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
                               >
-                                <div className="text-sm font-medium text-green-600 mb-2">Left Y-Axis (Primary)</div>
+                                <div className="text-sm font-medium text-green-600 mb-2">
+                                  Left Y-Axis (Primary)
+                                </div>
                                 {(() => {
                                   // Support both yAxis1 and yAxis (AI may use either)
                                   const leftAxisData = effectiveDataMapping?.yAxis1 || effectiveDataMapping?.yAxis
@@ -734,8 +759,18 @@ export function ChartCustomizationPanel({
                                       {(Array.isArray(leftAxisData) ? leftAxisData : [leftAxisData]).map((field: string) => (
                                         <div key={field} className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
                                           <span className="text-sm text-green-800">{field}</span>
-                                          <button
-                                            onClick={() => {
+                                          <div className="flex items-center gap-1">
+                                            <InlineFilter
+                                              column={field}
+                                              columnType={dataSchema?.columns.find(c => c.name === field)?.type as any || 'number'}
+                                              data={data || rawData || []}
+                                              filters={customization?.filters}
+                                              onFiltersChange={(filters) => {
+                                                onCustomizationChange(chartId, { filters })
+                                              }}
+                                            />
+                                            <button
+                                              onClick={() => {
                                               // Get current value from either source
                                               const currentYAxis1 = customization?.dataMapping?.yAxis1 || customization?.dataMapping?.yAxis || effectiveDataMapping?.yAxis1 || effectiveDataMapping?.yAxis
                                               let newYAxis1: string | string[] | undefined
@@ -762,17 +797,18 @@ export function ChartCustomizationPanel({
                                                 }
                                               })
                                             }}
-                                            className="text-green-600 hover:text-green-800 text-xs"
-                                          >
-                                            Remove
-                                          </button>
+                                              className="text-green-600 hover:text-green-800 text-xs"
+                                            >
+                                              Remove
+                                            </button>
+                                          </div>
                                         </div>
                                       ))}
                                     </div>
                                   ) : (
                                     <div className="text-center py-4 text-gray-500 text-sm">
                                       <span className="block text-lg mb-1">👈</span>
-                                      Drag numeric fields from the left
+                                      {getFieldTypeHelpText(effectiveChartType as any, 'yAxis')}
                                     </div>
                                   )
                                 })()}
@@ -792,7 +828,14 @@ export function ChartCustomizationPanel({
                                   e.currentTarget.classList.remove('border-purple-400', 'bg-purple-50')
                                   try {
                                     const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                    if (data.fieldType === 'number') {
+                                    // Use intelligent field validation
+                                    const allowField = isFieldAllowedForChart(
+                                      effectiveChartType as any,
+                                      'yAxis1',
+                                      data.fieldType
+                                    )
+
+                                    if (allowField) {
                                       const currentYAxis2 = customization?.dataMapping?.yAxis2 || effectiveDataMapping?.yAxis2
                                       let newYAxis2: string | string[]
 
@@ -826,14 +869,28 @@ export function ChartCustomizationPanel({
                                 }}
                                 className="min-h-20 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
                               >
-                                <div className="text-sm font-medium text-purple-600 mb-2">Right Y-Axis (Secondary)</div>
+                                <div className="text-sm font-medium text-purple-600 mb-2">
+                                  {effectiveChartType === 'bar' || effectiveChartType === 'combo'
+                                    ? 'Right Y-Axis (Secondary) - Values or Categories'
+                                    : 'Right Y-Axis (Secondary)'}
+                                </div>
                                 {effectiveDataMapping?.yAxis2 && (Array.isArray(effectiveDataMapping.yAxis2) ? effectiveDataMapping.yAxis2.length > 0 : true) ? (
                                   <div className="space-y-2">
                                     {(Array.isArray(effectiveDataMapping.yAxis2) ? effectiveDataMapping.yAxis2 : [effectiveDataMapping.yAxis2]).map((field: string) => (
                                       <div key={field} className="flex items-center justify-between p-2 bg-purple-100 border border-purple-300 rounded">
                                         <span className="text-sm text-purple-800">{field}</span>
-                                        <button
-                                          onClick={() => {
+                                        <div className="flex items-center gap-1">
+                                          <InlineFilter
+                                            column={field}
+                                            columnType={dataSchema?.columns.find(c => c.name === field)?.type as any || 'number'}
+                                            data={data || rawData || []}
+                                            filters={customization?.filters}
+                                            onFiltersChange={(filters) => {
+                                              onCustomizationChange(chartId, { filters })
+                                            }}
+                                          />
+                                          <button
+                                            onClick={() => {
                                             const currentYAxis2 = customization?.dataMapping?.yAxis2 || effectiveDataMapping?.yAxis2
                                             let newYAxis2: string | string[] | undefined
 
@@ -858,17 +915,18 @@ export function ChartCustomizationPanel({
                                               }
                                             })
                                           }}
-                                          className="text-purple-600 hover:text-purple-800 text-xs"
-                                        >
-                                          Remove
-                                        </button>
+                                            className="text-purple-600 hover:text-purple-800 text-xs"
+                                          >
+                                            Remove
+                                          </button>
+                                        </div>
                                       </div>
                                     ))}
                                   </div>
                                 ) : (
                                   <div className="text-center py-4 text-gray-500 text-sm">
                                     <span className="block text-lg mb-1">👈</span>
-                                    Drag numeric fields from the left
+                                    {getFieldTypeHelpText(effectiveChartType as any, 'yAxis2')}
                                   </div>
                                 )}
                               </div>
@@ -888,8 +946,8 @@ export function ChartCustomizationPanel({
                                 e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
                                 try {
                                   const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                  // Only allow numeric fields in Y-axis for most chart types
-                                  if (data.fieldType === 'number' || effectiveChartType === 'scatter') {
+                                  // Use intelligent field validation
+                                  if (isFieldAllowedForChart(effectiveChartType as any, 'yAxis', data.fieldType)) {
                                     // Check all possible sources: yAxis, values, or yAxis1
                                     const currentYAxis = customization?.dataMapping?.yAxis || customization?.dataMapping?.values || customization?.dataMapping?.yAxis1 || effectiveDataMapping?.yAxis || effectiveDataMapping?.values || effectiveDataMapping?.yAxis1
                                     let newYAxis: string | string[]
@@ -926,7 +984,11 @@ export function ChartCustomizationPanel({
                               }}
                               className="min-h-20 border-2 border-dashed border-gray-300 rounded-lg p-3 transition-all"
                             >
-                              <div className="text-sm font-medium text-gray-600 mb-2">Y-Axis (Numeric Fields Only)</div>
+                              <div className="text-sm font-medium text-gray-600 mb-2">
+                                {effectiveChartType === 'bar' || effectiveChartType === 'combo'
+                                  ? 'Y-Axis - Values or Categories'
+                                  : 'Y-Axis'}
+                              </div>
                               {(() => {
                                 // Support all Y-axis field name variants (AI may use different names)
                                 const yAxisData = effectiveDataMapping?.yAxis || effectiveDataMapping?.values || effectiveDataMapping?.yAxis1
@@ -937,8 +999,18 @@ export function ChartCustomizationPanel({
                                     {(Array.isArray(yAxisData) ? yAxisData : [yAxisData]).map((field: string, index: number) => (
                                       <div key={field} className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
                                         <span className="text-sm text-green-800">{field}</span>
-                                        <button
-                                          onClick={() => {
+                                        <div className="flex items-center gap-1">
+                                          <InlineFilter
+                                            column={field}
+                                            columnType={dataSchema?.columns.find(c => c.name === field)?.type as any || 'string'}
+                                            data={data || rawData || []}
+                                            filters={customization?.filters}
+                                            onFiltersChange={(filters) => {
+                                              onCustomizationChange(chartId, { filters })
+                                            }}
+                                          />
+                                          <button
+                                            onClick={() => {
                                             // Check all possible sources: yAxis, values, or yAxis1
                                             const currentYAxis = customization?.dataMapping?.yAxis || customization?.dataMapping?.values || customization?.dataMapping?.yAxis1 || effectiveDataMapping?.yAxis || effectiveDataMapping?.values || effectiveDataMapping?.yAxis1
                                             let newYAxis: string | string[] | undefined
@@ -970,12 +1042,13 @@ export function ChartCustomizationPanel({
                                           Remove
                                         </button>
                                       </div>
+                                    </div>
                                     ))}
                                   </div>
                                 ) : (
                                   <div className="text-center py-4 text-gray-500 text-sm">
                                     <span className="block text-lg mb-1">👈</span>
-                                    Drag numeric fields from the left
+                                    {getFieldTypeHelpText(effectiveChartType as any, 'yAxis')}
                                   </div>
                                 )
                               })()}
@@ -1018,27 +1091,43 @@ export function ChartCustomizationPanel({
                             <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
                               <div className="text-sm font-medium text-gray-700 mb-3">Bar Chart Options</div>
 
-                              <div className="space-y-3">
-                                {/* Sort By */}
-                                <div>
-                                  <label className="text-xs text-gray-600 mb-1 block">Sort By</label>
-                                  <select
-                                    value={customization?.dataMapping?.sortBy || ''}
-                                    onChange={(e) => {
-                                      handleUpdate({
-                                        dataMapping: {
-                                          ...customization?.dataMapping,
-                                          sortBy: e.target.value || undefined
-                                        }
-                                      })
-                                    }}
-                                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                                  >
-                                    <option value="">No sorting</option>
-                                    <option value="value">Value</option>
-                                    <option value="label">Label</option>
-                                  </select>
+                              {availableColumns.length === 0 || columnsByType.numeric.length === 0 ? (
+                                <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-3">
+                                  ⚠️ {availableColumns.length === 0 ? 'No data available. Upload data first.' : 'Configure your chart data first (X-axis and Y-axis) to enable sorting'}
                                 </div>
+                              ) : (
+                                <div className="space-y-3">
+                                  {/* Sort By */}
+                                  <div>
+                                    <label className="text-xs text-gray-600 mb-1 block">Sort By Column</label>
+                                    <select
+                                      value={customization?.dataMapping?.sortBy || ''}
+                                      onChange={(e) => {
+                                        handleUpdate({
+                                          dataMapping: {
+                                            ...customization?.dataMapping,
+                                            sortBy: e.target.value || undefined
+                                          }
+                                        })
+                                      }}
+                                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                                    >
+                                      <option value="">No sorting</option>
+                                      {/* Show numeric columns for sorting */}
+                                      {columnsByType.numeric.map(col => (
+                                        <option key={col} value={col}>{col}</option>
+                                      ))}
+                                      {/* Show category/x-axis column for alphabetical sorting */}
+                                      {(customization?.dataMapping?.category || customization?.dataMapping?.xAxis) && (
+                                        <option value={customization?.dataMapping?.category || customization?.dataMapping?.xAxis}>
+                                          {customization?.dataMapping?.category || customization?.dataMapping?.xAxis} (Label)
+                                        </option>
+                                      )}
+                                    </select>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      Choose which column to sort the bars by
+                                    </p>
+                                  </div>
 
                                 {/* Sort Order */}
                                 {customization?.dataMapping?.sortBy && (
@@ -1060,7 +1149,7 @@ export function ChartCustomizationPanel({
                                             : 'bg-white border-gray-300 text-gray-600'
                                         }`}
                                       >
-                                        Ascending
+                                        ↑ Low to High
                                       </button>
                                       <button
                                         onClick={() => {
@@ -1077,19 +1166,24 @@ export function ChartCustomizationPanel({
                                             : 'bg-white border-gray-300 text-gray-600'
                                         }`}
                                       >
-                                        Descending
+                                        ↓ High to Low
                                       </button>
                                     </div>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      {customization?.dataMapping?.sortOrder === 'asc' ? 'Smallest values first' : 'Largest values first'}
+                                    </p>
                                   </div>
                                 )}
 
                                 {/* Limit Results */}
                                 <div>
-                                  <label className="text-xs text-gray-600 mb-1 block">Limit Results (Top N)</label>
+                                  <label className="text-xs text-gray-600 mb-1 block">
+                                    Show Top/Bottom N Items
+                                  </label>
                                   <input
                                     type="number"
                                     min="1"
-                                    placeholder="All items"
+                                    placeholder="Show all items"
                                     value={customization?.dataMapping?.limit || ''}
                                     onChange={(e) => {
                                       const value = e.target.value ? parseInt(e.target.value) : undefined
@@ -1102,8 +1196,14 @@ export function ChartCustomizationPanel({
                                     }}
                                     className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
                                   />
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    {customization?.dataMapping?.limit
+                                      ? `Showing ${customization.dataMapping.sortOrder === 'asc' ? 'bottom' : 'top'} ${customization.dataMapping.limit} items`
+                                      : 'Showing all items'}
+                                  </p>
                                 </div>
-                              </div>
+                                </div>
+                              )}
                             </div>
                           )}
 
@@ -1118,7 +1218,7 @@ export function ChartCustomizationPanel({
                                     e.preventDefault()
                                     try {
                                       const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                      if (data.fieldType === 'number') {
+                                      if (isFieldAllowedForChart(effectiveChartType as any, 'value', data.fieldType)) {
                                         handleUpdate({
                                           dataMapping: {
                                             ...customization?.dataMapping,
@@ -1137,21 +1237,34 @@ export function ChartCustomizationPanel({
                                     <span className="ml-1 text-xs text-gray-500">- Numeric only</span>
                                   </div>
                                   {effectiveDataMapping?.size ? (
-                                    <div className="flex items-center justify-between p-2 bg-purple-100 border border-purple-300 rounded">
-                                      <span className="text-sm text-purple-800">{effectiveDataMapping.size}</span>
-                                      <button
-                                        onClick={() => {
-                                          handleUpdate({
-                                            dataMapping: {
-                                              ...customization?.dataMapping,
-                                              size: undefined
-                                            }
-                                          })
-                                        }}
-                                        className="text-purple-600 hover:text-purple-800 text-xs"
-                                      >
-                                        Remove
-                                      </button>
+                                    <div className="p-2 bg-purple-100 border border-purple-300 rounded">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-sm text-purple-800">{effectiveDataMapping.size}</span>
+                                        <div className="flex items-center gap-1">
+                                          <InlineFilter
+                                            column={effectiveDataMapping.size}
+                                            columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.size)?.type as any || 'number'}
+                                            data={data || rawData || []}
+                                            filters={customization?.filters}
+                                            onFiltersChange={(filters) => {
+                                              onCustomizationChange(chartId, { filters })
+                                            }}
+                                          />
+                                          <button
+                                            onClick={() => {
+                                              handleUpdate({
+                                                dataMapping: {
+                                                  ...customization?.dataMapping,
+                                                  size: undefined
+                                                }
+                                              })
+                                            }}
+                                            className="text-purple-600 hover:text-purple-800 text-xs"
+                                          >
+                                            Remove
+                                          </button>
+                                        </div>
+                                      </div>
                                     </div>
                                   ) : (
                                     <div className="text-center py-2 text-gray-500 text-sm">
@@ -1186,21 +1299,34 @@ export function ChartCustomizationPanel({
                                     <span className="ml-1 text-xs text-gray-500">- Any field</span>
                                   </div>
                                   {effectiveDataMapping?.color ? (
-                                    <div className="flex items-center justify-between p-2 bg-orange-100 border border-orange-300 rounded">
-                                      <span className="text-sm text-orange-800">{effectiveDataMapping.color}</span>
-                                      <button
-                                        onClick={() => {
-                                          handleUpdate({
-                                            dataMapping: {
-                                              ...customization?.dataMapping,
-                                              color: undefined
-                                            }
-                                          })
-                                        }}
-                                        className="text-orange-600 hover:text-orange-800 text-xs"
-                                      >
-                                        Remove
-                                      </button>
+                                    <div className="p-2 bg-orange-100 border border-orange-300 rounded">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-sm text-orange-800">{effectiveDataMapping.color}</span>
+                                        <div className="flex items-center gap-1">
+                                          <InlineFilter
+                                            column={effectiveDataMapping.color}
+                                            columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.color)?.type as any || 'string'}
+                                            data={data || rawData || []}
+                                            filters={customization?.filters}
+                                            onFiltersChange={(filters) => {
+                                              onCustomizationChange(chartId, { filters })
+                                            }}
+                                          />
+                                          <button
+                                            onClick={() => {
+                                              handleUpdate({
+                                                dataMapping: {
+                                                  ...customization?.dataMapping,
+                                                  color: undefined
+                                                }
+                                              })
+                                            }}
+                                            className="text-orange-600 hover:text-orange-800 text-xs"
+                                          >
+                                            Remove
+                                          </button>
+                                        </div>
+                                      </div>
                                     </div>
                                   ) : (
                                     <div className="text-center py-2 text-gray-500 text-sm">
@@ -1285,17 +1411,28 @@ export function ChartCustomizationPanel({
                             {effectiveDataMapping?.category ? (
                               <div className="flex items-center justify-between p-2 bg-purple-100 border border-purple-300 rounded">
                                 <span className="text-sm text-purple-800">{effectiveDataMapping.category}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      category: undefined
-                                    }
-                                  })}
-                                  className="text-purple-600 hover:text-purple-800 text-xs"
-                                >
-                                  Remove
-                                </button>
+                                <div className="flex items-center gap-1">
+                                  <InlineFilter
+                                    column={effectiveDataMapping.category}
+                                    columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.category)?.type as any || 'string'}
+                                    data={data || rawData || []}
+                                    filters={customization?.filters}
+                                    onFiltersChange={(filters) => {
+                                      onCustomizationChange(chartId, { filters })
+                                    }}
+                                  />
+                                  <button
+                                    onClick={() => handleUpdate({
+                                      dataMapping: {
+                                        ...customization?.dataMapping,
+                                        category: undefined
+                                      }
+                                    })}
+                                    className="text-purple-600 hover:text-purple-800 text-xs"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
@@ -1319,8 +1456,8 @@ export function ChartCustomizationPanel({
                               e.currentTarget.classList.remove('border-orange-400', 'bg-orange-50')
                               try {
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                // Prefer numeric fields for values
-                                if (data.fieldType === 'number') {
+                                // Check if field is allowed for this chart type
+                                if (isFieldAllowedForChart(effectiveChartType as any, 'value', data.fieldType)) {
                                   handleUpdate({
                                     dataMapping: {
                                       ...customization?.dataMapping,
@@ -1338,17 +1475,28 @@ export function ChartCustomizationPanel({
                             {effectiveDataMapping?.value ? (
                               <div className="flex items-center justify-between p-2 bg-orange-100 border border-orange-300 rounded">
                                 <span className="text-sm text-orange-800">{effectiveDataMapping.value}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      value: undefined
-                                    }
-                                  })}
-                                  className="text-orange-600 hover:text-orange-800 text-xs"
-                                >
-                                  Remove
-                                </button>
+                                <div className="flex items-center gap-1">
+                                  <InlineFilter
+                                    column={effectiveDataMapping.value}
+                                    columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.value)?.type as any || 'number'}
+                                    data={data || rawData || []}
+                                    filters={customization?.filters}
+                                    onFiltersChange={(filters) => {
+                                      onCustomizationChange(chartId, { filters })
+                                    }}
+                                  />
+                                  <button
+                                    onClick={() => handleUpdate({
+                                      dataMapping: {
+                                        ...customization?.dataMapping,
+                                        value: undefined
+                                      }
+                                    })}
+                                    className="text-orange-600 hover:text-orange-800 text-xs"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
@@ -1414,7 +1562,7 @@ export function ChartCustomizationPanel({
                               e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50')
                               try {
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                if (data.fieldType === 'number') {
+                                if (isFieldAllowedForChart(effectiveChartType as any, 'metric', data.fieldType)) {
                                   handleUpdate({
                                     dataMapping: {
                                       ...customization?.dataMapping,
@@ -1432,17 +1580,28 @@ export function ChartCustomizationPanel({
                             {effectiveDataMapping?.metric ? (
                               <div className="flex items-center justify-between p-2 bg-indigo-100 border border-indigo-300 rounded">
                                 <span className="text-sm text-indigo-800">{effectiveDataMapping.metric}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      metric: undefined
-                                    }
-                                  })}
-                                  className="text-indigo-600 hover:text-indigo-800 text-xs"
-                                >
-                                  Remove
-                                </button>
+                                <div className="flex items-center gap-1">
+                                  <InlineFilter
+                                    column={effectiveDataMapping.metric}
+                                    columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.metric)?.type as any || 'number'}
+                                    data={data || rawData || []}
+                                    filters={customization?.filters}
+                                    onFiltersChange={(filters) => {
+                                      onCustomizationChange(chartId, { filters })
+                                    }}
+                                  />
+                                  <button
+                                    onClick={() => handleUpdate({
+                                      dataMapping: {
+                                        ...customization?.dataMapping,
+                                        metric: undefined
+                                      }
+                                    })}
+                                    className="text-indigo-600 hover:text-indigo-800 text-xs"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
@@ -1566,19 +1725,32 @@ export function ChartCustomizationPanel({
                           >
                             <div className="text-sm font-medium text-gray-600 mb-2">Category Field (Required)</div>
                             {effectiveDataMapping?.category ? (
-                              <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
-                                <span className="text-sm text-blue-800">{effectiveDataMapping.category}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      category: undefined
-                                    }
-                                  })}
-                                  className="text-blue-600 hover:text-blue-800 text-xs"
-                                >
-                                  Remove
-                                </button>
+                              <div className="p-2 bg-blue-100 border border-blue-300 rounded">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-blue-800">{effectiveDataMapping.category}</span>
+                                  <div className="flex items-center gap-1">
+                                    <InlineFilter
+                                      column={effectiveDataMapping.category}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.category)?.type as any || 'string'}
+                                      data={data || rawData || []}
+                                      filters={customization?.filters}
+                                      onFiltersChange={(filters) => {
+                                        onCustomizationChange(chartId, { filters })
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => handleUpdate({
+                                        dataMapping: {
+                                          ...customization?.dataMapping,
+                                          category: undefined
+                                        }
+                                      })}
+                                      className="text-blue-600 hover:text-blue-800 text-xs"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
@@ -1602,8 +1774,8 @@ export function ChartCustomizationPanel({
                               e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
                               try {
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                // Prefer numeric fields for values
-                                if (data.fieldType === 'number') {
+                                // Check if field is allowed for this chart type
+                                if (isFieldAllowedForChart(effectiveChartType as any, 'value', data.fieldType)) {
                                   handleUpdate({
                                     dataMapping: {
                                       ...customization?.dataMapping,
@@ -1619,19 +1791,32 @@ export function ChartCustomizationPanel({
                           >
                             <div className="text-sm font-medium text-gray-600 mb-2">Value Field (Required - Numeric Only)</div>
                             {effectiveDataMapping?.value ? (
-                              <div className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
-                                <span className="text-sm text-green-800">{effectiveDataMapping.value}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      value: undefined
-                                    }
-                                  })}
-                                  className="text-green-600 hover:text-green-800 text-xs"
-                                >
-                                  Remove
-                                </button>
+                              <div className="p-2 bg-green-100 border border-green-300 rounded">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-green-800">{effectiveDataMapping.value}</span>
+                                  <div className="flex items-center gap-1">
+                                    <InlineFilter
+                                      column={effectiveDataMapping.value}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.value)?.type as any || 'number'}
+                                      data={data || rawData || []}
+                                      filters={customization?.filters}
+                                      onFiltersChange={(filters) => {
+                                        onCustomizationChange(chartId, { filters })
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => handleUpdate({
+                                        dataMapping: {
+                                          ...customization?.dataMapping,
+                                          value: undefined
+                                        }
+                                      })}
+                                      className="text-green-600 hover:text-green-800 text-xs"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
@@ -1669,19 +1854,32 @@ export function ChartCustomizationPanel({
                           >
                             <div className="text-sm font-medium text-purple-600 mb-2">Type Field (Optional)</div>
                             {effectiveDataMapping?.type ? (
-                              <div className="flex items-center justify-between p-2 bg-purple-100 border border-purple-300 rounded">
-                                <span className="text-sm text-purple-800">{effectiveDataMapping.type}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      type: undefined
-                                    }
-                                  })}
-                                  className="text-purple-600 hover:text-purple-800 text-xs"
-                                >
-                                  Remove
-                                </button>
+                              <div className="p-2 bg-purple-100 border border-purple-300 rounded">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-purple-800">{effectiveDataMapping.type}</span>
+                                  <div className="flex items-center gap-1">
+                                    <InlineFilter
+                                      column={effectiveDataMapping.type}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.type)?.type as any || 'string'}
+                                      data={data || rawData || []}
+                                      filters={customization?.filters}
+                                      onFiltersChange={(filters) => {
+                                        onCustomizationChange(chartId, { filters })
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => handleUpdate({
+                                        dataMapping: {
+                                          ...customization?.dataMapping,
+                                          type: undefined
+                                        }
+                                      })}
+                                      className="text-purple-600 hover:text-purple-800 text-xs"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
@@ -1758,19 +1956,32 @@ export function ChartCustomizationPanel({
                           >
                             <div className="text-sm font-medium text-gray-600 mb-2">X-Axis Field (Required)</div>
                             {effectiveDataMapping?.xAxis ? (
-                              <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
-                                <span className="text-sm text-blue-800">{effectiveDataMapping.xAxis}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      xAxis: undefined
-                                    }
-                                  })}
-                                  className="text-blue-600 hover:text-blue-800 text-xs"
-                                >
-                                  Remove
-                                </button>
+                              <div className="p-2 bg-blue-100 border border-blue-300 rounded">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-blue-800">{effectiveDataMapping.xAxis}</span>
+                                  <div className="flex items-center gap-1">
+                                    <InlineFilter
+                                      column={effectiveDataMapping.xAxis}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.xAxis)?.type as any || 'string'}
+                                      data={data || rawData || []}
+                                      filters={customization?.filters}
+                                      onFiltersChange={(filters) => {
+                                        onCustomizationChange(chartId, { filters })
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => handleUpdate({
+                                        dataMapping: {
+                                          ...customization?.dataMapping,
+                                          xAxis: undefined
+                                        }
+                                      })}
+                                      className="text-blue-600 hover:text-blue-800 text-xs"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
@@ -1807,19 +2018,32 @@ export function ChartCustomizationPanel({
                           >
                             <div className="text-sm font-medium text-gray-600 mb-2">Y-Axis Field (Required)</div>
                             {effectiveDataMapping?.yAxis ? (
-                              <div className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
-                                <span className="text-sm text-green-800">{effectiveDataMapping.yAxis}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      yAxis: undefined
-                                    }
-                                  })}
-                                  className="text-green-600 hover:text-green-800 text-xs"
-                                >
-                                  Remove
-                                </button>
+                              <div className="p-2 bg-green-100 border border-green-300 rounded">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-green-800">{effectiveDataMapping.yAxis}</span>
+                                  <div className="flex items-center gap-1">
+                                    <InlineFilter
+                                      column={effectiveDataMapping.yAxis}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.yAxis)?.type as any || 'string'}
+                                      data={data || rawData || []}
+                                      filters={customization?.filters}
+                                      onFiltersChange={(filters) => {
+                                        onCustomizationChange(chartId, { filters })
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => handleUpdate({
+                                        dataMapping: {
+                                          ...customization?.dataMapping,
+                                          yAxis: undefined
+                                        }
+                                      })}
+                                      className="text-green-600 hover:text-green-800 text-xs"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
@@ -1842,7 +2066,7 @@ export function ChartCustomizationPanel({
                               e.currentTarget.classList.remove('border-purple-400', 'bg-purple-50')
                               try {
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                if (data.fieldType === 'number') {
+                                if (isFieldAllowedForChart(effectiveChartType as any, 'metric', data.fieldType)) {
                                   handleUpdate({
                                     dataMapping: {
                                       ...customization?.dataMapping,
@@ -1858,19 +2082,32 @@ export function ChartCustomizationPanel({
                           >
                             <div className="text-sm font-medium text-gray-600 mb-2">Value Field (Required - Numeric)</div>
                             {effectiveDataMapping?.value ? (
-                              <div className="flex items-center justify-between p-2 bg-purple-100 border border-purple-300 rounded">
-                                <span className="text-sm text-purple-800">{effectiveDataMapping.value}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      value: undefined
-                                    }
-                                  })}
-                                  className="text-purple-600 hover:text-purple-800 text-xs"
-                                >
-                                  Remove
-                                </button>
+                              <div className="p-2 bg-purple-100 border border-purple-300 rounded">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-purple-800">{effectiveDataMapping.value}</span>
+                                  <div className="flex items-center gap-1">
+                                    <InlineFilter
+                                      column={effectiveDataMapping.value}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.value)?.type as any || 'number'}
+                                      data={data || rawData || []}
+                                      filters={customization?.filters}
+                                      onFiltersChange={(filters) => {
+                                        onCustomizationChange(chartId, { filters })
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => handleUpdate({
+                                        dataMapping: {
+                                          ...customization?.dataMapping,
+                                          value: undefined
+                                        }
+                                      })}
+                                      className="text-purple-600 hover:text-purple-800 text-xs"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
@@ -1941,7 +2178,7 @@ export function ChartCustomizationPanel({
                                 e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50')
                                 try {
                                   const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                  if (data.fieldType === 'number') {
+                                  if (isFieldAllowedForChart('scorecard', 'metric', data.fieldType)) {
                                     handleUpdate({
                                       dataMapping: {
                                         ...customization?.dataMapping,
@@ -1955,19 +2192,32 @@ export function ChartCustomizationPanel({
                               }}
                             >
                               {effectiveDataMapping?.metric ? (
-                                <div className="flex items-center justify-between p-2 bg-indigo-100 border border-indigo-300 rounded">
-                                  <span className="text-sm text-indigo-800">{effectiveDataMapping.metric}</span>
-                                  <button
-                                    onClick={() => handleUpdate({
-                                      dataMapping: {
-                                        ...customization?.dataMapping,
-                                        metric: undefined
-                                      }
-                                    })}
-                                    className="text-indigo-600 hover:text-indigo-800 text-xs"
-                                  >
-                                    Remove
-                                  </button>
+                                <div className="p-2 bg-indigo-100 border border-indigo-300 rounded">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-sm text-indigo-800">{effectiveDataMapping.metric}</span>
+                                    <div className="flex items-center gap-1">
+                                      <InlineFilter
+                                        column={effectiveDataMapping.metric}
+                                        columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.metric)?.type as any || 'number'}
+                                        data={data || rawData || []}
+                                        filters={customization?.filters}
+                                        onFiltersChange={(filters) => {
+                                          onCustomizationChange(chartId, { filters })
+                                        }}
+                                      />
+                                      <button
+                                        onClick={() => handleUpdate({
+                                          dataMapping: {
+                                            ...customization?.dataMapping,
+                                            metric: undefined
+                                          }
+                                        })}
+                                        className="text-indigo-600 hover:text-indigo-800 text-xs"
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+                                  </div>
                                 </div>
                               ) : (
                                 <div className="text-center py-3 text-gray-500 text-sm">
@@ -1987,6 +2237,7 @@ export function ChartCustomizationPanel({
                             value={effectiveDataMapping?.aggregation || 'sum'}
                             onChange={(e) => handleUpdate({
                               dataMapping: {
+                                ...customization?.dataMapping,
                                 aggregation: e.target.value as 'sum' | 'avg' | 'median' | 'min' | 'max' | 'count'
                               }
                             })}
@@ -2004,16 +2255,17 @@ export function ChartCustomizationPanel({
                           </p>
                         </div>
 
-                        {/* Max Value Input */}
+                        {/* Goal (Max Value) Input */}
                         <div>
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Maximum Value (Required)
+                            Goal (Required)
                           </label>
                           <input
                             type="number"
                             value={effectiveDataMapping?.max || ''}
                             onChange={(e) => handleUpdate({
                               dataMapping: {
+                                ...customization?.dataMapping,
                                 max: e.target.value ? Number(e.target.value) : undefined
                               }
                             })}
@@ -2021,20 +2273,21 @@ export function ChartCustomizationPanel({
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                           />
                           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            The maximum value for the gauge (100% mark)
+                            The goal/target value for the gauge (100% mark)
                           </p>
                         </div>
 
                         {/* Min Value Input (Optional) */}
                         <div>
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Minimum Value (Optional)
+                            Starting Value (Optional)
                           </label>
                           <input
                             type="number"
                             value={effectiveDataMapping?.min !== undefined ? effectiveDataMapping?.min : 0}
                             onChange={(e) => handleUpdate({
                               dataMapping: {
+                                ...customization?.dataMapping,
                                 min: e.target.value ? Number(e.target.value) : 0
                               }
                             })}
@@ -2042,7 +2295,7 @@ export function ChartCustomizationPanel({
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                           />
                           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            The minimum value for the gauge (0% mark). Default: 0
+                            The starting value for the gauge (0% mark). Default: 0
                           </p>
                         </div>
                         </div>
@@ -2113,19 +2366,32 @@ export function ChartCustomizationPanel({
                           >
                             <div className="text-sm font-medium text-gray-600 mb-2">Cohort Field (Required)</div>
                             {effectiveDataMapping?.cohort ? (
-                              <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
-                                <span className="text-sm text-blue-800">{effectiveDataMapping.cohort}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      cohort: undefined
-                                    }
-                                  })}
-                                  className="text-blue-600 hover:text-blue-800 text-xs"
-                                >
-                                  Remove
-                                </button>
+                              <div className="p-2 bg-blue-100 border border-blue-300 rounded">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-blue-800">{effectiveDataMapping.cohort}</span>
+                                  <div className="flex items-center gap-1">
+                                    <InlineFilter
+                                      column={effectiveDataMapping.cohort}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.cohort)?.type as any || 'string'}
+                                      data={data || rawData || []}
+                                      filters={customization?.filters}
+                                      onFiltersChange={(filters) => {
+                                        onCustomizationChange(chartId, { filters })
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => handleUpdate({
+                                        dataMapping: {
+                                          ...customization?.dataMapping,
+                                          cohort: undefined
+                                        }
+                                      })}
+                                      className="text-blue-600 hover:text-blue-800 text-xs"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
@@ -2162,19 +2428,32 @@ export function ChartCustomizationPanel({
                           >
                             <div className="text-sm font-medium text-gray-600 mb-2">Period Field (Required)</div>
                             {effectiveDataMapping?.period ? (
-                              <div className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
-                                <span className="text-sm text-green-800">{effectiveDataMapping.period}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      period: undefined
-                                    }
-                                  })}
-                                  className="text-green-600 hover:text-green-800 text-xs"
-                                >
-                                  Remove
-                                </button>
+                              <div className="p-2 bg-green-100 border border-green-300 rounded">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-green-800">{effectiveDataMapping.period}</span>
+                                  <div className="flex items-center gap-1">
+                                    <InlineFilter
+                                      column={effectiveDataMapping.period}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.period)?.type as any || 'string'}
+                                      data={data || rawData || []}
+                                      filters={customization?.filters}
+                                      onFiltersChange={(filters) => {
+                                        onCustomizationChange(chartId, { filters })
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => handleUpdate({
+                                        dataMapping: {
+                                          ...customization?.dataMapping,
+                                          period: undefined
+                                        }
+                                      })}
+                                      className="text-green-600 hover:text-green-800 text-xs"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
@@ -2197,7 +2476,7 @@ export function ChartCustomizationPanel({
                               e.currentTarget.classList.remove('border-purple-400', 'bg-purple-50')
                               try {
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                if (data.fieldType === 'number') {
+                                if (isFieldAllowedForChart(effectiveChartType as any, 'metric', data.fieldType)) {
                                   handleUpdate({
                                     dataMapping: {
                                       ...customization?.dataMapping,
@@ -2213,19 +2492,32 @@ export function ChartCustomizationPanel({
                           >
                             <div className="text-sm font-medium text-gray-600 mb-2">Value Field (Required - Numeric)</div>
                             {effectiveDataMapping?.value ? (
-                              <div className="flex items-center justify-between p-2 bg-purple-100 border border-purple-300 rounded">
-                                <span className="text-sm text-purple-800">{effectiveDataMapping.value}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      value: undefined
-                                    }
-                                  })}
-                                  className="text-purple-600 hover:text-purple-800 text-xs"
-                                >
-                                  Remove
-                                </button>
+                              <div className="p-2 bg-purple-100 border border-purple-300 rounded">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-purple-800">{effectiveDataMapping.value}</span>
+                                  <div className="flex items-center gap-1">
+                                    <InlineFilter
+                                      column={effectiveDataMapping.value}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.value)?.type as any || 'number'}
+                                      data={data || rawData || []}
+                                      filters={customization?.filters}
+                                      onFiltersChange={(filters) => {
+                                        onCustomizationChange(chartId, { filters })
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => handleUpdate({
+                                        dataMapping: {
+                                          ...customization?.dataMapping,
+                                          value: undefined
+                                        }
+                                      })}
+                                      className="text-purple-600 hover:text-purple-800 text-xs"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
@@ -2302,19 +2594,32 @@ export function ChartCustomizationPanel({
                           >
                             <div className="text-sm font-medium text-gray-600 mb-2">Category Field (Optional)</div>
                             {effectiveDataMapping?.category ? (
-                              <div className="flex items-center justify-between p-2 bg-purple-100 border border-purple-300 rounded">
-                                <span className="text-sm text-purple-800">{effectiveDataMapping.category}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      category: undefined
-                                    }
-                                  })}
-                                  className="text-purple-600 hover:text-purple-800 text-xs"
-                                >
-                                  Remove
-                                </button>
+                              <div className="p-2 bg-purple-100 border border-purple-300 rounded">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-purple-800">{effectiveDataMapping.category}</span>
+                                  <div className="flex items-center gap-1">
+                                    <InlineFilter
+                                      column={effectiveDataMapping.category}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.category)?.type as any || 'string'}
+                                      data={data || rawData || []}
+                                      filters={customization?.filters}
+                                      onFiltersChange={(filters) => {
+                                        onCustomizationChange(chartId, { filters })
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => handleUpdate({
+                                        dataMapping: {
+                                          ...customization?.dataMapping,
+                                          category: undefined
+                                        }
+                                      })}
+                                      className="text-purple-600 hover:text-purple-800 text-xs"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
@@ -2337,7 +2642,7 @@ export function ChartCustomizationPanel({
                               e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
                               try {
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                if (data.fieldType === 'number') {
+                                if (isFieldAllowedForChart(effectiveChartType as any, 'metric', data.fieldType)) {
                                   handleUpdate({
                                     dataMapping: {
                                       ...customization?.dataMapping,
@@ -2353,19 +2658,32 @@ export function ChartCustomizationPanel({
                           >
                             <div className="text-sm font-medium text-gray-600 mb-2">Actual Field (Required - Numeric)</div>
                             {effectiveDataMapping?.actual ? (
-                              <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
-                                <span className="text-sm text-blue-800">{effectiveDataMapping.actual}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      actual: undefined
-                                    }
-                                  })}
-                                  className="text-blue-600 hover:text-blue-800 text-xs"
-                                >
-                                  Remove
-                                </button>
+                              <div className="p-2 bg-blue-100 border border-blue-300 rounded">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-blue-800">{effectiveDataMapping.actual}</span>
+                                  <div className="flex items-center gap-1">
+                                    <InlineFilter
+                                      column={effectiveDataMapping.actual}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.actual)?.type as any || 'number'}
+                                      data={data || rawData || []}
+                                      filters={customization?.filters}
+                                      onFiltersChange={(filters) => {
+                                        onCustomizationChange(chartId, { filters })
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => handleUpdate({
+                                        dataMapping: {
+                                          ...customization?.dataMapping,
+                                          actual: undefined
+                                        }
+                                      })}
+                                      className="text-blue-600 hover:text-blue-800 text-xs"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
@@ -2388,7 +2706,7 @@ export function ChartCustomizationPanel({
                               e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
                               try {
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                if (data.fieldType === 'number') {
+                                if (isFieldAllowedForChart(effectiveChartType as any, 'metric', data.fieldType)) {
                                   handleUpdate({
                                     dataMapping: {
                                       ...customization?.dataMapping,
@@ -2404,19 +2722,32 @@ export function ChartCustomizationPanel({
                           >
                             <div className="text-sm font-medium text-gray-600 mb-2">Comparative/Target Field (Required - Numeric)</div>
                             {effectiveDataMapping?.comparative ? (
-                              <div className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
-                                <span className="text-sm text-green-800">{effectiveDataMapping.comparative}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      comparative: undefined
-                                    }
-                                  })}
-                                  className="text-green-600 hover:text-green-800 text-xs"
-                                >
-                                  Remove
-                                </button>
+                              <div className="p-2 bg-green-100 border border-green-300 rounded">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-green-800">{effectiveDataMapping.comparative}</span>
+                                  <div className="flex items-center gap-1">
+                                    <InlineFilter
+                                      column={effectiveDataMapping.comparative}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.comparative)?.type as any || 'number'}
+                                      data={data || rawData || []}
+                                      filters={customization?.filters}
+                                      onFiltersChange={(filters) => {
+                                        onCustomizationChange(chartId, { filters })
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => handleUpdate({
+                                        dataMapping: {
+                                          ...customization?.dataMapping,
+                                          comparative: undefined
+                                        }
+                                      })}
+                                      className="text-green-600 hover:text-green-800 text-xs"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
@@ -2493,19 +2824,32 @@ export function ChartCustomizationPanel({
                           >
                             <div className="text-sm font-medium text-gray-600 mb-2">Category Field (Required)</div>
                             {effectiveDataMapping?.category ? (
-                              <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
-                                <span className="text-sm text-blue-800">{effectiveDataMapping.category}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      category: undefined
-                                    }
-                                  })}
-                                  className="text-blue-600 hover:text-blue-800 text-xs"
-                                >
-                                  Remove
-                                </button>
+                              <div className="p-2 bg-blue-100 border border-blue-300 rounded">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-blue-800">{effectiveDataMapping.category}</span>
+                                  <div className="flex items-center gap-1">
+                                    <InlineFilter
+                                      column={effectiveDataMapping.category}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.category)?.type as any || 'string'}
+                                      data={data || rawData || []}
+                                      filters={customization?.filters}
+                                      onFiltersChange={(filters) => {
+                                        onCustomizationChange(chartId, { filters })
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => handleUpdate({
+                                        dataMapping: {
+                                          ...customization?.dataMapping,
+                                          category: undefined
+                                        }
+                                      })}
+                                      className="text-blue-600 hover:text-blue-800 text-xs"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
@@ -2528,7 +2872,7 @@ export function ChartCustomizationPanel({
                               e.currentTarget.classList.remove('border-green-400', 'bg-green-50')
                               try {
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                if (data.fieldType === 'number') {
+                                if (isFieldAllowedForChart(effectiveChartType as any, 'metric', data.fieldType)) {
                                   handleUpdate({
                                     dataMapping: {
                                       ...customization?.dataMapping,
@@ -2544,19 +2888,32 @@ export function ChartCustomizationPanel({
                           >
                             <div className="text-sm font-medium text-gray-600 mb-2">Value Field (Required - Numeric)</div>
                             {effectiveDataMapping?.value ? (
-                              <div className="flex items-center justify-between p-2 bg-green-100 border border-green-300 rounded">
-                                <span className="text-sm text-green-800">{effectiveDataMapping.value}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      value: undefined
-                                    }
-                                  })}
-                                  className="text-green-600 hover:text-green-800 text-xs"
-                                >
-                                  Remove
-                                </button>
+                              <div className="p-2 bg-green-100 border border-green-300 rounded">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-green-800">{effectiveDataMapping.value}</span>
+                                  <div className="flex items-center gap-1">
+                                    <InlineFilter
+                                      column={effectiveDataMapping.value}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.value)?.type as any || 'number'}
+                                      data={data || rawData || []}
+                                      filters={customization?.filters}
+                                      onFiltersChange={(filters) => {
+                                        onCustomizationChange(chartId, { filters })
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => handleUpdate({
+                                        dataMapping: {
+                                          ...customization?.dataMapping,
+                                          value: undefined
+                                        }
+                                      })}
+                                      className="text-green-600 hover:text-green-800 text-xs"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
@@ -2569,8 +2926,8 @@ export function ChartCustomizationPanel({
                       </div>
                     )}
 
-                    {/* Sankey Chart Data Mapping */}
-                    {effectiveChartType === 'sankey' && (
+                    {/* Sparkline Chart Data Mapping */}
+                    {effectiveChartType === 'sparkline' && (
                       <div className="flex gap-6">
                         <div className="w-1/3 flex-shrink-0">
                           <label className="text-sm font-medium mb-3 block">Available Fields</label>
@@ -2717,7 +3074,7 @@ export function ChartCustomizationPanel({
                               e.currentTarget.classList.remove('border-purple-400', 'bg-purple-50')
                               try {
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                if (data.fieldType === 'number') {
+                                if (isFieldAllowedForChart(effectiveChartType as any, 'metric', data.fieldType)) {
                                   handleUpdate({
                                     dataMapping: {
                                       ...customization?.dataMapping,
@@ -2823,19 +3180,32 @@ export function ChartCustomizationPanel({
                           >
                             <div className="text-sm font-medium text-gray-600 mb-2">Time/Date Field (X-Axis)</div>
                             {effectiveDataMapping?.xAxis ? (
-                              <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
-                                <span className="text-sm text-blue-800">{effectiveDataMapping.xAxis}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      xAxis: undefined
-                                    }
-                                  })}
-                                  className="text-blue-600 hover:text-blue-800 text-xs"
-                                >
-                                  Remove
-                                </button>
+                              <div className="p-2 bg-blue-100 border border-blue-300 rounded">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-blue-800">{effectiveDataMapping.xAxis}</span>
+                                  <div className="flex items-center gap-1">
+                                    <InlineFilter
+                                      column={effectiveDataMapping.xAxis}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.xAxis)?.type as any || 'date'}
+                                      data={data || rawData || []}
+                                      filters={customization?.filters}
+                                      onFiltersChange={(filters) => {
+                                        onCustomizationChange(chartId, { filters })
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => handleUpdate({
+                                        dataMapping: {
+                                          ...customization?.dataMapping,
+                                          xAxis: undefined
+                                        }
+                                      })}
+                                      className="text-blue-600 hover:text-blue-800 text-xs"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
@@ -2859,7 +3229,7 @@ export function ChartCustomizationPanel({
                               e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
                               try {
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                if (data.fieldType === 'number') {
+                                if (isFieldAllowedForChart(effectiveChartType as any, 'metric', data.fieldType)) {
                                   handleUpdate({
                                     dataMapping: {
                                       ...customization?.dataMapping,
@@ -2875,19 +3245,32 @@ export function ChartCustomizationPanel({
                           >
                             <div className="text-sm font-medium text-gray-600 mb-2">Trend Field (Required - Numeric)</div>
                             {effectiveDataMapping?.yAxis ? (
-                              <div className="flex items-center justify-between p-2 bg-blue-100 border border-blue-300 rounded">
-                                <span className="text-sm text-blue-800">{effectiveDataMapping.yAxis}</span>
-                                <button
-                                  onClick={() => handleUpdate({
-                                    dataMapping: {
-                                      ...customization?.dataMapping,
-                                      yAxis: undefined
-                                    }
-                                  })}
-                                  className="text-blue-600 hover:text-blue-800 text-xs"
-                                >
-                                  Remove
-                                </button>
+                              <div className="p-2 bg-blue-100 border border-blue-300 rounded">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-blue-800">{effectiveDataMapping.yAxis}</span>
+                                  <div className="flex items-center gap-1">
+                                    <InlineFilter
+                                      column={effectiveDataMapping.yAxis}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.yAxis)?.type as any || 'number'}
+                                      data={data || rawData || []}
+                                      filters={customization?.filters}
+                                      onFiltersChange={(filters) => {
+                                        onCustomizationChange(chartId, { filters })
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => handleUpdate({
+                                        dataMapping: {
+                                          ...customization?.dataMapping,
+                                          yAxis: undefined
+                                        }
+                                      })}
+                                      className="text-blue-600 hover:text-blue-800 text-xs"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
                             ) : (
                               <div className="text-center py-3 text-gray-500 text-sm">
@@ -3007,12 +3390,6 @@ export function ChartCustomizationPanel({
                             case 'treemap':
                               isValid = !!(mapping.category && mapping.value)
                               if (!mapping.category) missingFields = 'Please select a category field'
-                              else if (!mapping.value) missingFields = 'Please select a value field'
-                              break
-                            case 'sankey':
-                              isValid = !!(mapping.source && mapping.target_node && mapping.value)
-                              if (!mapping.source) missingFields = 'Please select a source field'
-                              else if (!mapping.target_node) missingFields = 'Please select a target field'
                               else if (!mapping.value) missingFields = 'Please select a value field'
                               break
                             case 'sparkline':
@@ -3232,6 +3609,7 @@ export function ChartCustomizationPanel({
               </div>
             )}
             
+
             {activeTab === 'actions' && (
               <div className="space-y-4">
                 {/* Export Options */}

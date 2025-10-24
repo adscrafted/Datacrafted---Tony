@@ -1,21 +1,25 @@
 'use client'
 
 import { useState } from 'react'
-import { useDataStore } from '@/lib/store'
+import { useDataStore } from '@/lib/stores/data-store'
+import { useSessionStore } from '@/lib/stores/session-store'
 import { Button } from '@/components/ui/button'
 import { Save, CheckCircle } from 'lucide-react'
 
 export function SaveDashboard() {
   const {
-    currentSession,
     analysis,
     fileName,
     rawData,
+  } = useDataStore()
+
+  const {
+    currentSession,
     isSaving,
     saveError,
     createNewSession,
     saveCurrentSession,
-  } = useDataStore()
+  } = useSessionStore()
 
   const [showSuccess, setShowSuccess] = useState(false)
 
@@ -28,7 +32,7 @@ export function SaveDashboard() {
     }
 
     await saveCurrentSession()
-    
+
     if (!saveError) {
       setShowSuccess(true)
       setTimeout(() => setShowSuccess(false), 2000)
@@ -55,7 +59,7 @@ export function SaveDashboard() {
         )}
         {isSaving ? 'Saving...' : showSuccess ? 'Saved!' : 'Save'}
       </Button>
-      
+
       {saveError && (
         <span className="text-sm text-red-500">{saveError}</span>
       )}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useDataStore } from '@/lib/store'
+import { useSessionStore } from '@/lib/stores/session-store'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Save, FolderOpen, Download, Plus, Edit2, Trash2 } from 'lucide-react'
@@ -23,7 +23,7 @@ export function SessionManager({ onNewSession, onLoadSession }: SessionManagerPr
     updateSessionMetadata,
     exportSession,
     setRecentSessions,
-  } = useDataStore()
+  } = useSessionStore()
 
   const [showNameDialog, setShowNameDialog] = useState(false)
   const [sessionName, setSessionName] = useState('')
@@ -192,7 +192,7 @@ export function SessionManager({ onNewSession, onLoadSession }: SessionManagerPr
                     )}
                   </div>
                   <Button
-                    size="sm" 
+                    size="sm"
                     variant="ghost"
                     onClick={(e) => {
                       e.stopPropagation()

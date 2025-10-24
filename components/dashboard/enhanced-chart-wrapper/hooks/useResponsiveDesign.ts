@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react'
-import type { ChartType, DataRow } from '@/lib/store'
+import type { ChartType } from '@/lib/stores/chart-store'
+import type { DataRow } from '@/lib/stores/data-store'
 import { CHART_MINIMUMS, RESPONSIVE_BREAKPOINTS } from '../constants'
 import type {
   ResponsiveFeatures,

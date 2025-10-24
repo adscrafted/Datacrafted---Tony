@@ -6,11 +6,11 @@ import { Upload, Loader2, AlertTriangle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useDataStore } from '@/lib/stores/data-store'
 import { useUIStore } from '@/lib/stores/ui-store'
+import { useChartStore } from '@/lib/stores/chart-store'
 import { cn } from '@/lib/utils/cn'
 import { analyzeDataSchema } from '@/lib/utils/schema-analyzer'
 import { schemaCache } from '@/lib/utils/cache-manager'
 import { parseFileOptimized, cleanupFileParser, type ParseProgress } from '@/lib/utils/file-parser-optimized'
-import { EnhancedProgress, useProgressStages } from '@/components/ui/enhanced-progress'
 import { startTiming, endTiming, recordMetric, measureAsyncFunction } from '@/lib/utils/performance-monitor'
 import { transitions, prefersReducedMotion } from '@/lib/utils/animations'
 import { prefetchDashboardResources, shouldPrefetch } from '@/lib/utils/preloader'
@@ -41,23 +41,13 @@ export function FileUploadCore({
   const isAnalyzing = useDataStore(state => state.isAnalyzing)
   const setIsAnalyzing = useDataStore(state => state.setIsAnalyzing)
   const setAnalysis = useDataStore(state => state.setAnalysis)
+  const clearData = useDataStore(state => state.clearData)
 
   // UI Store selectors
   const setUploadProgress = useUIStore(state => state.setUploadProgress)
   const setUploadStage = useUIStore(state => state.setUploadStage)
 
-  // Enhanced progress tracking
-  const {
-    stages,
-    currentStage,
-    overallProgress,
-    initializeStages,
-    updateStage,
-    completeStage,
-    errorStage
-  } = useProgressStages()
-
-  // Local progress tracking state (separate from store)
+  // Local progress tracking state
   const [progressStage, setProgressStage] = useState<string>('')
   const [parseDetails, setParseDetails] = useState<{
     rowsProcessed?: number
@@ -116,26 +106,13 @@ export function FileUploadCore({
       totalChunks: progress.totalChunks
     })
 
-    // Update enhanced progress stages
-    const stageId = progress.stage
-    const stageDetails = progress.rowsProcessed
-      ? `${progress.rowsProcessed.toLocaleString()} rows processed`
-      : undefined
-
-    updateStage(stageId, {
-      status: 'active',
-      progress: progress.percentage,
-      details: stageDetails,
-      estimatedTime: progress.estimatedTimeRemaining
-    })
-
     // Calculate throughput for large files
     if (progress.rowsProcessed && startTimeRef.current) {
       const elapsed = (performance.now() - startTimeRef.current) / 1000
       const throughput = progress.rowsProcessed / elapsed
       setPerformanceMetrics(prev => ({ ...prev, throughput }))
     }
-  }, [updateStage, setUploadProgress, setUploadStage])
+  }, [setUploadProgress, setUploadStage])
 
   const validateFile = useCallback((file: File): string[] => {
     const errors: string[] = []
@@ -158,13 +135,10 @@ export function FileUploadCore({
   const handleFileProcessing = useCallback(async (file: File) => {
     console.log('🔵 [FILE-UPLOAD] Starting upload process for:', file.name)
 
-    // Initialize progress stages
-    initializeStages([
-      { id: 'reading', label: 'Reading file' },
-      { id: 'parsing', label: 'Parsing data' },
-      { id: 'analyzing', label: 'Analyzing structure' },
-      { id: 'complete', label: 'Processing complete' }
-    ])
+    // CRITICAL: Clear all previous data before uploading new file
+    // This prevents old schema descriptions from persisting
+    console.log('🧹 [FILE-UPLOAD] Clearing previous data from store and localStorage')
+    clearData()
 
     // Start upload process
     setIsAnalyzing(true)
@@ -189,14 +163,7 @@ export function FileUploadCore({
     onUploadStart?.()
 
     try {
-      // Initialize progress stages
-      initializeStages([
-        { id: 'parsing', label: 'Parsing file' },
-        { id: 'analyzing', label: 'Analyzing data' },
-        { id: 'complete', label: 'Complete' }
-      ])
-
-      // Set upload stage to uploading
+      // Set upload stage to uploading (stages already initialized above)
       setUploadStage('uploading')
 
       // Store file info
@@ -205,7 +172,6 @@ export function FileUploadCore({
 
       // Parse file stage
       console.log('🔵 [FILE-UPLOAD] Starting file parsing stage')
-      updateStage('parsing', { status: 'active', progress: 0 })
       setProgressStage('Parsing file...')
 
       console.log('🔵 [FILE-UPLOAD] Calling parseFileOptimized')
@@ -226,7 +192,12 @@ export function FileUploadCore({
       }
 
       console.log('✅ [FILE-UPLOAD] File parsing stage completed successfully')
-      completeStage('parsing')
+
+      // CRITICAL FIX: Clear chart customizations for new uploads
+      // This prevents old positions from previous projects interfering with new data
+      const { clearCharts } = useChartStore.getState()
+      clearCharts()
+      console.log('🔵 [FILE-UPLOAD] Cleared previous chart customizations for fresh start')
 
       // Store the data
       console.log('🔵 [FILE-UPLOAD] Storing raw data in store:', {
@@ -251,11 +222,6 @@ export function FileUploadCore({
       // Analyze schema stage
       console.log('🔵 [FILE-UPLOAD] Starting schema analysis')
       setUploadStage('analyzing')
-      updateStage('analyzing', {
-        status: 'active',
-        progress: 0,
-        details: 'Analyzing data structure...'
-      })
       setProgressStage('Analyzing data structure...')
 
       const schema = await analyzeDataSchema(result.data, file.name, file)
@@ -273,12 +239,9 @@ export function FileUploadCore({
       const schemaStoreState = useDataStore.getState()
       console.log('🔍 [FILE-UPLOAD] Store schema after setting:', schemaStoreState.dataSchema?.columns?.slice(0, 3))
 
-      completeStage('analyzing')
-
       // Complete stage
       console.log('🔵 [FILE-UPLOAD] Completing upload process')
       setUploadStage('saving')
-      completeStage('complete')
       setProgressStage('Complete')
 
       // Record completion metrics
@@ -357,7 +320,6 @@ export function FileUploadCore({
         errorMessage,
         fileName: file.name,
         fileSize: file.size,
-        currentStage: currentStage || 'unknown',
         stack: error instanceof Error ? error.stack : 'No stack trace'
       })
 
@@ -370,15 +332,8 @@ export function FileUploadCore({
       recordMetric('upload_failed', {
         fileName: file.name,
         fileSize: file.size,
-        error: errorMessage,
-        stage: currentStage || 'unknown'
+        error: errorMessage
       }, ['upload', 'error'])
-
-      // Mark current stage as error
-      if (currentStage) {
-        console.log('❌ [FILE-UPLOAD] Marking stage as error:', currentStage)
-        errorStage(currentStage, errorMessage)
-      }
 
       console.log('❌ [FILE-UPLOAD] Setting error state and cleaning up')
       setError(errorMessage)
@@ -390,7 +345,7 @@ export function FileUploadCore({
     } finally {
       setAutoProcessing(false)
     }
-  }, [setFileName, setRawData, setDataSchema, setError, setIsAnalyzing, router, handleProgress, onUploadStart, onUploadComplete, onUploadError, initializeStages, updateStage, completeStage, errorStage, currentStage, setUploadStage])
+  }, [clearData, setFileName, setRawData, setDataSchema, setError, setIsAnalyzing, router, handleProgress, onUploadStart, onUploadComplete, onUploadError, setUploadStage])
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0]

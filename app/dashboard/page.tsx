@@ -174,6 +174,108 @@ function DashboardContent() {
 
       setAnalysis(result)
 
+      // CRITICAL FIX: Initialize chart positions immediately after AI analysis
+      // This prevents charts from appearing as 1x1 stacked layout
+      console.log('🎯 [DASHBOARD] Initializing chart positions for AI analysis')
+
+      // Calculate positions for all charts using the same logic as reset layout
+      const chartPositions: Record<string, { position: { x: number, y: number, w: number, h: number } }> = {}
+      const scorecards: Array<{ config: any, chartId: string }> = []
+      const tables: Array<{ config: any, chartId: string }> = []
+      const otherCharts: Array<{ config: any, chartId: string }> = []
+
+      // Helper function to get fixed dimensions for each chart type
+      const getFixedDimensions = (config: any): { w: number, h: number } => {
+        switch (config.type) {
+          case 'scorecard':
+            return { w: 2, h: 1 }  // 2x1 for 1:1 aspect ratio
+          case 'sparkline':
+            return { w: 6, h: 2 }  // Half width, half height of regular charts
+          case 'table':
+            return { w: 12, h: 6 } // Full width tables
+          default:
+            return { w: 6, h: 4 }  // Regular charts (2 per row)
+        }
+      }
+
+      // Separate charts by type
+      result.chartConfig.forEach((config, index) => {
+        const chartId = config.id || `chart-${index}`
+
+        if (config.type === 'scorecard') {
+          scorecards.push({ config, chartId })
+        } else if (config.type === 'table') {
+          tables.push({ config, chartId })
+        } else {
+          otherCharts.push({ config, chartId })
+        }
+      })
+
+      let currentX = 0
+      let currentY = 0
+      const GRID_COLS = 12
+
+      // Position scorecards first (6 per row, 1 row tall)
+      let maxScorecardY = 0
+      scorecards.forEach(({ config, chartId }) => {
+        const dims = getFixedDimensions(config)
+
+        if (currentX + dims.w > GRID_COLS) {
+          currentX = 0
+          currentY += dims.h
+        }
+
+        chartPositions[chartId] = {
+          position: { x: currentX, y: currentY, w: dims.w, h: dims.h }
+        }
+
+        maxScorecardY = Math.max(maxScorecardY, currentY)
+        currentX += dims.w
+      })
+
+      // Position other charts (2 per row)
+      currentX = 0
+      currentY = scorecards.length > 0 ? maxScorecardY + 1 : 0
+      let maxOtherChartsY = currentY
+
+      otherCharts.forEach(({ config, chartId }) => {
+        const dims = getFixedDimensions(config)
+
+        if (currentX + dims.w > GRID_COLS) {
+          currentX = 0
+          currentY += dims.h
+        }
+
+        chartPositions[chartId] = {
+          position: { x: currentX, y: currentY, w: dims.w, h: dims.h }
+        }
+
+        maxOtherChartsY = Math.max(maxOtherChartsY, currentY + dims.h)
+        currentX += dims.w
+      })
+
+      // Position tables at the bottom (full width)
+      currentY = maxOtherChartsY
+      tables.forEach(({ config, chartId }) => {
+        const dims = getFixedDimensions(config)
+
+        chartPositions[chartId] = {
+          position: { x: 0, y: currentY, w: 12, h: dims.h }
+        }
+
+        currentY += dims.h
+      })
+
+      // Apply the calculated positions to the chart store
+      console.log('📐 [DASHBOARD] Applying initial positions to chart store:', {
+        totalCharts: result.chartConfig.length,
+        scorecards: scorecards.length,
+        tables: tables.length,
+        otherCharts: otherCharts.length
+      })
+
+      batchUpdateChartCustomizations(chartPositions)
+
       // Auto-save the INITIAL AI-generated analysis to database
       // This only happens for new analysis, not for user customizations
       const currentProjectId = directId || projectId
@@ -208,7 +310,7 @@ function DashboardContent() {
     } finally {
       setIsAnalyzing(false)
     }
-  }, [rawData, isAnalyzing, analysis, directId, projectId, saveProjectData])
+  }, [rawData, analysis, directId, projectId, saveProjectData])
 
   // Single consolidated effect for loading and analysis
   useEffect(() => {
@@ -299,6 +401,11 @@ function DashboardContent() {
 
             if (savedConfig && savedConfig.chartCustomizations && Object.keys(savedConfig.chartCustomizations).length > 0) {
               console.log('✅ [DASHBOARD] Found saved dashboard config, applying customizations')
+
+              // CRITICAL FIX: Apply saved customizations to the chart store
+              const { batchUpdateChartCustomizations } = useChartStore.getState()
+              batchUpdateChartCustomizations(savedConfig.chartCustomizations)
+              console.log('✅ [DASHBOARD] Applied saved customizations to chart store')
 
               // Apply saved config to the analysis
               if (projectData.analysis) {
@@ -509,7 +616,7 @@ function DashboardContent() {
 
     // Only log analysis once when it first loads (not on every render)
     // Removed excessive logging to reduce console noise
-  }, [rawData, analysis, isAnalyzing, sessionId, currentSession, projectId, directId, isLoadingConfig])
+  }, [rawData, analysis, sessionId, currentSession, projectId, directId, isLoadingConfig])
 
   // Auto-open chat interface when on dashboard
   useEffect(() => {
@@ -617,15 +724,33 @@ function DashboardContent() {
   }, [rawData, isWaitingForIndexedDB])
 
   // Debug loading conditions
-  const shouldShowLoading = isLoadingFromAPI ||
+  // Debug: Log isAnalyzing changes
+  React.useEffect(() => {
+    console.log('🔍 [DASHBOARD] isAnalyzing changed to:', isAnalyzing)
+  }, [isAnalyzing])
+
+  const shouldShowLoading = isAnalyzing || // Always show loading during analysis, regardless of existing data
+                            isLoadingFromAPI ||
                             isWaitingForIndexedDB ||
                             isLoadingConfig ||
-                            isAnalyzing ||
                             (rawData && rawData.length > 0 && !analysis) ||
                             (fileName && !rawData) ||
                             (dataId && (!rawData || rawData.length === 0))
 
-  // Removed excessive loading state logging to reduce console noise
+  // Debug: Log all loading state changes
+  React.useEffect(() => {
+    console.log('🔍 [DASHBOARD] Loading state changed:', {
+      isAnalyzing,
+      shouldShowLoading,
+      isLoadingFromAPI,
+      isWaitingForIndexedDB,
+      isLoadingConfig,
+      hasRawData: !!(rawData && rawData.length > 0),
+      hasAnalysis: !!analysis,
+      currentView,
+      timestamp: new Date().toISOString()
+    })
+  }, [isAnalyzing, shouldShowLoading, isLoadingFromAPI, isWaitingForIndexedDB, isLoadingConfig, rawData, analysis, currentView])
 
   if (shouldShowLoading) {
     // Determine loading message based on state
@@ -1054,7 +1179,7 @@ function DashboardContent() {
             <main className="flex-1 overflow-y-auto h-full">
               {currentView === 'schema' ? (
                 <div className="p-8">
-                  <EditableSchemaViewer />
+                  <EditableSchemaViewer onAIUpdateComplete={() => setCurrentView('dashboard')} />
                 </div>
               ) : (
                 <div className="p-8 pb-24">

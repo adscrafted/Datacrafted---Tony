@@ -18,6 +18,17 @@ import { useDataStore, type DataRow } from './data-store'
 import { useChartStore } from './chart-store'
 import { useUIStore } from './ui-store'
 import { aggregateDataByGranularity } from '@/lib/utils/data-aggregation'
+import { logger } from '@/lib/utils/logger'
+
+// Cache for filtered data to prevent redundant calculations
+let filteredDataCache: {
+  rawData: DataRow[] | null
+  filters: any
+  dateRange: any
+  granularity: string
+  selectedDateColumn: string | null
+  result: DataRow[]
+} | null = null
 
 /**
  * Get filtered data based on current filters and date range
@@ -38,12 +49,28 @@ export function getFilteredData(): DataRow[] {
   // Get selected date column from UI store
   const selectedDateColumn = useUIStore.getState().selectedDateColumn
 
-  console.log('🔍 [FILTERED_DATA] Starting with:', {
+  logger.log('🔍 [FILTERED_DATA] Starting with:', {
     rawDataLength: rawData?.length || 0,
     hasDateRange: !!(dateRange?.from || dateRange?.to),
     granularity,
     selectedDateColumn
   })
+
+  // Check cache
+  if (filteredDataCache) {
+    const isCacheValid =
+      filteredDataCache.rawData === rawData &&
+      JSON.stringify(filteredDataCache.filters) === JSON.stringify(dashboardFilters) &&
+      JSON.stringify(filteredDataCache.dateRange) === JSON.stringify(dateRange) &&
+      filteredDataCache.granularity === granularity &&
+      filteredDataCache.selectedDateColumn === selectedDateColumn
+
+    if (isCacheValid) {
+      logger.log('✅ [FILTERED_DATA] Cache HIT - returning cached result')
+      return filteredDataCache.result
+    }
+  }
+  logger.log('🔍 [FILTERED_DATA] Cache MISS - recalculating')
 
   // Quick return for empty data
   if (!rawData || rawData.length === 0) return []
@@ -94,7 +121,7 @@ export function getFilteredData(): DataRow[] {
       useUIStore.setState({ selectedDateColumn: dateColumnToUse })
     }
 
-    console.log('🔍 [FILTERED_DATA] Date filtering:', {
+    logger.log('🔍 [FILTERED_DATA] Date filtering:', {
       dateRange,
       allDateColumns: dateColumns,
       selectedDateColumn: dateColumnToUse,
@@ -127,7 +154,7 @@ export function getFilteredData(): DataRow[] {
 
         return true
       })
-      console.log('🔍 [FILTERED_DATA] After date filter:', {
+      logger.log('🔍 [FILTERED_DATA] After date filter:', {
         beforeCount: beforeFilterCount,
         afterCount: filteredData.length,
         filteredOut: beforeFilterCount - filteredData.length
@@ -205,7 +232,7 @@ export function getFilteredData(): DataRow[] {
   }) : []
 
   if (dateColumns.length > 0 && shouldApplyGranularityAggregation) {
-    console.log('📊 [FILTERED_DATA] Applying granularity aggregation:', {
+    logger.log('📊 [FILTERED_DATA] Applying granularity aggregation:', {
       granularity,
       dateColumn: dateColumns[0],
       beforeAggregation: filteredData.length
@@ -213,7 +240,7 @@ export function getFilteredData(): DataRow[] {
 
     filteredData = aggregateDataByGranularity(filteredData, granularity, dateColumns[0])
 
-    console.log('📊 [FILTERED_DATA] After granularity aggregation:', {
+    logger.log('📊 [FILTERED_DATA] After granularity aggregation:', {
       afterAggregation: filteredData.length,
       rowsReduced: filteredData.length
     })
@@ -229,18 +256,37 @@ export function getFilteredData(): DataRow[] {
       return dateA.getTime() - dateB.getTime()
     })
   } else if (dateColumns.length > 0 && !shouldApplyGranularityAggregation) {
-    console.log('📊 [FILTERED_DATA] Skipping granularity aggregation (no date filter active):', {
+    logger.log('📊 [FILTERED_DATA] Skipping granularity aggregation (no date filter active):', {
       dataLength: filteredData.length,
       message: 'Using all raw data for accurate calculations'
     })
   }
 
-  console.log('✅ [FILTERED_DATA] Returning filtered data:', {
+  logger.log('✅ [FILTERED_DATA] Returning filtered data:', {
     finalLength: filteredData.length,
     aggregationWasApplied: shouldApplyGranularityAggregation
   })
 
+  // Cache the result
+  filteredDataCache = {
+    rawData,
+    filters: dashboardFilters,
+    dateRange,
+    granularity,
+    selectedDateColumn,
+    result: filteredData
+  }
+
   return filteredData
+}
+
+/**
+ * Invalidate filtered data cache
+ * Call this when rawData changes to force recalculation
+ */
+export function invalidateFilteredDataCache() {
+  filteredDataCache = null
+  logger.log('🗑️ [FILTERED_DATA] Cache invalidated')
 }
 
 /**

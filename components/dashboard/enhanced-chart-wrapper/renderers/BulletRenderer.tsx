@@ -1,5 +1,5 @@
 import React from 'react'
-import type { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/stores/data-store'
 
 const BulletChart = React.lazy(() => import('../../charts/bullet-chart'))
 

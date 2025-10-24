@@ -1,7 +1,9 @@
 'use client'
 
 import React, { useEffect, useState, useRef } from 'react'
-import { useDataStore } from '@/lib/store'
+import { useDataStore } from '@/lib/stores/data-store'
+import { useChartStore } from '@/lib/stores/chart-store'
+import { useSessionStore } from '@/lib/stores/session-store'
 import { CheckCircle, Cloud, CloudOff, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
@@ -11,17 +13,23 @@ interface AutoSaveIndicatorProps {
 
 export function AutoSaveIndicator({ className }: AutoSaveIndicatorProps) {
   const {
-    currentSession,
     analysis,
+  } = useDataStore()
+
+  const {
     chartCustomizations,
     currentTheme,
     currentLayout,
     dashboardFilters,
+  } = useChartStore()
+
+  const {
+    currentSession,
     isSaving,
     saveError,
     createNewSession,
     saveCurrentSession,
-  } = useDataStore()
+  } = useSessionStore()
 
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error' | 'offline'>('saved')
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
@@ -44,7 +52,7 @@ export function AutoSaveIndicator({ className }: AutoSaveIndicatorProps) {
     if (!analysis) return
 
     setSaveStatus('saving')
-    
+
     try {
       if (!currentSession) {
         // Create a new session if none exists
@@ -52,7 +60,7 @@ export function AutoSaveIndicator({ className }: AutoSaveIndicatorProps) {
       } else {
         await saveCurrentSession()
       }
-      
+
       setSaveStatus('saved')
       setLastSaved(new Date())
     } catch (error) {
@@ -64,22 +72,22 @@ export function AutoSaveIndicator({ className }: AutoSaveIndicatorProps) {
   // Watch for changes and trigger auto-save with debounce
   useEffect(() => {
     const currentDataHash = getSaveDataHash()
-    
+
     // Only save if data has actually changed
     if (currentDataHash !== lastSaveDataRef.current && analysis) {
       lastSaveDataRef.current = currentDataHash
-      
+
       // Clear existing timeout
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current)
       }
-      
+
       // Set new timeout for auto-save (3 seconds debounce)
       saveTimeoutRef.current = setTimeout(() => {
         performAutoSave()
       }, 3000)
     }
-    
+
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current)
@@ -98,15 +106,15 @@ export function AutoSaveIndicator({ className }: AutoSaveIndicatorProps) {
   useEffect(() => {
     const handleOnline = () => setSaveStatus('saved')
     const handleOffline = () => setSaveStatus('offline')
-    
+
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
-    
+
     // Check initial status
     if (!navigator.onLine) {
       setSaveStatus('offline')
     }
-    
+
     return () => {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
@@ -116,13 +124,13 @@ export function AutoSaveIndicator({ className }: AutoSaveIndicatorProps) {
   // Format last saved time
   const getLastSavedText = () => {
     if (!lastSaved) return ''
-    
+
     const now = new Date()
     const diff = now.getTime() - lastSaved.getTime()
     const seconds = Math.floor(diff / 1000)
     const minutes = Math.floor(seconds / 60)
     const hours = Math.floor(minutes / 60)
-    
+
     if (seconds < 10) return 'just now'
     if (seconds < 60) return `${seconds}s ago`
     if (minutes < 60) return `${minutes}m ago`

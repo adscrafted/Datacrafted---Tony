@@ -30,7 +30,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { useDataStore, type ChartTemplate } from '@/lib/store'
+import { useDataStore } from '@/lib/stores/data-store'
+import { useChartStore, type ChartTemplate } from '@/lib/stores/chart-store'
+import { useUIStore } from '@/lib/stores/ui-store'
 import { cn } from '@/lib/utils/cn'
 import { QualityIndicator } from './quality-indicator'
 
@@ -59,16 +61,34 @@ export const ChartTemplateGallery: React.FC<ChartTemplateGalleryProps> = ({
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
 
-  const {
-    chartTemplates,
-    availableColumns,
-    rawData,
-    addChart,
-    setShowChartTemplateGallery
-  } = useDataStore()
+  // Get data from modular stores
+  const rawData = useDataStore((state) => state.rawData)
+  const availableColumns = useDataStore((state) => state.availableColumns)
+  const dataSchema = useDataStore((state) => state.dataSchema)
+  const chartTemplates = useChartStore((state) => state.chartTemplates)
+  const addChart = useChartStore((state) => state.addChart)
+  const setShowChartTemplateGallery = useUIStore((state) => state.setShowChartTemplateGallery)
 
-  // Analyze available data types
+  // Analyze available data types using schema (more accurate than raw data inspection)
   const dataTypeAnalysis = useMemo(() => {
+    // If we have a schema, use it (most accurate)
+    if (dataSchema?.columns) {
+      const numberColumns = dataSchema.columns.filter(col => col.type === 'number')
+      const stringColumns = dataSchema.columns.filter(col => col.type === 'string' || col.type === 'categorical')
+      const dateColumns = dataSchema.columns.filter(col => col.type === 'date')
+
+      return {
+        hasNumbers: numberColumns.length > 0,
+        hasStrings: stringColumns.length > 0,
+        hasDates: dateColumns.length > 0,
+        columnCount: dataSchema.columns.length,
+        numberColumns: numberColumns.length,
+        stringColumns: stringColumns.length,
+        dateColumns: dateColumns.length
+      }
+    }
+
+    // Fallback to raw data inspection if schema not available
     if (!rawData.length || !availableColumns.length) {
       return { hasNumbers: false, hasStrings: false, hasDates: false, columnCount: 0 }
     }
@@ -101,7 +121,7 @@ export const ChartTemplateGallery: React.FC<ChartTemplateGalleryProps> = ({
       stringColumns: stringColumns.length,
       dateColumns: dateColumns.length
     }
-  }, [rawData, availableColumns])
+  }, [dataSchema, rawData, availableColumns])
 
   // Filter templates based on search and category
   const filteredTemplates = useMemo(() => {

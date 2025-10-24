@@ -1,5 +1,5 @@
 import React from 'react'
-import type { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/stores/data-store'
 import { logger } from '@/lib/utils/logger'
 
 const GaugeChart = React.lazy(() => import('../../charts/gauge-chart'))

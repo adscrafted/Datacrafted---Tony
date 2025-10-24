@@ -120,8 +120,27 @@ export async function syncUserToDatabase(user: User): Promise<{
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.error || 'Failed to sync user')
+      // Don't throw errors for database connection issues
+      // The app can still work without database sync
+      const errorText = await response.text()
+      let errorMessage = 'Failed to sync user'
+      try {
+        const errorJson = JSON.parse(errorText)
+        errorMessage = errorJson.error || errorMessage
+      } catch {
+        errorMessage = errorText || errorMessage
+      }
+
+      // Log as warning, not error, for database connection issues
+      if (errorMessage.includes('database') || errorMessage.includes('Prisma')) {
+        console.warn('[API-CLIENT] Database sync unavailable, continuing without persistence')
+        return {
+          success: false,
+          error: 'Database temporarily unavailable'
+        }
+      }
+
+      throw new Error(errorMessage)
     }
 
     const data = await response.json()

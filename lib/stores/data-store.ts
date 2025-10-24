@@ -32,6 +32,8 @@ import type {
   CorrectedColumn,
   DataContext,
 } from '@/lib/types/recommendation'
+import { invalidateFilteredDataCache } from './filtered-data'
+import { logger } from '@/lib/utils/logger'
 
 export interface DataRow {
   [key: string]: string | number | boolean | Date | null
@@ -187,7 +189,7 @@ export const useDataStore = create<DataStore>()(
           if (data && data.length > 1000) {
             const fileName = get().fileName || 'untitled'
             const dataId = await dataStorage.saveData(fileName, data)
-            console.log('📦 [DATA_STORE] Stored large dataset in IndexedDB:', {
+            logger.log('📦 [DATA_STORE] Stored large dataset in IndexedDB:', {
               rows: data.length,
               dataId,
               timestamp: new Date().toISOString()
@@ -195,7 +197,7 @@ export const useDataStore = create<DataStore>()(
             set({ rawData: data, dataId })
           } else {
             // For small datasets, just store in memory
-            console.log('📦 [DATA_STORE] Stored small dataset in memory:', {
+            logger.log('📦 [DATA_STORE] Stored small dataset in memory:', {
               rows: data.length,
               timestamp: new Date().toISOString()
             })
@@ -207,8 +209,11 @@ export const useDataStore = create<DataStore>()(
             const columns = Object.keys(data[0])
             set({ availableColumns: columns })
           }
+
+          // Invalidate filtered data cache when rawData changes
+          invalidateFilteredDataCache()
         } catch (error) {
-          console.error('❌ [DATA_STORE] Failed to store data:', {
+          logger.error('❌ [DATA_STORE] Failed to store data:', {
             error,
             message: error instanceof Error ? error.message : 'Unknown error',
             dataLength: data?.length,
@@ -216,11 +221,13 @@ export const useDataStore = create<DataStore>()(
           })
           // Fallback to memory storage
           set({ rawData: data, dataId: null })
+          // Still invalidate cache even on error
+          invalidateFilteredDataCache()
         }
       },
 
       setDataSchema: (schema) => {
-        console.log('📊 [DATA_STORE] Setting data schema:', {
+        logger.log('📊 [DATA_STORE] Setting data schema:', {
           fileName: schema.fileName,
           rowCount: schema.rowCount,
           columnCount: schema.columnCount,
@@ -232,12 +239,12 @@ export const useDataStore = create<DataStore>()(
       setAnalysis: (analysis) => {
         // Handle null explicitly to clear analysis
         if (analysis === null) {
-          console.log('📦 [DATA_STORE] Clearing analysis')
+          logger.log('📦 [DATA_STORE] Clearing analysis')
           set({ analysis: null, dataContext: null })
           return
         }
 
-        console.log('📦 [DATA_STORE] Setting analysis:', {
+        logger.log('📦 [DATA_STORE] Setting analysis:', {
           chartCount: analysis?.chartConfig?.length || 0,
           hasDataContext: 'dataContext' in analysis && !!analysis.dataContext,
           timestamp: new Date().toISOString()
@@ -252,7 +259,7 @@ export const useDataStore = create<DataStore>()(
       },
 
       setCorrectedSchema: (schema) => {
-        console.log('📝 [DATA_STORE] Setting corrected schema:', {
+        logger.log('📝 [DATA_STORE] Setting corrected schema:', {
           corrections: schema.length,
           timestamp: new Date().toISOString()
         })
@@ -260,14 +267,21 @@ export const useDataStore = create<DataStore>()(
       },
 
       setDataContext: (context) => {
-        console.log('🎯 [DATA_STORE] Setting data context:', {
+        logger.log('🎯 [DATA_STORE] Setting data context:', {
           domain: context.domain,
           timestamp: new Date().toISOString()
         })
         set({ dataContext: context })
       },
 
-      setIsAnalyzing: (isAnalyzing) => set({ isAnalyzing }),
+      setIsAnalyzing: (isAnalyzing) => {
+        logger.log('🔄 [DATA_STORE] setIsAnalyzing called:', {
+          isAnalyzing,
+          timestamp: new Date().toISOString(),
+          stackTrace: new Error().stack?.split('\n').slice(2, 5).join('\n')
+        })
+        set({ isAnalyzing })
+      },
       setError: (error) => set({ error }),
       setAnalysisProgress: (progress) => set({ analysisProgress: progress }),
       setUsingAI: (usingAI) => set({ usingAI }),
@@ -284,14 +298,16 @@ export const useDataStore = create<DataStore>()(
         // Otherwise, load from IndexedDB
         if (state.dataId) {
           try {
-            console.log('📥 [DATA_STORE] Loading data from IndexedDB:', state.dataId)
+            logger.log('📥 [DATA_STORE] Loading data from IndexedDB:', state.dataId)
             const data = await dataStorage.loadData(state.dataId)
             if (data) {
               set({ rawData: data })
+              // Invalidate cache when loading new data
+              invalidateFilteredDataCache()
               return data
             }
           } catch (error) {
-            console.error('❌ [DATA_STORE] Failed to load data from IndexedDB:', error)
+            logger.error('❌ [DATA_STORE] Failed to load data from IndexedDB:', error)
           }
         }
 
@@ -299,7 +315,7 @@ export const useDataStore = create<DataStore>()(
       },
 
       clearData: () => {
-        console.log('🗑️ [DATA_STORE] Clearing all data')
+        logger.log('🗑️ [DATA_STORE] Clearing all data')
         set({
           fileName: null,
           rawData: [],
@@ -313,6 +329,8 @@ export const useDataStore = create<DataStore>()(
           analysisProgress: 0,
           availableColumns: [],
         })
+        // Invalidate cache when clearing data
+        invalidateFilteredDataCache()
       },
     }),
     {
@@ -334,14 +352,14 @@ export const useDataStore = create<DataStore>()(
       onRehydrateStorage: (state) => {
         return (rehydratedState, error) => {
           if (error) {
-            console.error('❌ [DATA_STORE] Failed to rehydrate:', error)
+            logger.error('❌ [DATA_STORE] Failed to rehydrate:', error)
             return
           }
 
           if (rehydratedState) {
             // Load data from IndexedDB after store hydration
             if (rehydratedState.dataId && !rehydratedState.rawData?.length) {
-              console.log('📥 [DATA_STORE] Rehydrating data from IndexedDB:', rehydratedState.dataId)
+              logger.log('📥 [DATA_STORE] Rehydrating data from IndexedDB:', rehydratedState.dataId)
               dataStorage.loadData(rehydratedState.dataId).then(data => {
                 if (data) {
                   useDataStore.setState({ rawData: data })
@@ -351,9 +369,12 @@ export const useDataStore = create<DataStore>()(
                     const columns = Object.keys(data[0])
                     useDataStore.setState({ availableColumns: columns })
                   }
+
+                  // Invalidate cache when rehydrating data
+                  invalidateFilteredDataCache()
                 }
               }).catch(error => {
-                console.error('❌ [DATA_STORE] Failed to load data from IndexedDB:', error)
+                logger.error('❌ [DATA_STORE] Failed to load data from IndexedDB:', error)
               })
             }
           }

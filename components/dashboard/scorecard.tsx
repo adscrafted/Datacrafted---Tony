@@ -94,11 +94,15 @@ export function Scorecard({
       }
 
       // Regular number formatting
+      // Use absolute value to check magnitude, but preserve sign in output
+      const absVal = Math.abs(val)
+      const sign = val < 0 ? '-' : ''
+
       // All values show 1 decimal place
-      if (val >= 1000000) {
-        return { isDate: false, value: `${(val / 1000000).toFixed(1)}M` }
-      } else if (val >= 1000) {
-        return { isDate: false, value: `${(val / 1000).toFixed(1)}K` }
+      if (absVal >= 1000000) {
+        return { isDate: false, value: `${sign}${(absVal / 1000000).toFixed(1)}M` }
+      } else if (absVal >= 1000) {
+        return { isDate: false, value: `${sign}${(absVal / 1000).toFixed(1)}K` }
       }
       // Always show 1 decimal place for values under 1000
       return { isDate: false, value: val.toFixed(1) }

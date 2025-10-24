@@ -10,7 +10,7 @@ import {
   Tooltip,
   Legend
 } from 'recharts'
-import type { DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/stores/data-store'
 import type { ScatterData } from '../types'
 import { CustomScatterShape } from '../components/CustomScatterShape'
 import { renderCollapsibleLegend } from '../../collapsible-legend'
@@ -201,7 +201,7 @@ const ScatterRendererComponent: React.FC<ScatterRendererProps> = ({
                   }
 
                   return (
-                    <div key={key} style={{ marginBottom: index < prioritizedKeys.length - 1 ? '4px' : '0', color: '#64748b' }}>
+                    <div key={`${key}-${index}`} style={{ marginBottom: index < prioritizedKeys.length - 1 ? '4px' : '0', color: '#64748b' }}>
                       <span style={{ fontWeight: '500' }}>{label}:</span>{' '}
                       <span style={{ color: '#111827' }}>{displayValue}</span>
                     </div>

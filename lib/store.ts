@@ -85,7 +85,7 @@ export interface ChartCustomization {
   customDescription?: string
   axisLabels?: { x?: string; y?: string }
   isVisible?: boolean
-  chartType?: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo' | 'waterfall' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sparkline' | 'sankey'
+  chartType?: 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo' | 'waterfall' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sparkline'
   animate?: boolean
   interactive?: boolean
   stacked?: boolean
@@ -136,8 +136,6 @@ export interface ChartCustomization {
     comparative?: string // For bullet charts
     ranges?: string // For bullet charts
     parent?: string // For treemap charts
-    source?: string // For sankey charts
-    target_node?: string // For sankey charts
     trend?: string // For sparkline charts
     min?: number // For gauge charts
     max?: number // For gauge charts
@@ -152,7 +150,7 @@ export interface ChartCustomization {
 
 export type ChartType =
   | 'line' | 'bar' | 'pie' | 'area' | 'scatter' | 'scorecard' | 'table' | 'combo'
-  | 'waterfall' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sankey' | 'sparkline'
+  | 'waterfall' | 'heatmap' | 'gauge' | 'cohort' | 'bullet' | 'treemap' | 'sparkline'
 
 export interface ChartTemplate {
   id: string

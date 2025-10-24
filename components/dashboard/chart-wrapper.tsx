@@ -43,7 +43,6 @@ const GaugeChart = lazy(() => import('./charts/gauge-chart'))
 const CohortGrid = lazy(() => import('./charts/cohort-grid'))
 const BulletChart = lazy(() => import('./charts/bullet-chart'))
 const TreemapChart = lazy(() => import('./charts/treemap-chart'))
-const SankeyChart = lazy(() => import('./charts/sankey-chart'))
 const SparklineChart = lazy(() => import('./charts/sparkline-chart'))
 
 interface ChartWrapperProps {
@@ -854,25 +853,6 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
               customization={{
                 colors: customization?.colors,
                 showLabels: customization?.showLabels ?? true
-              }}
-            />
-          </React.Suspense>
-        )
-
-      case 'sankey':
-        return (
-          <React.Suspense fallback={<ChartSkeleton />}>
-            <SankeyChart
-              data={chartData}
-              dataMapping={{
-                source: customization?.dataMapping?.source || safeDataKey[0] || 'source',
-                target: customization?.dataMapping?.target_node || safeDataKey[1] || 'target',
-                value: customization?.dataMapping?.value || safeDataKey[2] || 'value'
-              }}
-              customization={{
-                colors: customization?.colors,
-                nodeWidth: 12,
-                nodePadding: 24
               }}
             />
           </React.Suspense>

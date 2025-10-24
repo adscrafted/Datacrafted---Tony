@@ -31,7 +31,6 @@ export function UploadStatusBar() {
     { id: 'uploading', label: 'Uploading file', status: 'pending' },
     { id: 'parsing', label: 'Parsing data', status: 'pending' },
     { id: 'analyzing', label: 'Analyzing structure', status: 'pending' },
-    { id: 'creating', label: 'Creating project', status: 'pending' },
     { id: 'saving', label: 'Saving data', status: 'pending' },
   ])
 

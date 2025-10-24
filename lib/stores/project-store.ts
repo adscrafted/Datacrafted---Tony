@@ -428,7 +428,12 @@ export const useProjectStore = create<ProjectStore>()(
           savedToDatabase = true
         } catch (error) {
           apiError = error instanceof Error ? error : new Error(String(error))
-          console.error('❌ [PROJECT_STORE] API save failed after retries:', apiError.message)
+          // Silently handle database connection issues
+          if (apiError.message.includes('database') || apiError.message.includes('Prisma') || apiError.message.includes('5432')) {
+            console.warn('⚠️ [PROJECT_STORE] Database unavailable, continuing with local storage only')
+          } else {
+            console.error('❌ [PROJECT_STORE] API save failed after retries:', apiError.message)
+          }
           // Don't throw yet - try IndexedDB first
         }
 
@@ -478,12 +483,13 @@ export const useProjectStore = create<ProjectStore>()(
           savedToIndexedDB
         })
 
-        // If database save failed but IndexedDB succeeded, throw an error to notify the UI
+        // If database save failed but IndexedDB succeeded, don't throw error
+        // Just log a warning if it's not a database connection issue
         if (!savedToDatabase && savedToIndexedDB) {
-          throw new Error(
-            `Data saved locally but failed to save to database. ` +
-            `You may need to sync this project later. Error: ${apiError?.message || 'Unknown'}`
-          )
+          if (apiError && !apiError.message.includes('database') && !apiError.message.includes('Prisma') && !apiError.message.includes('5432')) {
+            console.warn('⚠️ [PROJECT_STORE] Data saved locally only. Database sync may be needed later.')
+          }
+          // Don't throw error - continue normally
         }
 
         // If database saved but IndexedDB failed, log warning but don't throw

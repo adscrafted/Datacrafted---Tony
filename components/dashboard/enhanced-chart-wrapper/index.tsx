@@ -47,6 +47,9 @@ import { useResponsiveDesign } from './hooks/useResponsiveDesign'
 import { useDualAxis } from './hooks/useDualAxis'
 import { useChartValidation } from './hooks/useChartValidation'
 
+// Import filter utilities
+import { getActiveFilterCount } from '@/lib/utils/chart-filters'
+
 // Import utility components
 import { UnconfiguredPlaceholder } from './components/UnconfiguredPlaceholder'
 import { ChartFallback, ChartTooSmallFallback } from './components/ChartFallback'
@@ -98,18 +101,20 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
   const contextMenuPosition = useUIStore(state => state.contextMenuPosition)
   const contextMenuChartId = useUIStore(state => state.contextMenuChartId)
 
-  // Chart Store selectors
+  // Chart Store selectors - OPTIMIZED for selective subscriptions
+  // PERFORMANCE: Use selective selectors to only re-render when THIS chart changes
+  const customization = useChartStore(state => state.chartCustomizations[id])
+  const draftChart = useChartStore(state => state.draftChart)
+
+  // Action selectors (these are stable references, won't cause re-renders)
   const exportChart = useChartStore(state => state.exportChart)
-  const chartCustomizations = useChartStore(state => state.chartCustomizations)
   const removeChart = useChartStore(state => state.removeChart)
   const duplicateChart = useChartStore(state => state.duplicateChart)
   const updateChartType = useChartStore(state => state.updateChartType)
   const updateChartCustomization = useChartStore(state => state.updateChartCustomization)
   const chartTemplates = useChartStore(state => state.chartTemplates)
-  const draftChart = useChartStore(state => state.draftChart)
 
-  // Get chart customization
-  const customization = chartCustomizations[id]
+  // Visibility check
   const isVisible = customization?.isVisible !== false
 
   // CRITICAL FIX: Use customized chart type if available
@@ -127,20 +132,28 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
     configDataMapping
   })
 
+  // Get schema for chart filtering
+  const schema = useDataStore(state => state.dataSchema)
+
   // Process chart data using hook
   const chartData = useChartData({
     data,
     type,
     title,
     customization,
-    configDataMapping
+    configDataMapping,
+    schema
   })
 
   // Safe dataKey handling
   const safeDataKey = React.useMemo(() => {
+    // DATA MAPPING PRIORITY (highest to lowest):
+    // 1. customization.dataMapping - User edits in chart customization panel (HIGHEST PRIORITY)
+    // 2. configDataMapping - AI-generated from analysis.chartConfig
+    // User edits override AI recommendations completely
     const effectiveMapping = {
-      ...configDataMapping,
-      ...customization?.dataMapping
+      ...configDataMapping,           // AI recommendations (base)
+      ...customization?.dataMapping   // User overrides (takes precedence)
     }
 
     if (effectiveMapping && Object.keys(effectiveMapping).length > 0) {
@@ -211,9 +224,29 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
           }
           break
 
+        case 'gauge':
+          if (mapping.metric) {
+            return [mapping.metric]
+          }
+          break
+
         case 'table':
           if (mapping.yAxis) {
             return Array.isArray(mapping.yAxis) ? mapping.yAxis : [mapping.yAxis]
+          }
+          break
+
+        case 'heatmap':
+          if (mapping.xAxis && mapping.yAxis && mapping.value) {
+            return [mapping.xAxis, mapping.yAxis, mapping.value]
+          }
+          break
+
+        case 'treemap':
+          if (mapping.category && mapping.value) {
+            return mapping.parentCategory
+              ? [mapping.category, mapping.value, mapping.parentCategory]
+              : [mapping.category, mapping.value]
           }
           break
       }
@@ -251,8 +284,11 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
     dualAxisConfig
   })
 
-  // Pie chart data processing
-  const colors = customization?.colors || COLORS
+  // Pie chart data processing - stabilize colors to prevent unnecessary re-renders
+  const colors = React.useMemo(() =>
+    customization?.colors || COLORS,
+    [customization?.colors]
+  )
 
   // Scatter chart data processing - MUST be at component level to comply with React hooks rules
   const scatterData = React.useMemo<ScatterData>(() => {
@@ -648,6 +684,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                   initialTab={initialTab}
                   configDataMapping={configDataMapping}
                   autoOpen={(isSelected && initialTab === 'data') || isDraftChart}
+                  data={data}
                 />
                 <DropdownMenu onOpenChange={setIsDropdownOpen}>
                   <DropdownMenuTrigger asChild>
@@ -806,6 +843,20 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                             ({customization.dataMapping.sortOrder === 'desc' ? 'Top' : 'Bottom'} {customization.dataMapping.limit})
                           </span>
                         )}
+                        {(() => {
+                          const activeFilterCount = getActiveFilterCount(customization?.filters)
+                          return activeFilterCount > 0 ? (
+                            <span
+                              className="inline-flex items-center px-2 py-0.5 ml-2 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200"
+                              title={`${activeFilterCount} active filter${activeFilterCount > 1 ? 's' : ''}`}
+                            >
+                              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                              </svg>
+                              {activeFilterCount}
+                            </span>
+                          ) : null
+                        })()}
                       </h3>
                       {qualityScore !== undefined && qualityScore > 0 && (
                         <QualityBadge score={qualityScore} />
@@ -860,6 +911,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
                   initialTab={initialTab}
                   configDataMapping={configDataMapping}
                   autoOpen={(isSelected && initialTab === 'data') || isDraftChart}
+                  data={data}
                 />
 
                 <Button
@@ -927,7 +979,14 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
 
           {/* Chart Content */}
           <div className="px-6 py-6 flex-1 min-h-0">
-            <div className="h-full w-full" style={{ minHeight: 360 }}>
+            <div
+              className="h-full w-full"
+              style={{
+                minHeight: effectiveChartType === 'scorecard'
+                  ? 'auto'  // Scorecards are compact, no minimum height needed
+                  : 200      // All other charts (including sparklines) need minimum height for proper rendering
+              }}
+            >
               {renderChart()}
             </div>
           </div>
@@ -990,10 +1049,9 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
     return keysA.every(key => a[key] === b[key])
   }
 
-  const dataUnchanged = (
-    prevProps.data === nextProps.data ||
-    prevProps.data.length === nextProps.data.length
-  )
+  // Use reference equality for data - with filtered data caching,
+  // the reference will change when data actually changes
+  const dataUnchanged = prevProps.data === nextProps.data
 
   const isEqual = (
     prevProps.id === nextProps.id &&

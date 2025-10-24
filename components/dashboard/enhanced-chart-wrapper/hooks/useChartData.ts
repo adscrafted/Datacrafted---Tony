@@ -1,7 +1,11 @@
 import React from 'react'
-import type { ChartType, DataRow } from '@/lib/store'
+import type { DataRow } from '@/lib/stores/data-store'
+import type { ChartType } from '@/lib/stores/chart-store'
 import { aggregateChartData } from '@/lib/utils/data-aggregation'
 import { processChartData, type ChartDataMapping } from '@/lib/utils/chart-data-processor'
+import { logger } from '@/lib/utils/logger'
+import { applyChartFilters } from '@/lib/utils/chart-filters'
+import { isValidDate } from '@/lib/utils/date-detection'
 
 interface UseChartDataOptions {
   data: DataRow[]
@@ -9,11 +13,13 @@ interface UseChartDataOptions {
   title: string
   customization: any
   configDataMapping: any
+  schema?: Array<{ name: string; type: string }>
 }
 
 /**
  * Hook to process and transform chart data based on chart type and configuration
  * Handles:
+ * - Chart-level filters (date aggregation, categorical filtering)
  * - Data slicing (limit to 1000 rows for performance, except scorecards)
  * - Formula-based scorecard processing
  * - Date-based sorting for time series
@@ -25,27 +31,50 @@ export function useChartData({
   type,
   title,
   customization,
-  configDataMapping
+  configDataMapping,
+  schema
 }: UseChartDataOptions): DataRow[] {
+  // DATA MAPPING PRIORITY (highest to lowest):
+  // 1. customization.dataMapping - User edits in chart customization panel (HIGHEST PRIORITY - FINAL AUTHORITY)
+  // 2. configDataMapping - AI-generated from analysis.chartConfig
+  // User edits completely override AI recommendations
+  // PERFORMANCE: Stabilize effectiveMapping to prevent unnecessary recalculations
+  const effectiveMapping = React.useMemo(() => ({
+    ...configDataMapping,           // AI recommendations (base)
+    ...customization?.dataMapping   // User overrides (takes precedence)
+  }), [configDataMapping, customization?.dataMapping])
+
   return React.useMemo(() => {
     if (!data || !Array.isArray(data) || data.length === 0) {
       return []
     }
 
-    // Get effective data mapping
-    const effectiveMapping = {
-      ...configDataMapping,
-      ...customization?.dataMapping
+    // STEP 1: Apply chart-level filters FIRST (before any other processing)
+    // This includes date aggregation and categorical filtering
+    let processedData = applyChartFilters(data, customization?.filters, schema)
+
+    if (customization?.filters && customization.filters.length > 0) {
+      const activeFilters = customization.filters.filter((f: any) => f.isActive)
+      if (activeFilters.length > 0) {
+        logger.log(`🔍 [CHART_FILTERS] ${title}:`, {
+          originalRows: data.length,
+          filteredRows: processedData.length,
+          activeFilters: activeFilters.map((f: any) => ({ type: f.type, column: f.column }))
+        })
+      }
     }
 
-    // CRITICAL FIX: For scorecards, we MUST use all data to ensure accurate aggregation
-    // The fullscreen view uses ALL filteredData for calculation details (see app/dashboard/page.tsx line 465-496)
-    // If we limit scorecard data here, the card value and calculation details will show different numbers
+    // STEP 2: Data slicing for performance
+    // CRITICAL FIX: For scorecards, gauge, heatmap, and treemap charts, we MUST use all data to ensure accurate aggregation
+    // - Scorecards/Gauge: fullscreen view uses ALL filteredData for calculation details (see app/dashboard/page.tsx line 465-496)
+    // - Heatmap: needs all data to build complete category sets for x/y axes
+    // - Treemap: needs all data to show complete category hierarchy
     // For other chart types (line, bar, scatter, etc.), limit to 1000 rows for rendering performance
-    let processedData = type === 'scorecard' ? data : data.slice(0, 1000)
+    const chartsNeedingAllData = ['scorecard', 'gauge', 'heatmap', 'treemap']
+    processedData = chartsNeedingAllData.includes(type) ? processedData : processedData.slice(0, 1000)
 
     if (type === 'scorecard') {
-      console.log(`🔍 [SCORECARD_DATA_DEBUG] ${title} - Initial data:`, {
+      logger.log(`🔍 [SCORECARD_DATA_DEBUG] ${title} - Initial data:`, {
         inputDataLength: data.length,
         processedDataLength: processedData.length,
         metric: effectiveMapping.metric,
@@ -58,19 +87,32 @@ export function useChartData({
       })
     }
 
+    if (type === 'gauge') {
+      logger.log(`🔍 [GAUGE_DATA_DEBUG] ${title} - Initial data:`, {
+        inputDataLength: data.length,
+        processedDataLength: processedData.length,
+        metric: effectiveMapping.metric,
+        aggregation: effectiveMapping.aggregation,
+        sampleRow: processedData[0],
+        customizationDataMapping: customization?.dataMapping,
+        configDataMapping: configDataMapping,
+        effectiveMapping: effectiveMapping
+      })
+    }
+
     // Process formula-based scorecards using the chart data processor
     if (type === 'scorecard' && effectiveMapping.formula && effectiveMapping.formulaAlias) {
       try {
         const processed = processChartData(processedData, 'scorecard', effectiveMapping as ChartDataMapping)
         processedData = processed.data
-        console.log(`📊 [FORMULA_DEBUG] ${title}:`, {
+        logger.log(`📊 [FORMULA_DEBUG] ${title}:`, {
           formula: effectiveMapping.formula,
           formulaAlias: effectiveMapping.formulaAlias,
           result: processedData[0],
           metadata: processed.metadata
         })
       } catch (error) {
-        console.error(`❌ [FORMULA_ERROR] ${title}:`, error)
+        logger.error(`❌ [FORMULA_ERROR] ${title}:`, error)
       }
     }
 
@@ -80,7 +122,7 @@ export function useChartData({
     if (xKey && processedData.length > 0) {
       // Check if X-axis appears to contain dates
       const sampleValue = processedData[0]?.[xKey]
-      const isDateColumn = sampleValue && !isNaN(Date.parse(String(sampleValue)))
+      const isDateColumn = isValidDate(sampleValue)
 
       if (isDateColumn) {
         // Sort chronologically by date for all chart types
@@ -118,7 +160,7 @@ export function useChartData({
 
       // Only aggregate if we have Y-axis keys
       if (yAxisKeys.length > 0) {
-        console.log(`📊 [AGGREGATION_DEBUG] ${title}:`, {
+        logger.log(`📊 [AGGREGATION_DEBUG] ${title}:`, {
           aggregationMethod,
           xKey,
           yAxisKeys,
@@ -127,10 +169,235 @@ export function useChartData({
 
         processedData = aggregateChartData(processedData, xKey, yAxisKeys, aggregationMethod)
 
-        console.log(`📊 [AGGREGATION_DEBUG] ${title} - After aggregation:`, {
+        logger.log(`📊 [AGGREGATION_DEBUG] ${title} - After aggregation:`, {
           afterAggregation: processedData.length,
           sampleRow: processedData[0]
         })
+      }
+    }
+
+    // Apply aggregation for treemap charts (group by category, aggregate value)
+    if (type === 'treemap' && aggregationMethod && effectiveMapping.category && effectiveMapping.value) {
+      logger.log(`🌳 [TREEMAP_AGGREGATION] ${title}:`, {
+        aggregationMethod,
+        category: effectiveMapping.category,
+        value: effectiveMapping.value,
+        beforeAggregation: processedData.length
+      })
+
+      processedData = aggregateChartData(
+        processedData,
+        effectiveMapping.category,
+        [effectiveMapping.value],
+        aggregationMethod
+      )
+
+      logger.log(`🌳 [TREEMAP_AGGREGATION] ${title} - After:`, {
+        afterAggregation: processedData.length,
+        sampleRow: processedData[0]
+      })
+    }
+
+    // Apply aggregation for heatmap charts (2D grouping by xAxis AND yAxis)
+    if (type === 'heatmap' && aggregationMethod && effectiveMapping.xAxis && effectiveMapping.yAxis && effectiveMapping.value) {
+      logger.log(`🗺️ [HEATMAP_AGGREGATION] ${title}:`, {
+        aggregationMethod,
+        xAxis: effectiveMapping.xAxis,
+        yAxis: effectiveMapping.yAxis,
+        value: effectiveMapping.value,
+        beforeAggregation: processedData.length
+      })
+
+      // For heatmap, we need 2D aggregation (group by BOTH xAxis and yAxis)
+      // We'll create a composite key: "xValue|yValue"
+      const groups = new Map<string, any[]>()
+
+      processedData.forEach(row => {
+        const xValue = row[effectiveMapping.xAxis]
+        const yValue = row[effectiveMapping.yAxis]
+        if (xValue === null || xValue === undefined || yValue === null || yValue === undefined) return
+
+        const compositeKey = `${xValue}|${yValue}`
+        if (!groups.has(compositeKey)) {
+          groups.set(compositeKey, [])
+        }
+        groups.get(compositeKey)!.push(row)
+      })
+
+      // Aggregate each group
+      const aggregatedData: any[] = []
+      groups.forEach((groupRows, compositeKey) => {
+        const [xValue, yValue] = compositeKey.split('|')
+        const values = groupRows.map(row => {
+          const val = row[effectiveMapping.value]
+          // Parse numeric value (handles currency strings)
+          if (typeof val === 'number') return val
+          if (typeof val === 'string') {
+            const cleaned = val.replace(/[€$£¥,\s%]/g, '')
+            const num = parseFloat(cleaned)
+            return isNaN(num) ? null : num
+          }
+          return null
+        }).filter(v => v !== null) as number[]
+
+        if (values.length === 0) return
+
+        let aggregatedValue: number
+        switch (aggregationMethod) {
+          case 'sum':
+            aggregatedValue = values.reduce((sum, val) => sum + val, 0)
+            break
+          case 'avg':
+            aggregatedValue = values.reduce((sum, val) => sum + val, 0) / values.length
+            break
+          case 'count':
+            aggregatedValue = values.length
+            break
+          case 'min':
+            aggregatedValue = Math.min(...values)
+            break
+          case 'max':
+            aggregatedValue = Math.max(...values)
+            break
+          default:
+            aggregatedValue = values.reduce((sum, val) => sum + val, 0)
+        }
+
+        aggregatedData.push({
+          [effectiveMapping.xAxis]: xValue,
+          [effectiveMapping.yAxis]: yValue,
+          [effectiveMapping.value]: aggregatedValue
+        })
+      })
+
+      processedData = aggregatedData
+
+      logger.log(`🗺️ [HEATMAP_AGGREGATION] ${title} - After:`, {
+        afterAggregation: processedData.length,
+        sampleRow: processedData[0]
+      })
+
+      // SMART HEATMAP OPTIMIZATION: Auto-limit categories when there are too many
+      // This makes heatmaps more readable without user intervention
+      const uniqueXValues = new Set(processedData.map(row => row[effectiveMapping.xAxis]))
+      const uniqueYValues = new Set(processedData.map(row => row[effectiveMapping.yAxis]))
+
+      logger.log(`🗺️ [HEATMAP_DIMENSIONS] ${title}:`, {
+        uniqueXCategories: uniqueXValues.size,
+        uniqueYCategories: uniqueYValues.size,
+        totalCells: processedData.length
+      })
+
+      // If Y-axis (typically merchants/categories) has too many values, limit to top N by total value
+      const MAX_Y_CATEGORIES = 15
+      if (uniqueYValues.size > MAX_Y_CATEGORIES) {
+        // Calculate total value for each Y category
+        const yTotals = new Map<string, number>()
+        processedData.forEach(row => {
+          const yValue = String(row[effectiveMapping.yAxis])
+          const value = Number(row[effectiveMapping.value]) || 0
+          yTotals.set(yValue, (yTotals.get(yValue) || 0) + value)
+        })
+
+        // Get top N Y categories by total value
+        const topYCategories = Array.from(yTotals.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, MAX_Y_CATEGORIES)
+          .map(([category]) => category)
+
+        // Filter data to only include top categories
+        processedData = processedData.filter(row =>
+          topYCategories.includes(String(row[effectiveMapping.yAxis]))
+        )
+
+        logger.log(`🗺️ [HEATMAP_Y_LIMIT] ${title}:`, {
+          originalYCategories: uniqueYValues.size,
+          limitedToTop: MAX_Y_CATEGORIES,
+          topCategories: topYCategories,
+          afterFiltering: processedData.length
+        })
+      }
+
+      // If X-axis has too many date values, suggest weekly/monthly grouping
+      // Check if X-axis contains dates
+      const MAX_X_CATEGORIES = 30
+      if (uniqueXValues.size > MAX_X_CATEGORIES) {
+        const sampleXValue = processedData[0]?.[effectiveMapping.xAxis]
+        const isDateColumn = isValidDate(sampleXValue)
+
+        if (isDateColumn) {
+          logger.log(`🗺️ [HEATMAP_X_DATES] ${title}:`, {
+            message: 'X-axis has many dates - auto-aggregating to weeks',
+            uniqueXDates: uniqueXValues.size,
+            action: 'Grouping by week for better readability'
+          })
+
+          // Auto-aggregate dates to weekly buckets
+          const weeklyGroups = new Map<string, Map<string, number>>()
+
+          processedData.forEach(row => {
+            const dateStr = String(row[effectiveMapping.xAxis])
+            const date = new Date(dateStr)
+
+            // Get start of week (Sunday)
+            const dayOfWeek = date.getDay()
+            const weekStart = new Date(date)
+            weekStart.setDate(date.getDate() - dayOfWeek)
+            const weekKey = weekStart.toISOString().split('T')[0]
+
+            const yValue = String(row[effectiveMapping.yAxis])
+            const value = Number(row[effectiveMapping.value]) || 0
+
+            if (!weeklyGroups.has(weekKey)) {
+              weeklyGroups.set(weekKey, new Map())
+            }
+            const weekGroup = weeklyGroups.get(weekKey)!
+            weekGroup.set(yValue, (weekGroup.get(yValue) || 0) + value)
+          })
+
+          // Convert back to array format
+          const weeklyData: any[] = []
+          weeklyGroups.forEach((yGroups, weekKey) => {
+            yGroups.forEach((value, yValue) => {
+              weeklyData.push({
+                [effectiveMapping.xAxis]: weekKey,
+                [effectiveMapping.yAxis]: yValue,
+                [effectiveMapping.value]: value
+              })
+            })
+          })
+
+          processedData = weeklyData
+
+          logger.log(`🗺️ [HEATMAP_WEEKLY_AGGREGATION] ${title}:`, {
+            originalDates: uniqueXValues.size,
+            weeksCreated: weeklyGroups.size,
+            afterAggregation: processedData.length
+          })
+        } else {
+          // Non-date X-axis with too many categories - limit to top N
+          const xTotals = new Map<string, number>()
+          processedData.forEach(row => {
+            const xValue = String(row[effectiveMapping.xAxis])
+            const value = Number(row[effectiveMapping.value]) || 0
+            xTotals.set(xValue, (xTotals.get(xValue) || 0) + value)
+          })
+
+          const topXCategories = Array.from(xTotals.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, MAX_X_CATEGORIES)
+            .map(([category]) => category)
+
+          processedData = processedData.filter(row =>
+            topXCategories.includes(String(row[effectiveMapping.xAxis]))
+          )
+
+          logger.log(`🗺️ [HEATMAP_X_LIMIT] ${title}:`, {
+            originalXCategories: uniqueXValues.size,
+            limitedToTop: MAX_X_CATEGORIES,
+            afterFiltering: processedData.length
+          })
+        }
       }
     }
 
@@ -138,7 +405,7 @@ export function useChartData({
     if (type === 'bar') {
       const { sortBy, sortOrder, limit } = effectiveMapping
 
-      console.log(`📊 [BAR_CHART_DEBUG] ${title}:`, {
+      logger.log(`📊 [BAR_CHART_DEBUG] ${title}:`, {
         configDataMapping,
         customizationDataMapping: customization?.dataMapping,
         effectiveMapping,
@@ -185,5 +452,5 @@ export function useChartData({
     }
 
     return processedData
-  }, [data, type, title, customization?.dataMapping, configDataMapping])
+  }, [data, type, title, effectiveMapping, customization?.filters, schema])
 }
