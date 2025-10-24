@@ -1,4 +1,5 @@
 import type { DataRow, AnalysisResult, ChatMessage } from '@/lib/store'
+import { useChartStore } from '@/lib/stores/chart-store'
 
 export interface ChatResponse {
   message: string
@@ -20,8 +21,20 @@ export async function sendChatMessage(
   data: DataRow[],
   fileName: string | null,
   conversationHistory: ChatMessage[],
-  useStreaming: boolean = true
+  useStreaming: boolean = true,
+  dashboardFilters?: Array<{ column: string; operator: string; value: any }>
 ): Promise<ChatResponse | ReadableStream> {
+  // If dashboardFilters not provided, try to get from store
+  let filters = dashboardFilters
+  if (!filters) {
+    try {
+      filters = useChartStore.getState().dashboardFilters
+    } catch (error) {
+      // Store not available in this context, continue without filters
+      filters = []
+    }
+  }
+
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: {
@@ -35,7 +48,8 @@ export async function sendChatMessage(
       conversationHistory: conversationHistory.map(msg => ({
         role: msg.role,
         content: msg.content
-      }))
+      })),
+      dashboardFilters: filters
     })
   })
 

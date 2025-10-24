@@ -62,7 +62,7 @@ interface AIAnalysisResponse {
 const SUPPORTED_CHART_TYPES = [
   'line', 'bar', 'pie', 'area', 'scatter', 'scorecard', 'table', 'combo',
   'waterfall', 'heatmap', 'gauge', 'cohort', 'bullet', 'treemap',
-  'sankey', 'sparkline'
+  'sparkline'
 ] as const
 type SupportedChartType = typeof SUPPORTED_CHART_TYPES[number]
 
@@ -516,8 +516,8 @@ Analysis patterns: Pipeline distribution, rep performance, deal velocity
 Advanced charts: Use waterfall for pipeline contribution/changes, gauge for quota attainment, bullet for rep performance vs target`,
     operations: `Common metrics: shipments, fulfillment, delivery, inventory, logistics
 Analysis patterns: Operations efficiency, supply chain metrics, throughput analysis
-Advanced charts: Use sankey for fulfillment flow paths, heatmap for delivery time patterns, gauge for SLA compliance, waterfall for inventory changes`,
-    general: 'General business data - identify key metrics and relationships. Use advanced chart types (heatmap, gauge, waterfall, treemap, cohort, sankey) when data patterns match.'
+Advanced charts: Use heatmap for delivery time patterns, gauge for SLA compliance, waterfall for inventory changes`,
+    general: 'General business data - identify key metrics and relationships. Use advanced chart types (heatmap, gauge, waterfall, treemap, cohort) when data patterns match.'
   }
 
   const domainGuidance = domainHints[domain] || domainHints.general
@@ -528,18 +528,26 @@ Analyze the dataset and generate chart configuration recommendations for a busin
 
 <CRITICAL_REQUIREMENTS>
 Generate 12-16 charts with MAXIMUM CHART TYPE DIVERSITY (system selects best 16 after validation):
-- 6-10 scorecards (based on meaningful KPIs) using diverse aggregations (sum, avg, count, min, max, distinct)
-- 2 ranking charts (Top/Bottom performers where applicable) (can be bar OR treemap):
-  * Top 10 chart: {type: "bar" or "treemap", dataMapping: {category: "...", values: ["..."], aggregation: "sum", sortBy: "...", sortOrder: "desc", limit: 10}}
-  * Bottom 10 chart: {type: "bar" or "treemap", dataMapping: {category: "...", values: ["..."], aggregation: "sum", sortBy: "...", sortOrder: "asc", limit: 10}}
-- 6-10 analytical charts using DIVERSE chart types - prioritize advanced charts when patterns match:
-  * CONSIDER including 2-3 advanced chart types when data patterns match (waterfall, heatmap, gauge, cohort, bullet, treemap, sankey, sparkline)
-  * Core charts (bar, line, area, scatter, combo, pie, table) should be used based on data characteristics
+
+MANDATORY MINIMUM REQUIREMENTS:
+- MINIMUM 6 scorecards, TARGET 8-10 scorecards (based on meaningful KPIs)
+  * MUST use diverse aggregations across all scorecards (sum, avg, count, min, max, distinct)
+  * DO NOT generate only 4 scorecards - this is insufficient
+  * Each aggregation type should be used at least once
+- EXACTLY 2 ranking charts (Top/Bottom performers - MANDATORY when comparing entities):
+  * REQUIRED: 1 Top 10 chart: {type: "bar" or "treemap", dataMapping: {category: "...", values: ["..."], aggregation: "sum", sortBy: "...", sortOrder: "desc", limit: 10}}
+  * REQUIRED: 1 Bottom 10 chart: {type: "bar" or "treemap", dataMapping: {category: "...", values: ["..."], aggregation: "sum", sortBy: "...", sortOrder: "asc", limit: 10}}
+- EXACTLY 1 REQUIRED table chart (MUST INCLUDE - comprehensive data view): {type: "table", dataMapping: {columns: [all key columns], sortBy: "most important metric", sortOrder: "desc", limit: 20}}
+- 3-7 analytical charts using DIVERSE chart types - prioritize advanced charts when patterns match:
+  * CONSIDER including 2-3 advanced chart types when data patterns match (waterfall, heatmap, gauge, cohort, bullet, treemap, sparkline)
+  * Core charts (bar, line, area, scatter, combo, pie) should be used based on data characteristics
 
 IMPORTANT:
 1. Use ONLY column names that exist in the AVAILABLE COLUMNS list below. Charts with non-existent columns will fail validation.
 2. MAXIMIZE chart type diversity - avoid generating 5+ charts of the same type unless absolutely necessary
 3. Advanced charts demonstrate analytical sophistication - use them when data patterns match
+4. SCORECARD REQUIREMENT: Generate AT LEAST 6 scorecards, preferably 8-10. Four scorecards is NOT enough.
+5. TOP/BOTTOM REQUIREMENT: You MUST include BOTH a Top 10 AND Bottom 10 chart when data has ranking potential.
 </CRITICAL_REQUIREMENTS>
 
 <DOMAIN_CONTEXT>
@@ -550,15 +558,14 @@ Column count: ${dataStructure.columnCount}
 ${domainGuidance}
 
 Chart recommendations (PRIORITIZE ADVANCED CHART TYPES):
-- 8-10 scorecards: Create scorecards for high-value metrics using diverse aggregations
-- 2 rankings: Identify top/bottom performers (use treemap for hierarchical view OR bar for simple ranking)
+- MINIMUM 6 scorecards, TARGET 8-10: Create scorecards for high-value metrics using diverse aggregations (DO NOT generate only 4)
+- EXACTLY 2 rankings (MANDATORY): MUST include BOTH top AND bottom performers (use treemap for hierarchical view OR bar for simple ranking)
 - Advanced charts (REQUIRED - include 2-3 minimum):
   * Waterfall: Show cumulative changes, variance analysis, P&L breakdown
   * Heatmap: Reveal patterns across 2 categorical dimensions (day×hour, product×region)
   * Gauge/Bullet: Track KPIs against targets, quota attainment, performance vs goal
   * Cohort: Analyze retention, customer lifetime patterns, time-based behavior
   * Treemap: Visualize hierarchical composition, portfolio breakdown, nested categories
-  * Sankey: Flow between states, journey mapping, multi-step transitions
 - Core charts (use ONLY when advanced types don't fit):
   * Scatter: Multi-dimensional efficiency (input vs output with size/color)
   * Combo: Multi-scale time series when metrics differ by >10x
@@ -591,14 +598,36 @@ Chart recommendations (PRIORITIZE ADVANCED CHART TYPES):
 
   prompt += `\n</AVAILABLE_COLUMNS>`
 
+  // Add filter context section
+  prompt += `\n\n<FILTERING_CAPABILITIES>`
+  prompt += `\nIMPORTANT: The dashboard supports inline filtering on ALL chart fields!`
+  prompt += `\nUsers can apply filters directly within each chart's data mapping fields:`
+  prompt += `\n- Text/Categorical fields: Multi-select specific items (like Excel filtering)`
+  prompt += `\n- Date fields: Aggregate by week, month, or year`
+  prompt += `\n- Numeric fields: Filter by value ranges`
+  prompt += `\n\nWhen generating chart recommendations:`
+  prompt += `\n1. You can suggest filters within the dataMapping.filters array`
+  prompt += `\n2. Mention in insights how filtering could refine analysis`
+  prompt += `\n3. Consider recommending complementary filters for deeper insights`
+  prompt += `\n\nExample filter suggestions in dataMapping:`
+  prompt += `\nfilters: [`
+  prompt += `\n  {column: "Campaign_Type", operator: "in", value: ["Search", "Display"], reason: "Focus on paid channels"}`
+  prompt += `\n  {column: "Date", operator: "between", value: ["2024-01-01", "2024-12-31"], reason: "Current year only"}`
+  prompt += `\n]`
+  prompt += `\n</FILTERING_CAPABILITIES>`
+
   // Add user corrections if present
   if (correctedSchema && correctedSchema.length > 0) {
     prompt += `\n\n<USER_CORRECTIONS>`
-    prompt += `\nThe user has corrected these column interpretations (HIGHEST PRIORITY):`
+    prompt += `\nThe user has MANUALLY corrected these column interpretations. These descriptions are CRITICAL - USE them in your chart titles, descriptions, and insights:`
     correctedSchema.forEach(col => {
       prompt += `\n- ${col.name}: ${col.type} - "${col.description}"`
     })
-    if (feedback) prompt += `\n\nUser Feedback: ${feedback}`
+    prompt += `\n\nIMPORTANT: Incorporate these user-provided descriptions into:`
+    prompt += `\n1. Chart titles (e.g., if user describes a column as "Monthly Revenue", use that in the title)`
+    prompt += `\n2. Chart descriptions (reference what the column represents based on user's description)`
+    prompt += `\n3. Business insights (use the business context from descriptions)`
+    if (feedback) prompt += `\n\nAdditional User Feedback: ${feedback}`
     prompt += `\n</USER_CORRECTIONS>`
   }
 
@@ -606,9 +635,9 @@ Chart recommendations (PRIORITIZE ADVANCED CHART TYPES):
   prompt += `
 
 <CHART_TYPES>
-All 16 supported types (PRIORITIZE ADVANCED TYPES):
+All 15 supported types (PRIORITIZE ADVANCED TYPES):
 Core: scorecard, bar, line, area, scatter, combo, pie, table
-Advanced (USE THESE!): waterfall, heatmap, gauge, cohort, bullet, treemap, sankey, sparkline
+Advanced (USE THESE!): waterfall, heatmap, gauge, cohort, bullet, treemap, sparkline
 
 dataMapping patterns:
 - scorecard: {metric, aggregation} OR {formula, formulaAlias, formulaOptions}
@@ -623,10 +652,10 @@ dataMapping patterns:
 - heatmap: {xAxis, yAxis, value, aggregation}
 - treemap: {category, value, aggregation, parentCategory?}
 - cohort: {cohort, period, metric, aggregation}
-- sankey: {source, target, value, aggregation}
 - sparkline: {xAxis, yAxis} (no aggregation needed - uses raw time series)
 
-Aggregations: sum, avg, count, min, max, distinct
+IMPORTANT - Aggregations: sum, avg, count, min, max, distinct
+NOTE: Use "avg" (NOT "average"). The system accepts only these exact values.
 Formula syntax: (Col1 - Col2) / Col3 * 100 | Functions: SUM(), AVG(), COUNT(), MIN(), MAX()
 
 Examples (INCLUDE ADVANCED CHART TYPES):
@@ -664,7 +693,8 @@ Step 3 - Metric Identification:
 Step 4 - Visualization Strategy:
 Generate 12-16 charts across these categories:
 
-SCORECARDS (6-10): Based on meaningful KPIs applied to high-value metrics
+SCORECARDS (MINIMUM 6, TARGET 8-10): Based on meaningful KPIs applied to high-value metrics
+REQUIREMENT: Generate AT LEAST 6 scorecards. Four scorecards is NOT sufficient.
 - sum: "Total Revenue", "Total Ad Spend", "Total Orders"
 - avg: "Average Order Value", "Average Campaign ROAS", "Average Conversion Rate"
 - count: "Total Campaigns", "Number of Products", "Active Customers"
@@ -672,11 +702,12 @@ SCORECARDS (6-10): Based on meaningful KPIs applied to high-value metrics
 - min: "Lowest Inventory Level", "Minimum Spend", "Earliest Date"
 - distinct: "Unique Product Categories", "Markets Covered", "Customer Segments"
 
-RANKINGS (2 recommended): Include when data has clear hierarchies
+RANKINGS (EXACTLY 2 - MANDATORY): Include when data has clear hierarchies
+REQUIREMENT: You MUST generate BOTH Top 10 AND Bottom 10 charts when data has ranking potential.
 - Top 10 bar chart: Best performers (type="bar", sortOrder="desc", limit=10) - shows top performers to invest in
 - Bottom 10 bar chart: Worst performers (type="bar", sortOrder="asc", limit=10) - shows underperformers needing attention
 
-NOTE: Include these when comparing performance across entities. Choose the most important metric for rankings.
+NOTE: These ranking charts are MANDATORY when comparing performance across entities. Choose the most important metric for rankings.
 
 ANALYTICAL (6-10): Consider advanced chart types when patterns match
 CONSIDER including 2-3 advanced charts when appropriate from this list:
@@ -685,7 +716,6 @@ CONSIDER including 2-3 advanced charts when appropriate from this list:
 - Gauge/Bullet: KPI vs target, quota tracking, performance metrics with benchmarks
 - Treemap: Portfolio composition, budget allocation, hierarchical categories (10+ items)
 - Cohort: Customer retention, lifetime value patterns, time-based behavior analysis
-- Sankey: User journey flows, multi-stage transitions, source→target relationships
 - Sparkline: Compact trend indicators, embedded visualizations
 
 Core charts (use based on data characteristics):
@@ -694,7 +724,7 @@ Core charts (use based on data characteristics):
 - Line/Area: Simple time trends (when waterfall doesn't apply)
 - Bar: Simple category comparisons (prefer treemap for 10+ categories)
 - Pie: Simple 3-5 category proportions (prefer treemap for hierarchical data)
-- Table: Detailed drill-down (1 maximum - place at bottom of dashboard)
+- Table: REQUIRED comprehensive data view showing top 20 records with all key columns for detailed analysis
 
 Step 5 - Validation:
 - Verify EVERY column name exists in AVAILABLE COLUMNS (exact match: spelling, capitalization, spacing)
@@ -780,13 +810,20 @@ Step 5 - Validation:
       "confidence": 90,
       "reasoning": "Multi-dimensional efficiency analysis reveals ROI patterns"
     }
-    ...minimum 18 charts total (include 2-3 advanced chart types)...
+    ...continue with remaining charts...
   ],
   "summary": {
     "dataQuality": "good|fair|poor",
     "keyFindings": "Executive summary of main insights and recommendations"
   }
 }
+
+CHART COUNT REQUIREMENTS - FINAL REMINDER:
+- Generate 12-16 charts total
+- MINIMUM 6 scorecards (preferably 8-10) - DO NOT generate only 4
+- EXACTLY 2 ranking charts (Top 10 AND Bottom 10)
+- 3-7 analytical charts with diverse types
+- EXACTLY 1 table chart
 </OUTPUT_FORMAT>`
 
   // Add sample data if available
@@ -798,7 +835,14 @@ Step 5 - Validation:
     prompt += `\n</SAMPLE_DATA>`
   }
 
-  prompt += `\n\nRemember: Generate 12-16 charts that best represent insights. Use only columns from AVAILABLE COLUMNS. Every chart answers a business question.`
+  prompt += `\n\nFINAL REQUIREMENTS CHECKLIST:
+1. Generate 12-16 charts total
+2. MINIMUM 6 scorecards (preferably 8-10) - DO NOT generate only 4 scorecards
+3. EXACTLY 2 ranking charts - BOTH Top 10 AND Bottom 10 are REQUIRED
+4. EXACTLY 1 table chart
+5. Use only columns from AVAILABLE COLUMNS
+6. Use "avg" (NOT "average") for aggregations
+7. Every chart answers a specific business question`
 
   return prompt
 }
@@ -1077,8 +1121,6 @@ STEP 1: Check for advanced chart patterns when appropriate (use these when data 
   Example: Revenue by Product Category (hierarchical view better than bar), Budget by Department
 - cohort: ANY cohort+period dimensions (signup date + months since, customer vintage + quarters)
   Example: Customer retention by signup month, Revenue by customer cohort over time
-- sankey: ANY source→target flow data, journey mapping, multi-step state transitions
-  Example: User journey (Landing Page → Category → Product → Cart), Traffic sources to conversions
 - sparkline: Compact trend indicators in scorecards, small multiples, embedded trends
 
 STEP 2: Use appropriate chart types based on data characteristics:
@@ -1087,34 +1129,46 @@ STEP 2: Use appropriate chart types based on data characteristics:
 - line/area: When showing simple time trends and waterfall doesn't apply
 - bar: When showing simple category comparison and treemap doesn't fit (<10 categories)
 - pie: When showing 3-5 simple proportions (prefer treemap for hierarchical data)
-- table: Maximum 1 per dashboard, placed at bottom for drill-down only
+- table: REQUIRED 1 per dashboard - comprehensive data view with key columns for detailed analysis
 
 DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in every analysis. Avoid generating 5+ charts of the same type.
 </CHART_SELECTION_HEURISTICS>
 
 <CRITICAL_RULES>
 1. Use ONLY column names from the AVAILABLE COLUMNS list
-2. Generate 12-16 charts (6-10 scorecards, 2 recommended rankings (when applicable), 6-10 analytical)
-3. Include BOTH Top 10 (desc) AND Bottom 10 (asc) rankings when comparing performance across entities (can be bar OR treemap)
-4. CONSIDER including 2-3 advanced chart types when appropriate (waterfall, heatmap, gauge, treemap, cohort, sankey, bullet, sparkline)
+2. Generate 12-16 charts total with this MANDATORY breakdown:
+   - MINIMUM 6 scorecards (TARGET 8-10) - DO NOT generate only 4 scorecards
+   - EXACTLY 2 ranking charts (Top 10 AND Bottom 10) - BOTH are REQUIRED when data has ranking potential
+   - 3-7 analytical charts (line, scatter, combo, heatmap, etc.)
+   - EXACTLY 1 table chart (MANDATORY)
+3. Top/Bottom Rankings - MANDATORY REQUIREMENT:
+   - You MUST include BOTH Top 10 (sortOrder="desc") AND Bottom 10 (sortOrder="asc")
+   - Use bar OR treemap chart type
+   - Choose the most important metric for ranking
+4. CONSIDER including 2-3 advanced chart types when appropriate (waterfall, heatmap, gauge, treemap, cohort, bullet, sparkline)
 5. MAXIMIZE chart type diversity - avoid 5+ charts of the same type unless data strongly requires it
-6. Use diverse aggregations: sum, avg, count, min, max, distinct
+6. Use diverse aggregations across scorecards: sum, avg, count, min, max, distinct (use "avg" NOT "average")
 7. Add size/color dimensions to scatter plots for multi-dimensional analysis
 8. Use combo charts when metric scales differ by >10x ratio
 9. Every chart must answer a specific business question
 10. Prioritize advanced charts over core charts to demonstrate analytical sophistication
-11. Respond with valid JSON in the exact format specified
+11. If USER_CORRECTIONS are provided, incorporate the user's descriptions into chart titles, descriptions, and insights
+12. MANDATORY: You MUST include exactly 1 table chart with comprehensive data view. This is REQUIRED - do not omit the table chart
+13. Respond with valid JSON in the exact format specified
 </CRITICAL_RULES>
 
 <SCORECARD_PRIORITY>
-Generate 6-10 scorecards based on meaningful KPIs with diverse aggregations:
+Generate MINIMUM 6 scorecards (TARGET 8-10) based on meaningful KPIs with diverse aggregations:
+CRITICAL: Four scorecards is NOT sufficient. You MUST generate at least 6 scorecards.
+
+Use diverse aggregation types:
 - sum: totals (revenue, spend, sales)
-- avg: benchmarks (AOV, conversion rate, efficiency)
+- avg: benchmarks (AOV, conversion rate, efficiency) - USE "avg" NOT "average"
 - count: volume (orders, campaigns, transactions)
 - min/max: extremes (peak sales, lowest cost, date ranges)
 - distinct: variety (unique customers, product categories, regions)
 
-NOTE: Use aggregations that make sense for each metric's business context
+NOTE: Use aggregations that make sense for each metric's business context. Each aggregation type should be used at least once.
 </SCORECARD_PRIORITY>
 
 <QUALITY_STANDARDS>
@@ -1366,8 +1420,14 @@ NOTE: Use aggregations that make sense for each metric's business context
               // Aggregation only required for metric-based scorecards
               if (isMetricScorecard && !dm.aggregation) {
                 errors.push('Metric-based scorecard missing required "aggregation" field')
-              } else if (isMetricScorecard && dm.aggregation && !['sum', 'avg', 'count', 'min', 'max', 'distinct'].includes(dm.aggregation)) {
-                errors.push(`Invalid aggregation type: ${dm.aggregation}. Must be one of: sum, avg, count, min, max, distinct`)
+              } else if (isMetricScorecard && dm.aggregation) {
+                // Normalize 'average' to 'avg' for consistency
+                if (dm.aggregation === 'average') {
+                  dm.aggregation = 'avg'
+                }
+                if (!['sum', 'avg', 'count', 'min', 'max', 'distinct'].includes(dm.aggregation)) {
+                  errors.push(`Invalid aggregation type: ${dm.aggregation}. Must be one of: sum, avg, count, min, max, distinct`)
+                }
               }
 
               // For formula-based scorecards, validate formula syntax (basic check)
@@ -1490,8 +1550,14 @@ NOTE: Use aggregations that make sense for each metric's business context
               // aggregation is required for gauge charts
               if (!dm.aggregation) {
                 warnings.push('Gauge chart missing aggregation - defaulting to "sum"')
-              } else if (!['sum', 'average', 'median', 'min', 'max', 'count'].includes(dm.aggregation)) {
-                errors.push(`Invalid aggregation: ${dm.aggregation}. Must be one of: sum, average, median, min, max, count`)
+              } else {
+                // Normalize 'average' to 'avg' for consistency
+                if (dm.aggregation === 'average') {
+                  dm.aggregation = 'avg'
+                }
+                if (!['sum', 'avg', 'count', 'min', 'max', 'distinct'].includes(dm.aggregation)) {
+                  errors.push(`Invalid aggregation: ${dm.aggregation}. Must be one of: sum, avg, count, min, max, distinct`)
+                }
               }
               // target is optional but validate if present
               if (dm.target && typeof dm.target === 'string' && !availableColumnsSet.has(dm.target)) {
@@ -1549,25 +1615,6 @@ NOTE: Use aggregations that make sense for each metric's business context
               // parent is optional for hierarchy
               if (dm.parent && !availableColumnsSet.has(dm.parent)) {
                 warnings.push(`Parent column "${dm.parent}" not found`)
-              }
-              break
-
-            case 'sankey':
-              // Sankey requires: source + target + flow
-              if (!dm.source) {
-                errors.push('Sankey chart missing required "source" field')
-              } else if (!availableColumnsSet.has(dm.source)) {
-                invalidCols.push(dm.source)
-              }
-              if (!dm.target) {
-                errors.push('Sankey chart missing required "target" field')
-              } else if (typeof dm.target === 'string' && !availableColumnsSet.has(dm.target)) {
-                invalidCols.push(dm.target)
-              }
-              if (!dm.flow) {
-                errors.push('Sankey chart missing required "flow" field')
-              } else if (!availableColumnsSet.has(dm.flow)) {
-                invalidCols.push(dm.flow)
               }
               break
 
@@ -1828,11 +1875,6 @@ NOTE: Use aggregations that make sense for each metric's business context
                 if (dm.value) legacyDataKey.push(dm.value)
                 if (dm.parent && typeof dm.parent === 'string') legacyDataKey.push(dm.parent)
                 break
-              case 'sankey':
-                if (dm.source) legacyDataKey.push(dm.source)
-                if (dm.target && typeof dm.target === 'string') legacyDataKey.push(dm.target)
-                if (dm.flow || dm.value) legacyDataKey.push(dm.flow || dm.value)
-                break
               case 'sparkline':
                 if (dm.xAxis && typeof dm.xAxis === 'string') legacyDataKey.push(dm.xAxis)
                 if (dm.yAxis && typeof dm.yAxis === 'string') legacyDataKey.push(dm.yAxis)
@@ -1937,11 +1979,6 @@ NOTE: Use aggregations that make sense for each metric's business context
                 if (dm.category) legacyDataKey.push(dm.category)
                 if (dm.value) legacyDataKey.push(dm.value)
                 if (dm.parent && typeof dm.parent === 'string') legacyDataKey.push(dm.parent)
-                break
-              case 'sankey':
-                if (dm.source) legacyDataKey.push(dm.source)
-                if (dm.target && typeof dm.target === 'string') legacyDataKey.push(dm.target)
-                if (dm.flow || dm.value) legacyDataKey.push(dm.flow || dm.value)
                 break
               case 'sparkline':
                 if (dm.xAxis && typeof dm.xAxis === 'string') legacyDataKey.push(dm.xAxis)

@@ -1,6 +1,60 @@
 import { useCallback } from 'react'
 import { useDataStore, type AnalysisResult } from '@/lib/stores/data-store'
+import { useChartStore } from '@/lib/stores/chart-store'
 import type { ChartSuggestion } from '@/lib/services/chat-service'
+
+// Helper function to build proper dataMapping based on chart type
+function buildDataMapping(chartType: string, columns: string[]): any {
+  const dataMapping: any = {}
+
+  switch (chartType) {
+    case 'bar':
+      dataMapping.category = columns[0]
+      dataMapping.values = columns.slice(1)
+      dataMapping.aggregation = 'sum'
+      break
+
+    case 'line':
+    case 'area':
+      dataMapping.xAxis = columns[0]
+      dataMapping.yAxis = columns.slice(1)
+      dataMapping.aggregation = 'sum'
+      break
+
+    case 'pie':
+      dataMapping.category = columns[0]
+      dataMapping.value = columns[1] || columns[0]
+      dataMapping.aggregation = 'sum'
+      break
+
+    case 'scorecard':
+      dataMapping.metric = columns[0]
+      dataMapping.comparison = columns[1]
+      dataMapping.aggregation = 'sum'
+      break
+
+    case 'scatter':
+      dataMapping.xAxis = columns[0]
+      dataMapping.yAxis = columns[1]
+      dataMapping.size = columns[2]
+      dataMapping.aggregation = 'none'
+      break
+
+    case 'table':
+      dataMapping.columns = columns
+      dataMapping.sortBy = columns[0]
+      dataMapping.sortOrder = 'desc'
+      break
+
+    default:
+      dataMapping.xAxis = columns[0]
+      dataMapping.yAxis = columns.slice(1)
+      dataMapping.aggregation = 'sum'
+      break
+  }
+
+  return dataMapping
+}
 
 interface UseChartRegenerationWithTabsProps {
   activeTabId: string
@@ -15,6 +69,7 @@ export function useChartRegenerationWithTabs({
 }: UseChartRegenerationWithTabsProps) {
   const analysis = useDataStore((state) => state.analysis)
   const setAnalysis = useDataStore((state) => state.setAnalysis)
+  const updateChartCustomization = useChartStore((state) => state.updateChartCustomization)
 
   const regenerateChartFromSuggestion = useCallback((suggestion: ChartSuggestion) => {
     // Check if we're on a dashboard tab
@@ -31,13 +86,29 @@ export function useChartRegenerationWithTabs({
       recommendations: []
     }
 
+    const chartId = `chart-${Date.now()}`
+
     const newChartConfig = {
-      id: `chart-${Date.now()}`,
+      id: chartId,
       type: suggestion.type,
       title: suggestion.title,
       dataKey: suggestion.dataKey,
       description: suggestion.description
     }
+
+    // Create the chart customization to actually add it to the dashboard
+    const chartCustomization = {
+      id: chartId,
+      position: { x: 0, y: 0, w: 6, h: 4 }, // Default size
+      isVisible: true,
+      chartType: suggestion.type as any,
+      title: suggestion.title,
+      dataMapping: buildDataMapping(suggestion.type as any, suggestion.dataKey)
+    }
+
+    // Add the chart to the dashboard using the chart store
+    updateChartCustomization(chartId, chartCustomization)
+    console.log('✅ [CHART-REGEN] Added chart to dashboard:', chartId, suggestion.title)
 
     // Create updated analysis for this tab
     const updatedTabAnalysis: AnalysisResult = {
@@ -61,7 +132,7 @@ export function useChartRegenerationWithTabs({
     }
 
     return newChartConfig
-  }, [activeTabId, tabAnalyses, setTabAnalyses, analysis, setAnalysis])
+  }, [activeTabId, tabAnalyses, setTabAnalyses, analysis, setAnalysis, updateChartCustomization])
 
   const replaceChart = useCallback((chartIndex: number, suggestion: ChartSuggestion) => {
     if (!activeTabId.startsWith('dashboard-')) {

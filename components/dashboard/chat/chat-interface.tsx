@@ -349,7 +349,10 @@ export const ChatInterface = React.memo(function ChatInterface() {
   }
 
   const handleApplyChartSuggestion = (suggestion: ChartSuggestion) => {
+    console.log('🎯 [CHAT] Applying chart suggestion:', suggestion)
     const newChart = regenerateChartFromSuggestion(suggestion)
+    console.log('📊 [CHAT] New chart created:', newChart)
+
     if (newChart) {
       // Add a message about the chart being added
       const chartMessage: ChatMessage = {
@@ -365,6 +368,8 @@ export const ChatInterface = React.memo(function ChatInterface() {
 
       // Scroll to bottom to show the confirmation
       setTimeout(scrollToBottom, 100)
+    } else {
+      console.error('❌ [CHAT] Failed to create chart from suggestion')
     }
   }
 

@@ -161,7 +161,7 @@ export const POST = withAuth(async (request, authUser) => {
     }
 
     // Parse request body
-    const { message, data, dataSchema, fileName, conversationHistory, preferredChartType, selectedChart, granularity } = await request.json()
+    const { message, data, dataSchema, fileName, conversationHistory, preferredChartType, selectedChart, granularity, dashboardFilters } = await request.json()
 
     if (!message || typeof message !== 'string') {
       return NextResponse.json(
@@ -190,6 +190,29 @@ ${selectedChart ? `\nThe user has selected a specific chart to discuss:
 When answering questions, focus on this specific chart unless the user asks about something else.` : ''}
 
 ${preferredChartType && preferredChartType !== 'auto' ? `\nThe user wants to create a ${preferredChartType} chart. Help them identify the best columns and configuration for this chart type.` : ''}
+
+${dashboardFilters && dashboardFilters.length > 0 ? `
+ACTIVE DASHBOARD FILTERS:
+The following filters are currently applied to the dashboard:
+${dashboardFilters.map(f => `- ${f.column} ${f.operator} ${JSON.stringify(f.value)}`).join('\n')}
+
+IMPORTANT FILTERING CONTEXT:
+- The data you're analyzing may be filtered. Consider the filtered context in your analysis.
+- The dashboard supports inline filtering on ALL chart fields:
+  * Text/Categorical fields: Multi-select specific items (like Excel filtering)
+  * Date fields: Aggregate by week, month, or year
+  * Numeric fields: Filter by value ranges
+- Users can apply filters directly within each chart's data mapping fields
+- When suggesting new charts, you can recommend filters to focus the analysis
+` : `
+FILTERING CAPABILITIES:
+The dashboard supports inline filtering on ALL chart fields:
+- Text/Categorical fields: Multi-select specific items (like Excel filtering)
+- Date fields: Aggregate by week, month, or year
+- Numeric fields: Filter by value ranges
+- Users can apply filters directly within each chart's data mapping fields
+- You can suggest filters when recommending charts to focus the analysis
+`}
 
 Your role is to:
 1. ANALYZE THE ACTUAL DATA and provide specific answers with real numbers from the dataset

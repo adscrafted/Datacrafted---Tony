@@ -65,7 +65,7 @@ export interface ChartRecommendation {
     /** Column containing time/date data */
     timeColumn?: string;
 
-    /** Filters to apply to the data */
+    /** AI-suggested filters to apply to this specific chart */
     filters?: Array<{
       column: string;
       operator: string;

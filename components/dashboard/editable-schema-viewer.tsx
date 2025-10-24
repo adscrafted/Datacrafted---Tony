@@ -48,6 +48,7 @@ export function EditableSchemaViewer({ onAIUpdateComplete }: EditableSchemaViewe
   const setError = useDataStore((state) => state.setError)
   const isAnalyzing = useDataStore((state) => state.isAnalyzing)
   const setCorrectedSchema = useDataStore((state) => state.setCorrectedSchema)
+  const correctedSchema = useDataStore((state) => state.correctedSchema)
   const [schema, setSchema] = useState<SchemaField[]>([])
   const [editingField, setEditingField] = useState<EditingField | null>(null)
   const [isAddingField, setIsAddingField] = useState(false)
@@ -56,8 +57,21 @@ export function EditableSchemaViewer({ onAIUpdateComplete }: EditableSchemaViewe
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
 
   useEffect(() => {
-    // Initialize schema from dataSchema
-    if (dataSchema?.columns) {
+    // First check if we have corrected schema stored from previous edits
+    if (correctedSchema && correctedSchema.length > 0) {
+      console.log('📋 [SCHEMA-VIEWER] Loading corrected schema from store:', correctedSchema.length, 'columns')
+      const fields: SchemaField[] = correctedSchema.map((col) => ({
+        name: col.name,
+        type: col.type,
+        description: col.description || '',
+        isPrimary: false,
+        isRequired: false,
+        confidence: undefined,
+        detectionReason: undefined,
+      }))
+      setSchema(fields)
+    } else if (dataSchema?.columns) {
+      // Initialize schema from dataSchema
       const fields: SchemaField[] = dataSchema.columns.map((col) => ({
         name: col.name,
         type: col.type,
@@ -82,7 +96,7 @@ export function EditableSchemaViewer({ onAIUpdateComplete }: EditableSchemaViewe
     } else {
       setSchema([])
     }
-  }, [dataSchema, rawData])
+  }, [dataSchema, rawData, correctedSchema])
 
   const handleEditField = (index: number) => {
     setEditingField({
@@ -98,6 +112,16 @@ export function EditableSchemaViewer({ onAIUpdateComplete }: EditableSchemaViewe
       setSchema(updatedSchema)
       setEditingField(null)
       setHasUnsavedChanges(true)
+
+      // Also save to corrected schema store so edits persist
+      const correctedFields = updatedSchema.map(field => ({
+        name: field.name,
+        type: field.type,
+        description: field.description || '',
+        userCorrected: true
+      }))
+      setCorrectedSchema(correctedFields)
+      console.log('💾 [SCHEMA-VIEWER] Saved schema edits to store')
     }
   }
 

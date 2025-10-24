@@ -139,6 +139,13 @@ interface DashboardFilter {
   dataColumns: string[]
 }
 
+// Active filter definition
+interface ActiveFilter {
+  column: string
+  operator: string
+  value: any
+}
+
 function isChartAlreadyUsed(
   chartType: string,
   dataColumns: string[],
@@ -162,7 +169,8 @@ function buildFocusedPrompt(
   schema?: DataSchema,
   correctedSchema?: CorrectedColumn[],
   excludedTypes?: string[],
-  limit: number = 10
+  limit: number = 10,
+  activeFilters?: ActiveFilter[]
 ): string {
   let prompt = `Analyze this dataset and recommend ${limit} visualizations with FOCUS on: ${focus.toUpperCase()}\n\n`
 
@@ -215,6 +223,25 @@ function buildFocusedPrompt(
     prompt += excludedTypes.map(type => `- ${type}`).join('\n') + '\n\n'
   }
 
+  // Add filter awareness
+  if (activeFilters && activeFilters.length > 0) {
+    prompt += `ACTIVE DASHBOARD FILTERS:\n`
+    prompt += `The following filters are currently applied to the dashboard:\n`
+    prompt += activeFilters.map(f => `- ${f.column} ${f.operator} ${JSON.stringify(f.value)}`).join('\n') + '\n\n'
+    prompt += `IMPORTANT FILTERING CONTEXT:\n`
+    prompt += `- The data being analyzed is filtered. Consider this context when generating recommendations.\n`
+    prompt += `- You can suggest additional filters in the dataMapping.filters field for each chart\n`
+    prompt += `- Filters help focus analysis on specific segments or time periods\n\n`
+  } else {
+    prompt += `FILTERING CAPABILITIES:\n`
+    prompt += `The dashboard supports inline filtering on ALL chart fields:\n`
+    prompt += `- Text/Categorical fields: Multi-select specific items (like Excel filtering)\n`
+    prompt += `- Date fields: Aggregate by week, month, or year\n`
+    prompt += `- Numeric fields: Filter by value ranges\n`
+    prompt += `- You can suggest filters in the dataMapping.filters field to focus the analysis\n`
+    prompt += `- Example: filters: [{ column: "Region", operator: "in", value: ["North", "South"] }]\n\n`
+  }
+
   // Add response format
   prompt += `Generate EXACTLY ${limit} recommendations. Respond with JSON only:\n`
   prompt += `{\n`
@@ -232,7 +259,8 @@ function buildFocusedPrompt(
   prompt += `      "dataMapping": {\n`
   prompt += `        "xAxis": "column1",\n`
   prompt += `        "yAxis": ["column2", "column3"],\n`
-  prompt += `        "category": "grouping_column"\n`
+  prompt += `        "category": "grouping_column",\n`
+  prompt += `        "filters": [{ "column": "Region", "operator": "in", "value": ["North"] }]\n`
   prompt += `      },\n`
   prompt += `      "chartConfig": {\n`
   prompt += `        "aggregation": "sum|avg|count|min|max",\n`
@@ -353,6 +381,7 @@ interface RefreshRequest {
   excludedTypes?: string[]
   focus?: 'trends' | 'comparisons' | 'distributions' | 'kpis' | 'all'
   limit?: number
+  activeFilters?: ActiveFilter[]
 }
 
 export async function POST(request: NextRequest) {
@@ -394,7 +423,8 @@ export async function POST(request: NextRequest) {
       filters,
       excludedTypes,
       focus = 'all',
-      limit = 10
+      limit = 10,
+      activeFilters
     }: RefreshRequest = await request.json()
 
     console.log('🔍 [API-REFRESH] Request parsed:', {
@@ -404,6 +434,7 @@ export async function POST(request: NextRequest) {
       hasSchema: !!schema,
       correctedColumnsCount: correctedSchema?.length || 0,
       dashboardFiltersCount: filters?.length || 0,
+      activeFiltersCount: activeFilters?.length || 0,
       excludedTypes: excludedTypes || [],
       focus,
       limit
@@ -444,7 +475,8 @@ export async function POST(request: NextRequest) {
       schema,
       correctedSchema,
       excludedTypes,
-      limit
+      limit,
+      activeFilters
     )
 
     // Call OpenAI API
