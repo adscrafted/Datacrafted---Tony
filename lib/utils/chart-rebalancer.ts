@@ -32,6 +32,7 @@ export interface RebalanceOptions {
   minScorecards?: number
   maxScorecards?: number
   preferredScorecards?: number
+  minNonScorecards?: number  // NEW: Minimum non-scorecard charts required (visualizations + tables)
   requireTable?: boolean
   fallbackChartType?: ChartType
 }
@@ -41,6 +42,7 @@ const DEFAULT_OPTIONS: Required<RebalanceOptions> = {
   minScorecards: 4,
   maxScorecards: 6,
   preferredScorecards: 6,
+  minNonScorecards: 8,  // NEW: Default minimum non-scorecard charts
   requireTable: true,
   fallbackChartType: 'table'
 }
@@ -92,6 +94,96 @@ function createFallbackTable(existingCharts: ChartConfig[]): ChartConfig {
     confidence: 70,
     qualityScore: 70,
     reasoning: 'Fallback table generated to ensure complete data visibility'
+  }
+}
+
+/**
+ * Creates a fallback visualization chart from existing data
+ */
+function createFallbackVisualization(existingCharts: ChartConfig[], index: number): ChartConfig | null {
+  // Try to find suitable columns for a bar chart
+  let categoryColumn: string | undefined
+  let valueColumn: string | undefined
+
+  for (const chart of existingCharts) {
+    // Look for category columns
+    if (!categoryColumn && chart.dataMapping?.category) {
+      categoryColumn = chart.dataMapping.category
+    }
+    if (!categoryColumn && chart.dataMapping?.xAxis && typeof chart.dataMapping.xAxis === 'string') {
+      categoryColumn = chart.dataMapping.xAxis
+    }
+
+    // Look for value columns
+    if (!valueColumn && chart.dataMapping?.values?.[0]) {
+      valueColumn = chart.dataMapping.values[0]
+    }
+    if (!valueColumn && chart.dataMapping?.yAxis && typeof chart.dataMapping.yAxis === 'string') {
+      valueColumn = chart.dataMapping.yAxis
+    }
+    if (!valueColumn && Array.isArray(chart.dataMapping?.yAxis) && chart.dataMapping.yAxis.length > 0) {
+      valueColumn = chart.dataMapping.yAxis[0]
+    }
+
+    if (categoryColumn && valueColumn) break
+  }
+
+  // If we still don't have both, return null
+  if (!categoryColumn || !valueColumn) {
+    console.warn('⚠️ [REBALANCER] Cannot create fallback visualization: missing category or value columns')
+    return null
+  }
+
+  // Generate descriptive title based on actual columns
+  const generateTitle = (cat: string, val: string, chartType: ChartType): string => {
+    // Remove common suffixes and clean up column names
+    const cleanCategory = cat.replace(/\s+(name|id|code|key)$/i, '').trim()
+    const cleanValue = val.replace(/\s+(total|sum|count|amount|value)$/i, '').trim()
+
+    switch (chartType) {
+      case 'line':
+        return `${cleanValue} Trend by ${cleanCategory}`
+      case 'area':
+        return `${cleanValue} Growth by ${cleanCategory}`
+      case 'pie':
+        return `${cleanValue} Distribution by ${cleanCategory}`
+      case 'bar':
+      default:
+        return `${cleanValue} by ${cleanCategory}`
+    }
+  }
+
+  // Generate descriptive description
+  const generateDescription = (cat: string, val: string, chartType: ChartType): string => {
+    switch (chartType) {
+      case 'line':
+        return `Shows how ${val} changes across different ${cat} over time`
+      case 'area':
+        return `Visualizes the cumulative ${val} growth across ${cat}`
+      case 'pie':
+        return `Displays the proportion of ${val} for each ${cat}`
+      case 'bar':
+      default:
+        return `Compares ${val} across different ${cat}`
+    }
+  }
+
+  const chartTypes: ChartType[] = ['bar', 'line', 'area', 'pie']
+  const selectedType = chartTypes[index % chartTypes.length]
+
+  return {
+    id: `fallback-viz-${index}-${Date.now()}`,
+    type: selectedType,
+    title: generateTitle(categoryColumn, valueColumn, selectedType),
+    description: generateDescription(categoryColumn, valueColumn, selectedType),
+    dataMapping: {
+      category: categoryColumn,
+      values: [valueColumn],
+      aggregation: 'sum'
+    },
+    confidence: 60,
+    qualityScore: 60,
+    reasoning: 'Additional visualization generated to meet minimum chart requirement'
   }
 }
 
@@ -221,7 +313,28 @@ export function enforceLayoutConstraints(
   const visualizationSlots = opts.targetCount - selectedScorecards.length - 1 // -1 for table
 
   // Select top visualizations for remaining slots
-  const selectedVisualizations = sortedVisualizations.slice(0, visualizationSlots)
+  let selectedVisualizations = sortedVisualizations.slice(0, visualizationSlots)
+
+  // NEW: Ensure we have enough non-scorecard charts (visualizations + table)
+  // The table counts as 1 non-scorecard, so we need (minNonScorecards - 1) visualizations
+  const minVisualizationsNeeded = opts.minNonScorecards - 1 // -1 because table counts as 1 non-scorecard
+
+  if (selectedVisualizations.length < minVisualizationsNeeded) {
+    const neededCount = minVisualizationsNeeded - selectedVisualizations.length
+    console.log(`📊 [REBALANCER] Need ${neededCount} more visualizations to meet minNonScorecards=${opts.minNonScorecards}`)
+
+    // Try to add more fallback visualizations
+    for (let i = 0; i < neededCount; i++) {
+      const fallbackViz = createFallbackVisualization([...charts, ...selectedScorecards, ...selectedVisualizations], i)
+      if (fallbackViz) {
+        selectedVisualizations.push(fallbackViz)
+        console.log(`✅ [REBALANCER] Added fallback visualization: ${fallbackViz.title}`)
+      } else {
+        console.warn('⚠️ [REBALANCER] Cannot create more fallback visualizations')
+        break
+      }
+    }
+  }
 
   // Combine in correct order: scorecards → visualizations → table
   return [
