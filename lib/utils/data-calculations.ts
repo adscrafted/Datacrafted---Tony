@@ -13,6 +13,13 @@
 
 import type { DataRow } from '@/lib/store'
 import { isValidDate } from '@/lib/utils/date-detection'
+import {
+  tokenizeFormula,
+  extractAggregateFunctions,
+  calculateFormulaForRow,
+  replaceAggregateFunctions,
+  findMatchingColumn
+} from './formula-parser'
 
 // ============================================================================
 // Security Constants
@@ -646,14 +653,7 @@ export function calculateFormula(
     round?: number // Decimal places to round to
   }
 ): CalculationResult {
-  // Import formula parser functions
-  const {
-    tokenizeFormula,
-    extractAggregateFunctions,
-    calculateFormulaForRow,
-    replaceAggregateFunctions,
-    findMatchingColumn
-  } = require('./formula-parser')
+  // Formula parser functions are imported at the top of the file
 
   if (!data || data.length === 0) {
     return {

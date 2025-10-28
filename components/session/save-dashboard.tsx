@@ -7,11 +7,9 @@ import { Button } from '@/components/ui/button'
 import { Save, CheckCircle } from 'lucide-react'
 
 export function SaveDashboard() {
-  const {
-    analysis,
-    fileName,
-    rawData,
-  } = useDataStore()
+  const analysis = useDataStore((state) => state.analysis)
+  const fileName = useDataStore((state) => state.fileName)
+  const rawData = useDataStore((state) => state.rawData)
 
   const {
     currentSession,

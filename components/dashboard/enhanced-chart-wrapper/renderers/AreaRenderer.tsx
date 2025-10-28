@@ -14,7 +14,7 @@ import { CustomActiveDot } from '../components/CustomDot'
 import { renderCollapsibleLegend } from '../../collapsible-legend'
 
 type AreaRendererProps = Pick<ChartRendererProps,
-  'chartData' | 'safeDataKey' | 'customization' | 'responsiveFeatures' |
+  'chartData' | 'safeDataKey' | 'customization' | 'configDataMapping' | 'responsiveFeatures' |
   'smartAxisScaling' | 'enhancedAxisLabels' | 'dualAxisConfig' |
   'colors' | 'truncateLabel' | 'onDataPointClick'>
 

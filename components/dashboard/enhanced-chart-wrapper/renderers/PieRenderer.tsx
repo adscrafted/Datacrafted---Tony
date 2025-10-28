@@ -4,7 +4,7 @@ import type { DataRow } from '@/lib/stores/data-store'
 import type { ChartRendererProps } from '../types'
 import { renderCollapsibleLegend } from '../../collapsible-legend'
 
-interface PieRendererProps extends Pick<ChartRendererProps, 'chartData' | 'safeDataKey' | 'customization' | 'responsiveFeatures' | 'truncateLabel' | 'colors' | 'onDataPointClick'> {}
+interface PieRendererProps extends Pick<ChartRendererProps, 'chartData' | 'safeDataKey' | 'customization' | 'configDataMapping' | 'responsiveFeatures' | 'truncateLabel' | 'colors' | 'onDataPointClick'> {}
 
 // MEMOIZATION: Custom comparison function to prevent unnecessary re-renders
 const arePropsEqual = (prevProps: PieRendererProps, nextProps: PieRendererProps): boolean => {
@@ -73,10 +73,13 @@ const PieRendererComponent: React.FC<PieRendererProps> = ({
             } : false}
           animationDuration={customization?.animate !== false ? 1500 : 0}
           onClick={(data) => {
+            console.log('🎯 Pie slice clicked:', data)
             // For pie charts, find the first matching row in the original data
             if (onDataPointClick && data && data.name) {
               const categoryKey = customization?.dataMapping?.category || safeDataKey[0]
+              console.log('🔍 Looking for category:', data.name, 'in key:', categoryKey)
               const matchingRow = chartData.find(row => String(row[categoryKey]) === String(data.name))
+              console.log('📊 Matching row:', matchingRow)
               if (matchingRow) {
                 onDataPointClick(matchingRow)
               }

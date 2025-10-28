@@ -34,6 +34,7 @@ import { usePerformanceMonitor } from '@/lib/hooks/use-performance-monitor'
 import { renderCollapsibleLegend } from './collapsible-legend'
 import { processChartData, type ChartDataMapping } from '@/lib/utils/chart-data-processor'
 import type { AggregationType } from '@/lib/utils/data-calculations'
+import { ChartErrorBoundary } from '@/components/error-boundary'
 
 // Lazy load table and waterfall components for better performance
 const TableChartLazy = lazy(() => import('./charts/table-chart').then(m => ({ default: m.TableChart })))
@@ -1255,7 +1256,7 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
       </CardHeader>
       <CardContent className="flex-1 p-4" style={{ minHeight: '360px' }}>
         <div className="h-full w-full">
-          <ChartErrorBoundary>
+          <ChartErrorBoundary chartId={chartId} chartType={chartType}>
             {renderChart}
           </ChartErrorBoundary>
         </div>

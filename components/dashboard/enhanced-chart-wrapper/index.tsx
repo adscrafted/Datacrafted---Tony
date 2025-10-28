@@ -88,6 +88,13 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
   initialTab,
   onDataPointClick
 }) {
+  // Debug logging for click handler
+  React.useEffect(() => {
+    if (onDataPointClick) {
+      console.log('📍 [EnhancedChartWrapper] onDataPointClick prop received for chart:', title, type)
+    }
+  }, [onDataPointClick, title, type])
+
   const chartRef = useRef<HTMLDivElement>(null)
   const [isHovered, setIsHovered] = useState(false)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
@@ -463,6 +470,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
             chartData={chartData}
             safeDataKey={safeDataKey}
             customization={customization}
+            configDataMapping={configDataMapping}
             responsiveFeatures={responsiveFeatures}
             smartAxisScaling={smartAxisScaling}
             enhancedAxisLabels={enhancedAxisLabels}
@@ -479,6 +487,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
             chartData={chartData}
             safeDataKey={safeDataKey}
             customization={customization}
+            configDataMapping={configDataMapping}
             responsiveFeatures={responsiveFeatures}
             smartAxisScaling={smartAxisScaling}
             enhancedAxisLabels={enhancedAxisLabels}
@@ -495,6 +504,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
             chartData={chartData}
             safeDataKey={safeDataKey}
             customization={customization}
+            configDataMapping={configDataMapping}
             responsiveFeatures={responsiveFeatures}
             truncateLabel={truncateLabel}
             colors={colors}
@@ -508,6 +518,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
             chartData={chartData}
             safeDataKey={safeDataKey}
             customization={customization}
+            configDataMapping={configDataMapping}
             responsiveFeatures={responsiveFeatures}
             smartAxisScaling={smartAxisScaling}
             enhancedAxisLabels={enhancedAxisLabels}

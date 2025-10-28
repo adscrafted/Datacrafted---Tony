@@ -34,6 +34,15 @@ export function InlineFilter({
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedGranularity, setSelectedGranularity] = useState<'day' | 'week' | 'month' | 'quarter' | 'year'>('month')
 
+  // DEBUG: Log rendering to verify component is visible
+  console.log('🎯 [InlineFilter] Rendering for column:', {
+    column,
+    columnType,
+    dataLength: data?.length || 0,
+    hasData: !!data && data.length > 0,
+    filtersCount: filters?.length || 0
+  })
+
   // Find existing filter for this column
   const existingFilter = filters.find(f => f.column === column)
   const hasActiveFilter = existingFilter && existingFilter.isActive && (
@@ -268,5 +277,6 @@ export function InlineFilter({
   }
 
   // For numeric columns (future enhancement)
+  console.warn('⚠️ [InlineFilter] No filter UI for numeric column:', column, 'type:', columnType)
   return null
 }

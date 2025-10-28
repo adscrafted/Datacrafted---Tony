@@ -12,9 +12,7 @@ interface AutoSaveIndicatorProps {
 }
 
 export function AutoSaveIndicator({ className }: AutoSaveIndicatorProps) {
-  const {
-    analysis,
-  } = useDataStore()
+  const analysis = useDataStore((state) => state.analysis)
 
   const {
     chartCustomizations,

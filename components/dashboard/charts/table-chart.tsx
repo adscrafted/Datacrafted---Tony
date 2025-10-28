@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
+import { VirtualizedTableChart } from './virtualized-table-chart'
 
 interface TableChartProps {
   data: any[]
@@ -11,7 +12,21 @@ interface TableChartProps {
   onHighlightComplete?: () => void // Callback when highlight animation completes
 }
 
+const VIRTUALIZATION_THRESHOLD = 500 // Use virtualization if more than 500 rows
+
 export function TableChart({ data, dataKey, maxRows = 100, highlightedRow, onHighlightComplete }: TableChartProps) {
+  // Use virtualized table for large datasets
+  if (data.length > VIRTUALIZATION_THRESHOLD) {
+    return (
+      <VirtualizedTableChart
+        data={data}
+        dataKey={dataKey}
+        maxRows={maxRows}
+        highlightedRow={highlightedRow}
+        onHighlightComplete={onHighlightComplete}
+      />
+    )
+  }
   const [sortConfig, setSortConfig] = useState<{
     key: string | null
     direction: 'asc' | 'desc' | null

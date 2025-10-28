@@ -740,8 +740,8 @@ export function ChartCustomizationPanel({
                                     )
 
                                     if (allowField) {
-                                      // Support yAxis1, yAxis, or values (check all sources)
-                                      const currentYAxis1 = customization?.dataMapping?.yAxis1 || customization?.dataMapping?.yAxis || customization?.dataMapping?.values || effectiveDataMapping?.yAxis1 || effectiveDataMapping?.yAxis || effectiveDataMapping?.values
+                                      // Support both yAxis1 and yAxis (check both sources)
+                                      const currentYAxis1 = customization?.dataMapping?.yAxis1 || customization?.dataMapping?.yAxis || effectiveDataMapping?.yAxis1 || effectiveDataMapping?.yAxis
                                       let newYAxis1: string | string[]
 
                                       if (Array.isArray(currentYAxis1)) {
@@ -765,8 +765,7 @@ export function ChartCustomizationPanel({
                                           ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
                                           ...customization?.dataMapping,
                                           yAxis1: newYAxis1,
-                                          yAxis: newYAxis1, // Update both for compatibility
-                                          values: Array.isArray(newYAxis1) ? newYAxis1 : [newYAxis1] // Also update values for bar charts
+                                          yAxis: newYAxis1 // Update both for compatibility
                                         }
                                       })
                                     }
@@ -780,8 +779,8 @@ export function ChartCustomizationPanel({
                                   Left Y-Axis (Primary)
                                 </div>
                                 {(() => {
-                                  // Support multiple field names: yAxis1, yAxis, or values (AI may use any)
-                                  const leftAxisData = effectiveDataMapping?.yAxis1 || effectiveDataMapping?.yAxis || effectiveDataMapping?.values
+                                  // Support both yAxis1 and yAxis (AI may use either)
+                                  const leftAxisData = effectiveDataMapping?.yAxis1 || effectiveDataMapping?.yAxis
                                   const hasData = leftAxisData && (Array.isArray(leftAxisData) ? leftAxisData.length > 0 : true)
 
                                   return hasData ? (
@@ -792,7 +791,7 @@ export function ChartCustomizationPanel({
                                           <div className="flex items-center gap-1">
                                             <InlineFilter
                                               column={field}
-                                              columnType={getInlineFilterColumnType(field)}
+                                              columnType={dataSchema?.columns.find(c => c.name === field)?.type as any || 'number'}
                                               data={data || rawData || []}
                                               filters={customization?.filters}
                                               onFiltersChange={(filters) => {
@@ -801,8 +800,8 @@ export function ChartCustomizationPanel({
                                             />
                                             <button
                                               onClick={() => {
-                                              // Get current value from all sources
-                                              const currentYAxis1 = customization?.dataMapping?.yAxis1 || customization?.dataMapping?.yAxis || customization?.dataMapping?.values || effectiveDataMapping?.yAxis1 || effectiveDataMapping?.yAxis || effectiveDataMapping?.values
+                                              // Get current value from either source
+                                              const currentYAxis1 = customization?.dataMapping?.yAxis1 || customization?.dataMapping?.yAxis || effectiveDataMapping?.yAxis1 || effectiveDataMapping?.yAxis
                                               let newYAxis1: string | string[] | undefined
 
                                               if (Array.isArray(currentYAxis1)) {
@@ -823,8 +822,7 @@ export function ChartCustomizationPanel({
                                                   ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
                                                   ...customization?.dataMapping,
                                                   yAxis1: newYAxis1,
-                                                  yAxis: newYAxis1, // Update both for compatibility
-                                                  values: Array.isArray(newYAxis1) ? newYAxis1 : (newYAxis1 ? [newYAxis1] : undefined) // Also update values for bar charts
+                                                  yAxis: newYAxis1 // Update both for compatibility
                                                 }
                                               })
                                             }}
@@ -913,7 +911,7 @@ export function ChartCustomizationPanel({
                                         <div className="flex items-center gap-1">
                                           <InlineFilter
                                             column={field}
-                                            columnType={getInlineFilterColumnType(field)}
+                                            columnType={dataSchema?.columns.find(c => c.name === field)?.type as any || 'number'}
                                             data={data || rawData || []}
                                             filters={customization?.filters}
                                             onFiltersChange={(filters) => {
@@ -1033,7 +1031,7 @@ export function ChartCustomizationPanel({
                                         <div className="flex items-center gap-1">
                                           <InlineFilter
                                             column={field}
-                                            columnType={getInlineFilterColumnType(field)}
+                                            columnType={dataSchema?.columns.find(c => c.name === field)?.type as any || 'string'}
                                             data={data || rawData || []}
                                             filters={customization?.filters}
                                             onFiltersChange={(filters) => {
@@ -1274,7 +1272,7 @@ export function ChartCustomizationPanel({
                                         <div className="flex items-center gap-1">
                                           <InlineFilter
                                             column={effectiveDataMapping.size}
-                                            columnType={getInlineFilterColumnType(effectiveDataMapping.size)}
+                                            columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.size)?.type as any || 'number'}
                                             data={data || rawData || []}
                                             filters={customization?.filters}
                                             onFiltersChange={(filters) => {
@@ -1336,7 +1334,7 @@ export function ChartCustomizationPanel({
                                         <div className="flex items-center gap-1">
                                           <InlineFilter
                                             column={effectiveDataMapping.color}
-                                            columnType={getInlineFilterColumnType(effectiveDataMapping.color)}
+                                            columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.color)?.type as any || 'string'}
                                             data={data || rawData || []}
                                             filters={customization?.filters}
                                             onFiltersChange={(filters) => {
@@ -1445,7 +1443,7 @@ export function ChartCustomizationPanel({
                                 <div className="flex items-center gap-1">
                                   <InlineFilter
                                     column={effectiveDataMapping.category}
-                                    columnType={getInlineFilterColumnType(effectiveDataMapping.category)}
+                                    columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.category)?.type as any || 'string'}
                                     data={data || rawData || []}
                                     filters={customization?.filters}
                                     onFiltersChange={(filters) => {
@@ -1509,7 +1507,7 @@ export function ChartCustomizationPanel({
                                 <div className="flex items-center gap-1">
                                   <InlineFilter
                                     column={effectiveDataMapping.value}
-                                    columnType={getInlineFilterColumnType(effectiveDataMapping.value)}
+                                    columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.value)?.type as any || 'number'}
                                     data={data || rawData || []}
                                     filters={customization?.filters}
                                     onFiltersChange={(filters) => {
@@ -1614,7 +1612,7 @@ export function ChartCustomizationPanel({
                                 <div className="flex items-center gap-1">
                                   <InlineFilter
                                     column={effectiveDataMapping.metric}
-                                    columnType={getInlineFilterColumnType(effectiveDataMapping.metric)}
+                                    columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.metric)?.type as any || 'number'}
                                     data={data || rawData || []}
                                     filters={customization?.filters}
                                     onFiltersChange={(filters) => {
@@ -1762,7 +1760,7 @@ export function ChartCustomizationPanel({
                                   <div className="flex items-center gap-1">
                                     <InlineFilter
                                       column={effectiveDataMapping.category}
-                                      columnType={getInlineFilterColumnType(effectiveDataMapping.category)}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.category)?.type as any || 'string'}
                                       data={data || rawData || []}
                                       filters={customization?.filters}
                                       onFiltersChange={(filters) => {
@@ -1828,7 +1826,7 @@ export function ChartCustomizationPanel({
                                   <div className="flex items-center gap-1">
                                     <InlineFilter
                                       column={effectiveDataMapping.value}
-                                      columnType={getInlineFilterColumnType(effectiveDataMapping.value)}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.value)?.type as any || 'number'}
                                       data={data || rawData || []}
                                       filters={customization?.filters}
                                       onFiltersChange={(filters) => {
@@ -1891,7 +1889,7 @@ export function ChartCustomizationPanel({
                                   <div className="flex items-center gap-1">
                                     <InlineFilter
                                       column={effectiveDataMapping.type}
-                                      columnType={getInlineFilterColumnType(effectiveDataMapping.type)}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.type)?.type as any || 'string'}
                                       data={data || rawData || []}
                                       filters={customization?.filters}
                                       onFiltersChange={(filters) => {
@@ -1993,7 +1991,7 @@ export function ChartCustomizationPanel({
                                   <div className="flex items-center gap-1">
                                     <InlineFilter
                                       column={effectiveDataMapping.xAxis}
-                                      columnType={getInlineFilterColumnType(effectiveDataMapping.xAxis)}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.xAxis)?.type as any || 'string'}
                                       data={data || rawData || []}
                                       filters={customization?.filters}
                                       onFiltersChange={(filters) => {
@@ -2055,7 +2053,7 @@ export function ChartCustomizationPanel({
                                   <div className="flex items-center gap-1">
                                     <InlineFilter
                                       column={effectiveDataMapping.yAxis}
-                                      columnType={getInlineFilterColumnType(effectiveDataMapping.yAxis)}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.yAxis)?.type as any || 'string'}
                                       data={data || rawData || []}
                                       filters={customization?.filters}
                                       onFiltersChange={(filters) => {
@@ -2119,7 +2117,7 @@ export function ChartCustomizationPanel({
                                   <div className="flex items-center gap-1">
                                     <InlineFilter
                                       column={effectiveDataMapping.value}
-                                      columnType={getInlineFilterColumnType(effectiveDataMapping.value)}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.value)?.type as any || 'number'}
                                       data={data || rawData || []}
                                       filters={customization?.filters}
                                       onFiltersChange={(filters) => {
@@ -2229,7 +2227,7 @@ export function ChartCustomizationPanel({
                                     <div className="flex items-center gap-1">
                                       <InlineFilter
                                         column={effectiveDataMapping.metric}
-                                        columnType={getInlineFilterColumnType(effectiveDataMapping.metric)}
+                                        columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.metric)?.type as any || 'number'}
                                         data={data || rawData || []}
                                         filters={customization?.filters}
                                         onFiltersChange={(filters) => {
@@ -2403,7 +2401,7 @@ export function ChartCustomizationPanel({
                                   <div className="flex items-center gap-1">
                                     <InlineFilter
                                       column={effectiveDataMapping.cohort}
-                                      columnType={getInlineFilterColumnType(effectiveDataMapping.cohort)}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.cohort)?.type as any || 'string'}
                                       data={data || rawData || []}
                                       filters={customization?.filters}
                                       onFiltersChange={(filters) => {
@@ -2465,7 +2463,7 @@ export function ChartCustomizationPanel({
                                   <div className="flex items-center gap-1">
                                     <InlineFilter
                                       column={effectiveDataMapping.period}
-                                      columnType={getInlineFilterColumnType(effectiveDataMapping.period)}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.period)?.type as any || 'string'}
                                       data={data || rawData || []}
                                       filters={customization?.filters}
                                       onFiltersChange={(filters) => {
@@ -2529,7 +2527,7 @@ export function ChartCustomizationPanel({
                                   <div className="flex items-center gap-1">
                                     <InlineFilter
                                       column={effectiveDataMapping.value}
-                                      columnType={getInlineFilterColumnType(effectiveDataMapping.value)}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.value)?.type as any || 'number'}
                                       data={data || rawData || []}
                                       filters={customization?.filters}
                                       onFiltersChange={(filters) => {
@@ -2631,7 +2629,7 @@ export function ChartCustomizationPanel({
                                   <div className="flex items-center gap-1">
                                     <InlineFilter
                                       column={effectiveDataMapping.category}
-                                      columnType={getInlineFilterColumnType(effectiveDataMapping.category)}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.category)?.type as any || 'string'}
                                       data={data || rawData || []}
                                       filters={customization?.filters}
                                       onFiltersChange={(filters) => {
@@ -2695,7 +2693,7 @@ export function ChartCustomizationPanel({
                                   <div className="flex items-center gap-1">
                                     <InlineFilter
                                       column={effectiveDataMapping.actual}
-                                      columnType={getInlineFilterColumnType(effectiveDataMapping.actual)}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.actual)?.type as any || 'number'}
                                       data={data || rawData || []}
                                       filters={customization?.filters}
                                       onFiltersChange={(filters) => {
@@ -2759,7 +2757,7 @@ export function ChartCustomizationPanel({
                                   <div className="flex items-center gap-1">
                                     <InlineFilter
                                       column={effectiveDataMapping.comparative}
-                                      columnType={getInlineFilterColumnType(effectiveDataMapping.comparative)}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.comparative)?.type as any || 'number'}
                                       data={data || rawData || []}
                                       filters={customization?.filters}
                                       onFiltersChange={(filters) => {
@@ -2861,7 +2859,7 @@ export function ChartCustomizationPanel({
                                   <div className="flex items-center gap-1">
                                     <InlineFilter
                                       column={effectiveDataMapping.category}
-                                      columnType={getInlineFilterColumnType(effectiveDataMapping.category)}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.category)?.type as any || 'string'}
                                       data={data || rawData || []}
                                       filters={customization?.filters}
                                       onFiltersChange={(filters) => {
@@ -2925,7 +2923,7 @@ export function ChartCustomizationPanel({
                                   <div className="flex items-center gap-1">
                                     <InlineFilter
                                       column={effectiveDataMapping.value}
-                                      columnType={getInlineFilterColumnType(effectiveDataMapping.value)}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.value)?.type as any || 'number'}
                                       data={data || rawData || []}
                                       filters={customization?.filters}
                                       onFiltersChange={(filters) => {
@@ -3217,7 +3215,7 @@ export function ChartCustomizationPanel({
                                   <div className="flex items-center gap-1">
                                     <InlineFilter
                                       column={effectiveDataMapping.xAxis}
-                                      columnType={getInlineFilterColumnType(effectiveDataMapping.xAxis)}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.xAxis)?.type as any || 'date'}
                                       data={data || rawData || []}
                                       filters={customization?.filters}
                                       onFiltersChange={(filters) => {
@@ -3282,7 +3280,7 @@ export function ChartCustomizationPanel({
                                   <div className="flex items-center gap-1">
                                     <InlineFilter
                                       column={effectiveDataMapping.yAxis}
-                                      columnType={getInlineFilterColumnType(effectiveDataMapping.yAxis)}
+                                      columnType={dataSchema?.columns.find(c => c.name === effectiveDataMapping.yAxis)?.type as any || 'number'}
                                       data={data || rawData || []}
                                       filters={customization?.filters}
                                       onFiltersChange={(filters) => {

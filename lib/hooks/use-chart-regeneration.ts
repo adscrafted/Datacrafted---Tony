@@ -85,6 +85,12 @@ export function useChartRegeneration() {
   const updateChartCustomization = useChartStore((state) => state.updateChartCustomization)
 
   const regenerateChartFromSuggestion = useCallback((suggestion: ChartSuggestion) => {
+    // Validate that we have analysis data before proceeding
+    if (!analysis) {
+      console.warn('[CHART-REGEN] Cannot add chart - no analysis data available')
+      return
+    }
+
     // Generate unique chart ID
     const chartId = `chart-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
@@ -116,18 +122,16 @@ export function useChartRegeneration() {
 
     console.log('✅ [CHART-REGEN] Added chart from AI suggestion:', chartId, suggestion.title)
 
-    // Update analysis if it exists
-    if (analysis) {
-      const updatedAnalysis: AnalysisResult = {
-        ...analysis,
-        chartConfig: [...analysis.chartConfig, newChartConfig],
-        insights: [
-          ...analysis.insights,
-          `Added ${suggestion.type} chart: ${suggestion.title} - ${suggestion.reason}`
-        ]
-      }
-      setAnalysis(updatedAnalysis)
+    // Update analysis with the new chart
+    const updatedAnalysis: AnalysisResult = {
+      ...analysis,
+      chartConfig: [...analysis.chartConfig, newChartConfig],
+      insights: [
+        ...analysis.insights,
+        `Added ${suggestion.type} chart: ${suggestion.title} - ${suggestion.reason}`
+      ]
     }
+    setAnalysis(updatedAnalysis)
 
     return newChartConfig
   }, [analysis, setAnalysis, updateChartCustomization])

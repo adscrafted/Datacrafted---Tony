@@ -8,7 +8,13 @@
 'use client'
 
 import { useState } from 'react'
-import { useProjectData, useProjectDataUpload, useProjectDataValidation } from '@/lib/hooks/use-project-data'
+// Hook was removed - example file only
+// import { useProjectData, useProjectDataUpload, useProjectDataValidation } from '@/lib/hooks/use-project-data'
+
+// Stub implementations for example
+const useProjectData = () => ({ data: [], loading: false, error: null })
+const useProjectDataUpload = () => ({ upload: async () => {}, progress: 0 })
+const useProjectDataValidation = () => ({ validate: () => true, errors: [] })
 import { projectDataClient, formatDataSize } from '@/lib/api/project-data-client'
 
 // ============================================================================

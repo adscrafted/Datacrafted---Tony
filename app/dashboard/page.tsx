@@ -16,14 +16,30 @@ import { analyzeData } from '@/lib/services/ai-analysis'
 import { cn } from '@/lib/utils/cn'
 import dynamic from 'next/dynamic'
 
-// Use regular imports for now - the benefits of the optimizations are already implemented
-import { MinimalChartWrapper } from '@/components/dashboard/minimal-chart-wrapper'
-import { EnhancedChartWrapper } from '@/components/dashboard/enhanced-chart-wrapper'
-import { ResizableChatInterface } from '@/components/dashboard/chat/resizable-chat-interface'
+// Dynamic imports for heavy components to improve initial load time
+const MinimalChartWrapper = dynamic(() => import('@/components/dashboard/minimal-chart-wrapper').then(mod => ({ default: mod.MinimalChartWrapper })), {
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin" /></div>
+})
+const EnhancedChartWrapper = dynamic(() => import('@/components/dashboard/enhanced-chart-wrapper').then(mod => ({ default: mod.EnhancedChartWrapper })), {
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin" /></div>
+})
+const ResizableChatInterface = dynamic(() => import('@/components/dashboard/chat/resizable-chat-interface').then(mod => ({ default: mod.ResizableChatInterface })), {
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin" /></div>
+})
+const FlexibleDashboardLayout = dynamic(() => import('@/components/dashboard/flexible-dashboard-layout').then(mod => ({ default: mod.FlexibleDashboardLayout })), {
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-full"><Loader2 className="animate-spin" /></div>
+})
+const EditableSchemaViewer = dynamic(() => import('@/components/dashboard/editable-schema-viewer').then(mod => ({ default: mod.EditableSchemaViewer })), {
+  ssr: false
+})
+
+// Keep lightweight components as regular imports
 import { AutoSaveIndicator } from '@/components/session/auto-save-indicator'
-import { FlexibleDashboardLayout } from '@/components/dashboard/flexible-dashboard-layout'
 import { ThemeProvider } from '@/components/dashboard/theme-provider'
-import { EditableSchemaViewer } from '@/components/dashboard/editable-schema-viewer'
 import { ShareDialog } from '@/components/dashboard/share-dialog'
 import { SaveDashboardButton } from '@/components/dashboard/save-dashboard-button'
 import { useProjectStore } from '@/lib/stores/project-store'

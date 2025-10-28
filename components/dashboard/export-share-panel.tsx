@@ -97,7 +97,9 @@ export function ExportSharePanel({ className }: ExportSharePanelProps) {
   const dashboardFilters = useChartStore((state) => state.dashboardFilters)
 
   // Functions still in monolithic store (to be migrated later)
-  const { exportDashboard, exportSession, generateShareableLink } = useDataStore()
+  const exportDashboard = useDataStore((state) => state.exportDashboard)
+  const exportSession = useDataStore((state) => state.exportSession)
+  const generateShareableLink = useDataStore((state) => state.generateShareableLink)
 
   const [isOpen, setIsOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'export' | 'share'>('export')

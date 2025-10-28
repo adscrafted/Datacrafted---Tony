@@ -148,6 +148,15 @@ interface ChartRecommendation {
     // Sparkline specific
     // xAxis already covered
     // yAxis already covered
+
+    // Filtering support - AI can recommend filters
+    filters?: Array<{
+      column: string              // Column to filter on
+      operator: 'equals' | 'not_equals' | 'in' | 'not_in' | 'contains' | 'not_contains' |
+                'greater_than' | 'less_than' | 'between' | 'is_null' | 'is_not_null'
+      value: any                  // Filter value(s)
+      reason?: string             // Why this filter is recommended
+    }>
   }
   confidence?: number           // AI confidence in this recommendation
   reasoning?: string            // Why this chart was recommended
@@ -527,18 +536,18 @@ Analyze the dataset and generate chart configuration recommendations for a busin
 </TASK>
 
 <CRITICAL_REQUIREMENTS>
-Generate 12-16 charts with MAXIMUM CHART TYPE DIVERSITY (system selects best 16 after validation):
+Generate 16-20 charts with MAXIMUM CHART TYPE DIVERSITY (expecting 10-15% validation failures, target 14-16 final):
 
-MANDATORY MINIMUM REQUIREMENTS:
-- MINIMUM 6 scorecards, TARGET 8-10 scorecards (based on meaningful KPIs)
+MANDATORY MINIMUM REQUIREMENTS (Generate extra to account for validation):
+- MINIMUM 8 scorecards, TARGET 10-12 scorecards (based on meaningful KPIs)
   * MUST use diverse aggregations across all scorecards (sum, avg, count, min, max, distinct)
-  * DO NOT generate only 4 scorecards - this is insufficient
+  * Generate MORE than needed as some may fail validation
   * Each aggregation type should be used at least once
-- EXACTLY 2 ranking charts (Top/Bottom performers - MANDATORY when comparing entities):
-  * REQUIRED: 1 Top 10 chart: {type: "bar" or "treemap", dataMapping: {category: "...", values: ["..."], aggregation: "sum", sortBy: "...", sortOrder: "desc", limit: 10}}
-  * REQUIRED: 1 Bottom 10 chart: {type: "bar" or "treemap", dataMapping: {category: "...", values: ["..."], aggregation: "sum", sortBy: "...", sortOrder: "asc", limit: 10}}
-- EXACTLY 1 REQUIRED table chart (MUST INCLUDE - comprehensive data view): {type: "table", dataMapping: {columns: [all key columns], sortBy: "most important metric", sortOrder: "desc", limit: 20}}
-- 3-7 analytical charts using DIVERSE chart types - prioritize advanced charts when patterns match:
+- EXACTLY 3-4 ranking charts (Top/Bottom performers - MANDATORY when comparing entities):
+  * REQUIRED: 2 Top 10 charts: {type: "bar" or "treemap", dataMapping: {category: "...", values: ["..."], aggregation: "sum", sortBy: "...", sortOrder: "desc", limit: 10}}
+  * REQUIRED: 1-2 Bottom 10 charts: {type: "bar" or "treemap", dataMapping: {category: "...", values: ["..."], aggregation: "sum", sortBy: "...", sortOrder: "asc", limit: 10}}
+- EXACTLY 1-2 REQUIRED table charts (MUST INCLUDE - comprehensive data view): {type: "table", dataMapping: {columns: [all key columns], sortBy: "most important metric", sortOrder: "desc", limit: 20}}
+- 5-8 analytical charts using DIVERSE chart types - prioritize advanced charts when patterns match:
   * CONSIDER including 2-3 advanced chart types when data patterns match (waterfall, heatmap, gauge, cohort, bullet, treemap, sparkline)
   * Core charts (bar, line, area, scatter, combo, pie) should be used based on data characteristics
 
@@ -1214,9 +1223,19 @@ NOTE: Use aggregations that make sense for each metric's business context. Each 
       // Parse OpenAI response using robust JSON extraction
       const aiAnalysis = parseJSONFromString<AIAnalysisResponse>(response)
 
+      // Log filter recommendations from AI
+      const chartsWithFilters = aiAnalysis.chartConfig?.filter((c: any) =>
+        c.dataMapping?.filters && c.dataMapping.filters.length > 0
+      ) || []
+
       logger.debug('[API-ANALYZE] AI response parsed:', {
         chartsCount: aiAnalysis.chartConfig?.length || 0,
-        insightsCount: aiAnalysis.insights?.length || 0
+        insightsCount: aiAnalysis.insights?.length || 0,
+        chartsWithFilters: chartsWithFilters.length,
+        filterDetails: chartsWithFilters.map((c: any) => ({
+          title: c.title,
+          filters: c.dataMapping.filters
+        }))
       })
 
       // Validate required structure
@@ -1255,18 +1274,66 @@ NOTE: Use aggregations that make sense for each metric's business context. Each 
       // Validate dataMapping against dataset columns
       const availableColumns = dataStructure.columns.map((col: any) => col.name)
 
+      // DEBUG: Log available columns
+      logger.info('[DEBUG] Available columns in dataset:', {
+        columns: availableColumns,
+        count: availableColumns.length
+      })
+
       // Create production-ready column matcher with tiered matching strategy
       const columnMatcher = createColumnMatcher(availableColumns)
 
+      // DEBUG: Log normalized columns
+      logger.info('[DEBUG] Normalized columns:', {
+        normalized: Array.from(columnMatcher.normalizedColumns),
+        normalizedToOriginal: Array.from(columnMatcher.normalizedToOriginal.entries())
+      })
+
       // Helper function to find column using the matcher
       const findColumn = (colName: string): string | null => {
-        return matchColumn(colName, columnMatcher) || null
+        const result = matchColumn(colName, columnMatcher)
+
+        // DEBUG: Log fuzzy match attempts with detailed info
+        if (!result) {
+          // Also get validation result for detailed error info
+          const { validateColumnExists } = require('@/lib/utils/column-name-matcher')
+          const validation = validateColumnExists(colName, columnMatcher)
+
+          logger.warn('[DEBUG] Column NOT matched:', {
+            requested: colName,
+            normalized: require('@/lib/utils/column-name-matcher').normalizeColumnName(colName),
+            suggestions: validation.suggestions,
+            availableColumns: availableColumns
+          })
+        } else if (result !== colName) {
+          logger.info('[DEBUG] Column fuzzy matched:', {
+            requested: colName,
+            matched: result
+          })
+        }
+
+        return result || null
       }
 
       const availableColumnsSet = new Set(columnMatcher.originalColumns)
 
+      // Helper function to check if column exists (using fuzzy matching)
+      const columnExists = (colName: string): boolean => {
+        return findColumn(colName) !== null
+      }
+
       let dataMappingValidationWarnings = 0
       let dataMappingValidationErrors = 0
+
+      // DEBUG: Log all chart configs before normalization
+      logger.info('[DEBUG] Chart configs before normalization:', {
+        chartCount: aiAnalysis.chartConfig.length,
+        charts: aiAnalysis.chartConfig.map((c: any) => ({
+          title: c.title,
+          type: c.type,
+          dataMapping: c.dataMapping
+        }))
+      })
 
       // Normalize all column names in chartConfig before validation
       aiAnalysis.chartConfig.forEach((config: any) => {
@@ -1347,19 +1414,19 @@ NOTE: Use aggregations that make sense for each metric's business context. Each 
               // Bar charts require: category + values array
               if (!dm.category) {
                 errors.push('Bar chart missing required "category" field in dataMapping')
-              } else if (!availableColumnsSet.has(dm.category)) {
+              } else if (!columnExists(dm.category)) {
                 invalidCols.push(dm.category)
               }
 
               if (!dm.values || !Array.isArray(dm.values) || dm.values.length === 0) {
                 errors.push('Bar chart missing required "values" array in dataMapping')
               } else {
-                const invalidValues = dm.values.filter((col: string) => !availableColumnsSet.has(col))
+                const invalidValues = dm.values.filter((col: string) => !columnExists(col))
                 invalidCols.push(...invalidValues)
               }
 
               // Validate Top/Bottom X parameters
-              if (dm.sortBy && !availableColumnsSet.has(dm.sortBy)) {
+              if (dm.sortBy && !columnExists(dm.sortBy)) {
                 errors.push(`sortBy column "${dm.sortBy}" not found in data`)
               }
               if (dm.sortOrder && !['asc', 'desc'].includes(dm.sortOrder)) {
@@ -1375,7 +1442,7 @@ NOTE: Use aggregations that make sense for each metric's business context. Each 
               // Line/Area charts require: xAxis + yAxis
               if (!dm.xAxis) {
                 errors.push(`${config.type} chart missing required "xAxis" field in dataMapping`)
-              } else if (!availableColumnsSet.has(dm.xAxis)) {
+              } else if (!columnExists(dm.xAxis)) {
                 invalidCols.push(dm.xAxis)
               }
 
@@ -1383,7 +1450,7 @@ NOTE: Use aggregations that make sense for each metric's business context. Each 
                 errors.push(`${config.type} chart missing required "yAxis" field in dataMapping`)
               } else {
                 const yAxisCols = Array.isArray(dm.yAxis) ? dm.yAxis : [dm.yAxis]
-                const invalidY = yAxisCols.filter((col: string) => !availableColumnsSet.has(col))
+                const invalidY = yAxisCols.filter((col: string) => !columnExists(col))
                 invalidCols.push(...invalidY)
               }
               break
@@ -1392,13 +1459,13 @@ NOTE: Use aggregations that make sense for each metric's business context. Each 
               // Pie charts require: category + value (singular)
               if (!dm.category) {
                 errors.push('Pie chart missing required "category" field in dataMapping')
-              } else if (!availableColumnsSet.has(dm.category)) {
+              } else if (!columnExists(dm.category)) {
                 invalidCols.push(dm.category)
               }
 
               if (!dm.value) {
                 errors.push('Pie chart missing required "value" field in dataMapping')
-              } else if (!availableColumnsSet.has(dm.value)) {
+              } else if (!columnExists(dm.value)) {
                 invalidCols.push(dm.value)
               }
               break
@@ -1413,7 +1480,7 @@ NOTE: Use aggregations that make sense for each metric's business context. Each 
               }
 
               // For metric-based scorecards, validate metric column exists
-              if (isMetricScorecard && !availableColumnsSet.has(dm.metric)) {
+              if (isMetricScorecard && !columnExists(dm.metric)) {
                 invalidCols.push(dm.metric)
               }
 
@@ -1436,7 +1503,7 @@ NOTE: Use aggregations that make sense for each metric's business context. Each 
               }
 
               // Comparison is optional but validate if present
-              if (dm.comparison && !availableColumnsSet.has(dm.comparison)) {
+              if (dm.comparison && !columnExists(dm.comparison)) {
                 warnings.push(`Comparison column "${dm.comparison}" not found in dataset`)
               }
               break
@@ -1445,21 +1512,21 @@ NOTE: Use aggregations that make sense for each metric's business context. Each 
               // Scatter requires: xAxis + yAxis
               if (!dm.xAxis) {
                 errors.push('Scatter chart missing required "xAxis" field in dataMapping')
-              } else if (!availableColumnsSet.has(dm.xAxis)) {
+              } else if (!columnExists(dm.xAxis)) {
                 invalidCols.push(dm.xAxis)
               }
 
               if (!dm.yAxis) {
                 errors.push('Scatter chart missing required "yAxis" field in dataMapping')
-              } else if (!availableColumnsSet.has(dm.yAxis as string)) {
+              } else if (!columnExists(dm.yAxis as string)) {
                 invalidCols.push(dm.yAxis as string)
               }
 
               // Size and color are optional but validate if present
-              if (dm.size && !availableColumnsSet.has(dm.size)) {
+              if (dm.size && !columnExists(dm.size)) {
                 warnings.push(`Size column "${dm.size}" not found in dataset`)
               }
-              if (dm.color && !availableColumnsSet.has(dm.color)) {
+              if (dm.color && !columnExists(dm.color)) {
                 warnings.push(`Color column "${dm.color}" not found in dataset`)
               }
               break
@@ -1469,7 +1536,7 @@ NOTE: Use aggregations that make sense for each metric's business context. Each 
               if (!dm.columns || !Array.isArray(dm.columns) || dm.columns.length === 0) {
                 errors.push('Table missing required "columns" array in dataMapping')
               } else {
-                const invalidCols = dm.columns.filter((col: string) => !availableColumnsSet.has(col))
+                const invalidCols = dm.columns.filter((col: string) => !columnExists(col))
                 if (invalidCols.length > 0) {
                   warnings.push(`Some columns not found: ${invalidCols.join(', ')}`)
                 }
@@ -1488,54 +1555,73 @@ NOTE: Use aggregations that make sense for each metric's business context. Each 
               if (!dm.yAxis2Type) errors.push('Combo chart missing "yAxis2Type"')
 
               // Validate columns exist
-              if (dm.xAxis && !availableColumnsSet.has(dm.xAxis)) {
+              if (dm.xAxis && !columnExists(dm.xAxis)) {
                 invalidCols.push(dm.xAxis)
               }
               const yAxis1Cols = Array.isArray(dm.yAxis) ? dm.yAxis : [dm.yAxis]
               const yAxis2Cols = Array.isArray(dm.yAxis2) ? dm.yAxis2 : [dm.yAxis2]
-              invalidCols.push(...yAxis1Cols.filter((col: string) => !availableColumnsSet.has(col)))
-              invalidCols.push(...yAxis2Cols.filter((col: string) => !availableColumnsSet.has(col)))
+              invalidCols.push(...yAxis1Cols.filter((col: string) => !columnExists(col)))
+              invalidCols.push(...yAxis2Cols.filter((col: string) => !columnExists(col)))
               break
 
             case 'waterfall':
               // Waterfall requires: category + value
               if (!dm.category) {
                 errors.push('Waterfall chart missing required "category" field')
-              } else if (!availableColumnsSet.has(dm.category)) {
+              } else if (!columnExists(dm.category)) {
                 invalidCols.push(dm.category)
               }
               if (!dm.value) {
                 errors.push('Waterfall chart missing required "value" field')
-              } else if (!availableColumnsSet.has(dm.value)) {
+              } else if (!columnExists(dm.value)) {
                 invalidCols.push(dm.value)
               }
               // type and isTotal are optional
-              if (dm.type && !availableColumnsSet.has(dm.type)) {
+              if (dm.type && !columnExists(dm.type)) {
                 warnings.push(`Type column "${dm.type}" not found`)
               }
-              if (dm.isTotal && !availableColumnsSet.has(dm.isTotal)) {
+              if (dm.isTotal && !columnExists(dm.isTotal)) {
                 warnings.push(`IsTotal column "${dm.isTotal}" not found`)
               }
               break
 
             case 'heatmap':
               // Heatmap requires: xAxis + yAxis + value
+              logger.info('[DEBUG] Validating heatmap chart:', {
+                title: config.title,
+                xAxis: dm.xAxis,
+                yAxis: dm.yAxis,
+                value: dm.value
+              })
+
               if (!dm.xAxis) {
                 errors.push('Heatmap missing required "xAxis" field')
-              } else if (!availableColumnsSet.has(dm.xAxis)) {
+              } else if (!columnExists(dm.xAxis)) {
+                logger.warn('[DEBUG] Heatmap xAxis column not found:', {
+                  requested: dm.xAxis,
+                  available: availableColumns
+                })
                 invalidCols.push(dm.xAxis)
               }
               if (!dm.yAxis) {
                 errors.push('Heatmap missing required "yAxis" field')
               } else {
                 const yCol = Array.isArray(dm.yAxis) ? dm.yAxis[0] : dm.yAxis
-                if (!availableColumnsSet.has(yCol)) {
+                if (!columnExists(yCol)) {
+                  logger.warn('[DEBUG] Heatmap yAxis column not found:', {
+                    requested: yCol,
+                    available: availableColumns
+                  })
                   invalidCols.push(yCol)
                 }
               }
               if (!dm.value) {
                 errors.push('Heatmap missing required "value" field')
-              } else if (!availableColumnsSet.has(dm.value)) {
+              } else if (!columnExists(dm.value)) {
+                logger.warn('[DEBUG] Heatmap value column not found:', {
+                  requested: dm.value,
+                  available: availableColumns
+                })
                 invalidCols.push(dm.value)
               }
               break
@@ -1544,7 +1630,7 @@ NOTE: Use aggregations that make sense for each metric's business context. Each 
               // Gauge requires: metric + aggregation
               if (!dm.metric) {
                 errors.push('Gauge chart missing required "metric" field')
-              } else if (!availableColumnsSet.has(dm.metric)) {
+              } else if (!columnExists(dm.metric)) {
                 invalidCols.push(dm.metric)
               }
               // aggregation is required for gauge charts
@@ -1560,7 +1646,7 @@ NOTE: Use aggregations that make sense for each metric's business context. Each 
                 }
               }
               // target is optional but validate if present
-              if (dm.target && typeof dm.target === 'string' && !availableColumnsSet.has(dm.target)) {
+              if (dm.target && typeof dm.target === 'string' && !columnExists(dm.target)) {
                 warnings.push(`Target column "${dm.target}" not found`)
               }
               break
@@ -1569,17 +1655,17 @@ NOTE: Use aggregations that make sense for each metric's business context. Each 
               // Cohort requires: cohort + period + retention
               if (!dm.cohort) {
                 errors.push('Cohort chart missing required "cohort" field')
-              } else if (!availableColumnsSet.has(dm.cohort)) {
+              } else if (!columnExists(dm.cohort)) {
                 invalidCols.push(dm.cohort)
               }
               if (!dm.period) {
                 errors.push('Cohort chart missing required "period" field')
-              } else if (!availableColumnsSet.has(dm.period)) {
+              } else if (!columnExists(dm.period)) {
                 invalidCols.push(dm.period)
               }
               if (!dm.retention) {
                 errors.push('Cohort chart missing required "retention" field')
-              } else if (!availableColumnsSet.has(dm.retention)) {
+              } else if (!columnExists(dm.retention)) {
                 invalidCols.push(dm.retention)
               }
               break
@@ -1590,12 +1676,12 @@ NOTE: Use aggregations that make sense for each metric's business context. Each 
                 errors.push('Bullet chart missing required "metric" or "actual" field')
               } else {
                 const actualCol = dm.actual || dm.metric
-                if (actualCol && !availableColumnsSet.has(actualCol)) {
+                if (actualCol && !columnExists(actualCol)) {
                   invalidCols.push(actualCol)
                 }
               }
               // target is optional but validate if present
-              if (dm.target && typeof dm.target === 'string' && !availableColumnsSet.has(dm.target)) {
+              if (dm.target && typeof dm.target === 'string' && !columnExists(dm.target)) {
                 warnings.push(`Target column "${dm.target}" not found`)
               }
               break
@@ -1604,16 +1690,16 @@ NOTE: Use aggregations that make sense for each metric's business context. Each 
               // Treemap requires: category + value
               if (!dm.category) {
                 errors.push('Treemap missing required "category" field')
-              } else if (!availableColumnsSet.has(dm.category)) {
+              } else if (!columnExists(dm.category)) {
                 invalidCols.push(dm.category)
               }
               if (!dm.value) {
                 errors.push('Treemap missing required "value" field')
-              } else if (!availableColumnsSet.has(dm.value)) {
+              } else if (!columnExists(dm.value)) {
                 invalidCols.push(dm.value)
               }
               // parent is optional for hierarchy
-              if (dm.parent && !availableColumnsSet.has(dm.parent)) {
+              if (dm.parent && !columnExists(dm.parent)) {
                 warnings.push(`Parent column "${dm.parent}" not found`)
               }
               break
@@ -1622,14 +1708,14 @@ NOTE: Use aggregations that make sense for each metric's business context. Each 
               // Sparkline requires: xAxis + yAxis (like line chart)
               if (!dm.xAxis) {
                 errors.push('Sparkline missing required "xAxis" field')
-              } else if (!availableColumnsSet.has(dm.xAxis)) {
+              } else if (!columnExists(dm.xAxis)) {
                 invalidCols.push(dm.xAxis)
               }
               if (!dm.yAxis) {
                 errors.push('Sparkline missing required "yAxis" field')
               } else {
                 const yAxisCols = Array.isArray(dm.yAxis) ? dm.yAxis : [dm.yAxis]
-                const invalidY = yAxisCols.filter((col: string) => !availableColumnsSet.has(col))
+                const invalidY = yAxisCols.filter((col: string) => !columnExists(col))
                 invalidCols.push(...invalidY)
               }
               break
@@ -1638,17 +1724,31 @@ NOTE: Use aggregations that make sense for each metric's business context. Each 
               warnings.push(`Unknown chart type: ${config.type}`)
           }
 
-          // Report invalid columns
+          // Report invalid columns as warnings instead of errors (more lenient)
           if (invalidCols.length > 0) {
-            errors.push(`Invalid column names: ${invalidCols.join(', ')}`)
+            // Changed from errors.push to warnings.push - allow charts with missing columns
+            warnings.push(`Column names not found (will use defaults): ${invalidCols.join(', ')}`)
+            logger.warn(`[VALIDATION] Chart "${config.title}" has column mismatches: ${invalidCols.join(', ')} - allowing chart with defaults`)
           }
         }
 
         // Log errors and warnings
         if (errors.length > 0) {
-          logger.error(`[VALIDATION] Chart "${config.title}" has errors:`, errors.join('; '))
-          dataMappingValidationErrors++
-          return false // Filter out charts with errors
+          // Only filter out charts with CRITICAL errors (missing required fields)
+          const criticalErrors = errors.filter(e =>
+            e.includes('missing required') ||
+            e.includes('Invalid aggregation') ||
+            e.includes('Invalid sortOrder') ||
+            e.includes('Invalid limit')
+          )
+
+          if (criticalErrors.length > 0) {
+            logger.error(`[VALIDATION] Chart "${config.title}" has CRITICAL errors:`, criticalErrors.join('; '))
+            dataMappingValidationErrors++
+            return false // Filter out only if critical structural errors
+          } else {
+            logger.warn(`[VALIDATION] Chart "${config.title}" has non-critical errors (keeping chart):`, errors.join('; '))
+          }
         }
 
         if (warnings.length > 0) {
@@ -1683,6 +1783,55 @@ NOTE: Use aggregations that make sense for each metric's business context. Each 
       if (topBottomCount === 0) {
         logger.warn('[VALIDATION] No Top/Bottom X charts generated')
       }
+
+      // Normalize column names in chart configurations to match actual data
+      aiAnalysis.chartConfig = aiAnalysis.chartConfig.map((config: any) => {
+        if (config.dataMapping) {
+          const dm = config.dataMapping
+          const normalizedMapping: any = {}
+
+          // Helper to normalize a single column name
+          const normalizeColumnName = (col: string): string => {
+            const matched = findColumn(col)
+            return matched || col // Use matched name or fallback to original
+          }
+
+          // Normalize all column references in dataMapping
+          Object.keys(dm).forEach(key => {
+            const value = dm[key]
+
+            // Special handling for filters array
+            if (key === 'filters' && Array.isArray(value)) {
+              normalizedMapping.filters = value.map((filter: any) => ({
+                ...filter,
+                column: filter.column ? normalizeColumnName(filter.column) : filter.column
+              }))
+              logger.debug('[NORMALIZATION] Processing filters:', {
+                original: value,
+                normalized: normalizedMapping.filters
+              })
+            } else if (typeof value === 'string' && key !== 'aggregation' && key !== 'sortOrder' &&
+                key !== 'yAxis1Type' && key !== 'yAxis2Type' && key !== 'yAxis1Label' &&
+                key !== 'yAxis2Label' && key !== 'formula' && key !== 'formulaAlias') {
+              // Single column reference
+              normalizedMapping[key] = normalizeColumnName(value)
+            } else if (Array.isArray(value) && key !== 'filters') {
+              // Array of column references (but not filters)
+              normalizedMapping[key] = value.map((col: any) =>
+                typeof col === 'string' ? normalizeColumnName(col) : col
+              )
+            } else {
+              // Keep as is (numbers, booleans, etc.)
+              normalizedMapping[key] = value
+            }
+          })
+
+          return { ...config, dataMapping: normalizedMapping }
+        }
+        return config
+      })
+
+      logger.debug('[NORMALIZATION] Column names normalized in chart configurations')
 
       // Ensure we still have enough recommendations after filtering
       if (aiAnalysis.chartConfig.length < 4) {
@@ -2037,27 +2186,36 @@ NOTE: Use aggregations that make sense for each metric's business context. Each 
         } : undefined
       }
 
-      // REBALANCING DISABLED: Show all valid charts generated by AI
-      // logger.info('[API-ANALYZE] Rebalancing charts before response:', {
-      //   beforeCount: analysisResult.chartConfig.length,
-      //   scorecards: analysisResult.chartConfig.filter((c: any) => c.type === 'scorecard').length,
-      //   tables: analysisResult.chartConfig.filter((c: any) => c.type === 'table').length
-      // })
+      // REBALANCING ENABLED: Ensure minimum 14 charts after validation
+      const currentChartCount = analysisResult.chartConfig.length
+      if (currentChartCount < 14) {
+        logger.info('[API-ANALYZE] Chart count below minimum, applying rebalancing:', {
+          beforeCount: currentChartCount,
+          targetCount: 14,
+          scorecards: analysisResult.chartConfig.filter((c: any) => c.type === 'scorecard').length,
+          tables: analysisResult.chartConfig.filter((c: any) => c.type === 'table').length
+        })
 
-      // // Apply rebalancing to chartConfig
-      // // IMPORTANT: For e-commerce/FBA/financial dashboards, we need many KPI scorecards
-      // // AI is prompted to generate 8+ diverse scorecards (sum, avg, count, min, max, distinct)
-      // // Allow up to 10 scorecards to show rich KPI metrics, leaving 5 slots for analytical charts + 1 table
-      // analysisResult.chartConfig = rebalanceCharts(analysisResult.chartConfig as any, 16, {
-      //   minScorecards: 0,   // Don't force minimum - use what AI generated
-      //   maxScorecards: 10,  // Allow up to 10 scorecards for rich KPI dashboards
-      //   preferredScorecards: 8,  // Prefer 8 scorecards (matches AI prompt)
-      //   requireTable: true
-      // }) as any
+        // Apply rebalancing to ensure minimum chart count
+        // IMPORTANT: Ensures we always have at least 14 charts for a rich dashboard
+        analysisResult.chartConfig = rebalanceCharts(analysisResult.chartConfig as any, 16, {
+          minScorecards: 6,   // Minimum 6 scorecards
+          maxScorecards: 12,  // Allow up to 12 scorecards for rich KPI dashboards
+          preferredScorecards: 10,  // Prefer 10 scorecards (matches updated AI prompt)
+          requireTable: true
+        }) as any
 
-      // // Log rebalancing results
-      // const chartStats = getChartStats(analysisResult.chartConfig as any)
-      // logger.info('[API-ANALYZE] Charts rebalanced successfully:', chartStats)
+        // Log rebalancing results
+        const chartStats = getChartStats(analysisResult.chartConfig as any)
+        logger.info('[API-ANALYZE] Charts rebalanced successfully:', {
+          ...chartStats,
+          finalCount: analysisResult.chartConfig.length
+        })
+      } else {
+        logger.info('[API-ANALYZE] Chart count sufficient, skipping rebalancing:', {
+          chartCount: currentChartCount
+        })
+      }
 
       // // Validate layout
       // const validation = validateChartLayout(analysisResult.chartConfig as any)
@@ -2066,11 +2224,18 @@ NOTE: Use aggregations that make sense for each metric's business context. Each 
       // }
 
       // Log final chart count without rebalancing
+      // Log final filter preservation
+      const finalChartsWithFilters = analysisResult.chartConfig.filter((c: any) =>
+        c.dataMapping?.filters && c.dataMapping.filters.length > 0
+      )
+
       logger.info('[API-ANALYZE] Showing all valid charts without rebalancing:', {
         totalCharts: analysisResult.chartConfig.length,
         scorecards: analysisResult.chartConfig.filter((c: any) => c.type === 'scorecard').length,
         visualizations: analysisResult.chartConfig.filter((c: any) => !['scorecard', 'table'].includes(c.type)).length,
-        tables: analysisResult.chartConfig.filter((c: any) => c.type === 'table').length
+        tables: analysisResult.chartConfig.filter((c: any) => c.type === 'table').length,
+        chartsWithFilters: finalChartsWithFilters.length,
+        filterDetails: finalChartsWithFilters.length > 0 ? 'Filters preserved in response' : 'No filters recommended by AI'
       })
 
       // Build enhanced data context
