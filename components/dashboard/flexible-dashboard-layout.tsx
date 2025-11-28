@@ -128,42 +128,41 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProjectId])
 
-  // PERFORMANCE: Cache for chart validation to prevent expensive re-runs
-  const validationCache = useRef<Map<string, any>>(new Map())
-
   // Filter out invalid charts before rendering
+  // NOTE: useMemo handles caching automatically - no need for manual cache
+  // CRITICAL FIX: Depend on analysis.chartConfig (array reference) not just length
+  // This ensures new charts from chat are immediately visible
   const validCharts = useMemo(() => {
+    const inputChartCount = analysis.chartConfig?.length || 0
+    console.log('🔍 [FLEX-DASHBOARD] validCharts useMemo running:', {
+      inputChartCount,
+      dataLength: data?.length || 0,
+      chartIds: analysis.chartConfig?.slice(0, 3).map((c: any) => c.id || 'no-id').join(', ') + '...'
+    })
+
     // CRITICAL FIX: If data is empty but we have charts, don't filter them out
     // The charts will display "No data" states individually rather than hiding the entire dashboard
     if (!data || data.length === 0) {
+      console.log('🔍 [FLEX-DASHBOARD] No data, returning all charts:', inputChartCount)
       return analysis.chartConfig || []
     }
 
-    // PERFORMANCE FIX: Only re-validate if chart count or data count changes
-    // Cache key based on chart count and data length (not full arrays)
-    const cacheKey = `${analysis.chartConfig?.length || 0}-${data.length}`
-
-    if (validationCache.current.has(cacheKey)) {
-      return validationCache.current.get(cacheKey)
-    }
-
+    console.log('🔍 [FLEX-DASHBOARD] Validating charts:', { inputChartCount })
     const result = filterValidCharts(analysis.chartConfig as any, data)
-    validationCache.current.set(cacheKey, result)
-
-    // Limit cache size to prevent memory leaks
-    if (validationCache.current.size > 10) {
-      const firstKey = validationCache.current.keys().next().value
-      if (firstKey) {
-        validationCache.current.delete(firstKey)
-      }
-    }
+    console.log('🔍 [FLEX-DASHBOARD] Validated charts:', { validCount: result.length, inputCount: inputChartCount })
 
     return result
-  }, [analysis.chartConfig?.length, data.length])
+  }, [analysis.chartConfig, data])
 
   // Sort charts by quality score (highest first), keeping scorecards separate
   // CRITICAL: Filter out draft chart from rendering - it should NOT appear on dashboard yet
   const sortedCharts = useMemo(() => {
+    console.log('🔄 [FLEX-DASHBOARD] sortedCharts useMemo running:', {
+      validChartsCount: validCharts.length,
+      analysisChartsCount: analysis.chartConfig?.length || 0,
+      customizationCount: Object.keys(chartCustomizations).length
+    })
+
     // CRITICAL: Filter out the draft chart - it shouldn't be visible on the dashboard yet
     // Also filter out unconfigured scorecards (missing metric or formula)
     const chartsToDisplay = validCharts.filter((chart: any) => {
@@ -265,7 +264,16 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     })
 
     // Return in proper order: scorecards at top, charts in middle (2 per row), tables at bottom
-    return [...scorecards, ...sortedOthers, ...tables]
+    const result = [...scorecards, ...sortedOthers, ...tables]
+    console.log('🔄 [FLEX-DASHBOARD] sortedCharts result:', {
+      inputCount: validCharts.length,
+      filteredCount: chartsToDisplay.length,
+      outputCount: result.length,
+      scorecards: scorecards.length,
+      tables: tables.length,
+      others: otherCharts.length
+    })
+    return result
   }, [validCharts, draftChart, analysis.chartConfig, chartCustomizations])
 
   // Extract quality scores from enhanced analysis if available
@@ -882,8 +890,9 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
             isDroppable={false}
           >
             {sortedCharts.map((config, index) => {
-              const originalIndex = analysis.chartConfig.indexOf(config)
-              const chartId = config.id || `chart-${originalIndex}`
+              // Use config.id if available, otherwise use the map index for a stable unique key
+              // Note: indexOf can return -1 if object reference doesn't match (after cloning/sorting)
+              const chartId = config.id || `chart-${index}`
               const isSelected = selectedChartId === chartId
               const customization = chartCustomizations[chartId]
               // CRITICAL FIX: Default to visible=true, not false

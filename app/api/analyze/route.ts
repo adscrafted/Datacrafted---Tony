@@ -14,6 +14,11 @@ import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 import { getCachedAnalysis, setCachedAnalysis, generateDataHash } from '@/lib/cache/analysis-cache'
 import { withTimeout, isTimeoutError } from '@/lib/utils/timeout'
 
+// Security: Input validation limits
+const MAX_ROWS = 10000
+const MAX_COLUMNS = 100
+const MAX_PAYLOAD_SIZE = 10 * 1024 * 1024 // 10MB
+
 // Production-ready logging utility
 const isDevelopment = process.env.NODE_ENV === 'development'
 const logger = {
@@ -28,6 +33,15 @@ const logger = {
   },
   error: (...args: any[]) => {
     console.error(...args)
+  }
+}
+
+// CORS helper function
+function corsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   }
 }
 
@@ -316,10 +330,44 @@ function getOpenAIClient() {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error('OpenAI API key not configured')
   }
-  
+
   return new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
   })
+}
+
+/**
+ * Retry wrapper for OpenAI API calls with exponential backoff
+ * Handles transient errors (5xx) and rate limits (429)
+ */
+async function callOpenAIWithRetry(
+  openai: OpenAI,
+  params: any,
+  maxRetries: number = 3
+): Promise<any> {
+  let lastError: Error | null = null
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await openai.chat.completions.create(params)
+    } catch (error: any) {
+      lastError = error
+
+      // Don't retry on client errors (4xx) except rate limits
+      if (error.status && error.status >= 400 && error.status < 500 && error.status !== 429) {
+        throw error
+      }
+
+      // Retry on server errors (5xx) and rate limits (429)
+      if (attempt < maxRetries) {
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000) // Exponential backoff, max 10s
+        logger.warn(`[API-ANALYZE] OpenAI retry ${attempt}/${maxRetries} after ${delay}ms`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+    }
+  }
+
+  throw lastError
 }
 
 // NOTE: Rate limiting is now handled by withRateLimit middleware
@@ -1336,8 +1384,10 @@ function analyzeDataStructure(data: DataRow[]) {
 
 const handler = withAuth(async (request: NextRequest, authUser) => {
   const requestStartTime = Date.now()
+  const requestId = crypto.randomUUID()
 
   logger.info('[API-ANALYZE] POST request received:', {
+    requestId,
     url: request.url,
     method: request.method,
     timestamp: new Date().toISOString(),
@@ -1348,13 +1398,14 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
   try {
     // Check API key - REQUIRED
     if (!process.env.OPENAI_API_KEY) {
-      logger.error('[API-ANALYZE] OpenAI API key not configured')
+      logger.error('[API-ANALYZE] OpenAI API key not configured', { requestId })
       return NextResponse.json(
         {
-          error: 'OpenAI API key not configured. Please add your API key to .env.local',
-          details: 'Set OPENAI_API_KEY=your-key-here in .env.local file'
+          error: 'Service temporarily unavailable',
+          type: 'config_error',
+          requestId
         },
-        { status: 500 }
+        { status: 503, headers: corsHeaders() }
       )
     }
 
@@ -1392,10 +1443,28 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
     })
 
     if (!data || !Array.isArray(data) || data.length === 0) {
-      logger.error('[API-ANALYZE] Invalid data provided:', { isArray: Array.isArray(data), length: data?.length })
+      logger.error('[API-ANALYZE] Invalid data provided:', { requestId, isArray: Array.isArray(data), length: data?.length })
       return NextResponse.json(
-        { error: 'Invalid data provided' },
-        { status: 400 }
+        { error: 'Invalid data provided', requestId },
+        { status: 400, headers: corsHeaders() }
+      )
+    }
+
+    // Security: Validate input size limits
+    if (data.length > MAX_ROWS) {
+      logger.error('[API-ANALYZE] Dataset too large:', { requestId, rows: data.length, maxRows: MAX_ROWS })
+      return NextResponse.json(
+        { error: `Dataset too large. Maximum ${MAX_ROWS.toLocaleString()} rows allowed.`, requestId },
+        { status: 413, headers: corsHeaders() }
+      )
+    }
+
+    const columnCount = data[0] ? Object.keys(data[0]).length : 0
+    if (columnCount > MAX_COLUMNS) {
+      logger.error('[API-ANALYZE] Too many columns:', { requestId, columns: columnCount, maxColumns: MAX_COLUMNS })
+      return NextResponse.json(
+        { error: `Too many columns. Maximum ${MAX_COLUMNS} columns allowed.`, requestId },
+        { status: 413, headers: corsHeaders() }
       )
     }
 
@@ -1403,7 +1472,7 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
 
     // PERFORMANCE: Check cache before running expensive AI analysis
     const dataHash = generateDataHash(JSON.stringify({ data, schema, correctedSchema, feedback }))
-    const cached = getCachedAnalysis(dataHash)
+    const cached = await getCachedAnalysis(dataHash)
 
     if (cached) {
       const totalDuration = Date.now() - requestStartTime
@@ -1411,7 +1480,7 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
         duration: totalDuration + 'ms',
         hash: dataHash.substring(0, 8) + '...'
       })
-      return NextResponse.json(cached)
+      return NextResponse.json(cached, { headers: corsHeaders() })
     }
 
     logger.info('[API-ANALYZE] Cache MISS - running AI analysis:', {
@@ -1443,8 +1512,9 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
     const startTime = Date.now()
 
     // PERFORMANCE: Use timeout utility wrapper for cleaner timeout handling
+    // RELIABILITY: Wrap OpenAI call with retry logic for transient failures
     const completion = await withTimeout(
-      openai.chat.completions.create({
+      callOpenAIWithRetry(openai, {
         model: "gpt-4o-mini", // Using GPT-4o-mini for fast and efficient analysis
         messages: [
           {
@@ -1529,6 +1599,7 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
       ],
         // temperature: 0.7, // Using default temperature for balanced creativity and consistency
         max_completion_tokens: 16000, // Increased to 16k to prevent truncation (PHASE 3 OPTIMIZED: prompt ~4k + completion 16k = 20k total, 56% token reduction)
+        response_format: { type: "json_object" }, // Force valid JSON output
       }),
       240000, // 4 minute timeout (240 seconds) - increased from 3 minutes to handle slower OpenAI responses
       'OpenAI API call timed out after 240 seconds'
@@ -1544,6 +1615,7 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
 
     if (!response) {
       logger.error('[API-ANALYZE] No response from OpenAI', {
+        requestId,
         hasChoices: !!completion.choices,
         choicesLength: completion.choices?.length,
         firstChoice: completion.choices?.[0],
@@ -2367,6 +2439,8 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
           }
 
           return {
+            // Unique ID for each chart to prevent React key collisions
+            id: `chart-${index}-${config.type}`,
             type: config.type,
             title: config.title,
             description: config.description,
@@ -2654,10 +2728,10 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
     })
 
     // PERFORMANCE: Cache the result for future requests
-    setCachedAnalysis(dataHash, analysisResult, JSON.stringify(data).length)
+    await setCachedAnalysis(dataHash, analysisResult, JSON.stringify(data).length)
     logger.info('[API-ANALYZE] Result cached for hash:', dataHash.substring(0, 8) + '...')
 
-    return NextResponse.json(analysisResult)
+    return NextResponse.json(analysisResult, { headers: corsHeaders() })
 
     } catch (parseError) {
       logger.error('[API-ANALYZE] Error parsing OpenAI response:', {
@@ -2669,16 +2743,18 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
       // Return error if AI response is malformed
       return NextResponse.json(
         {
-          error: 'Failed to parse AI response. Please try again.',
-          details: parseError instanceof Error ? parseError.message : 'Unknown error'
+          error: 'Analysis failed. Please try again.',
+          type: 'parse_error',
+          requestId
         },
-        { status: 500 }
+        { status: 500, headers: corsHeaders() }
       )
     }
 
   } catch (error) {
     const totalDuration = Date.now() - requestStartTime
     logger.error('[API-ANALYZE] Error in analysis API:', {
+      requestId,
       error: error instanceof Error ? error.message : 'Unknown error',
       duration: totalDuration + 'ms'
     })
@@ -2686,6 +2762,7 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
     // Handle timeout errors specifically
     if (isTimeoutError(error)) {
       logger.error('[API-ANALYZE] Request timed out:', {
+        requestId,
         timeoutMs: error.timeoutMs,
         message: error.message
       })
@@ -2693,10 +2770,9 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
         {
           error: 'Analysis request timed out',
           type: 'timeout',
-          details: 'The analysis took too long to complete. Please try with a smaller dataset or contact support.',
-          timeoutMs: error.timeoutMs
+          requestId
         },
-        { status: 408 } // Request Timeout
+        { status: 408, headers: corsHeaders() } // Request Timeout
       )
     }
 
@@ -2711,73 +2787,73 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
 
       // Check for specific OpenAI error types
       if (err.code === 'rate_limit_exceeded') {
-        logger.error('[API-ANALYZE] Rate limit exceeded:', err.message)
+        logger.error('[API-ANALYZE] Rate limit exceeded:', { requestId, message: err.message })
         return NextResponse.json(
           { 
-            error: 'Rate limit exceeded. Please wait a moment and try again.',
+            error: 'Too many requests. Please try again later.',
             type: 'rate_limit',
-            details: err.message
+            requestId
           },
-          { status: 429 }
+          { status: 429, headers: corsHeaders() }
         )
       }
-      
+
       if (err.code === 'insufficient_quota') {
-        logger.error('[API-ANALYZE] Insufficient quota:', err.message)
+        logger.error('[API-ANALYZE] Insufficient quota:', { requestId, message: err.message })
         return NextResponse.json(
           {
-            error: 'OpenAI quota exceeded. Please check your billing.',
+            error: 'Service temporarily unavailable',
             type: 'quota_exceeded',
-            details: err.message
+            requestId
           },
-          { status: 402 }
+          { status: 402, headers: corsHeaders() }
         )
       }
 
       if (err.status === 429) {
-        logger.error('[API-ANALYZE] 429 Rate limit from OpenAI:', err.message)
+        logger.error('[API-ANALYZE] 429 Rate limit from OpenAI:', { requestId, message: err.message })
         return NextResponse.json(
           { 
-            error: 'Too many requests to OpenAI. Please try again in a few minutes.',
+            error: 'Too many requests. Please try again later.',
             type: 'rate_limit',
-            details: err.message
+            requestId
           },
-          { status: 429 }
+          { status: 429, headers: corsHeaders() }
         )
       }
-      
+
       if (err.status === 401) {
-        logger.error('[API-ANALYZE] 401 Unauthorized from OpenAI:', err.message)
+        logger.error('[API-ANALYZE] 401 Unauthorized from OpenAI:', { requestId, message: err.message })
         return NextResponse.json(
           {
-            error: 'OpenAI API key is invalid or expired.',
+            error: 'Authentication failed. Please contact support.',
             type: 'auth_error',
-            details: err.message
+            requestId
           },
-          { status: 401 }
+          { status: 401, headers: corsHeaders() }
         )
       }
 
       if (err.status >= 500) {
-        logger.error('[API-ANALYZE] OpenAI server error:', err.status, err.message)
+        logger.error('[API-ANALYZE] OpenAI server error:', { requestId, status: err.status, message: err.message })
         return NextResponse.json(
-          { 
-            error: 'OpenAI service is temporarily unavailable.',
+          {
+            error: 'Service temporarily unavailable',
             type: 'server_error',
-            details: err.message
+            requestId
           },
-          { status: 503 }
+          { status: 503, headers: corsHeaders() }
         )
       }
     }
-    
+
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : 'Analysis failed',
+        error: 'Analysis failed. Please try again.',
         type: 'unknown_error',
-        details: 'Please check your data format and try again'
+        requestId
       },
-      { status: 500 }
+      { status: 500, headers: corsHeaders() }
     )
   }
 })
@@ -2787,8 +2863,25 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
 // Authentication is required (withAuth middleware)
 export const POST = withRateLimit(RATE_LIMITS.ANALYSIS, handler)
 
+// OPTIONS handler for CORS preflight requests
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: corsHeaders()
+  })
+}
+
 // Fallback function removed - OpenAI API key is now required
 
 // Next.js 15 Route Segment Configuration
 export const maxDuration = 300 // 5 minutes timeout
 export const runtime = 'nodejs' // Node.js runtime for full API support
+
+// Security: Request body size limit
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb'
+    }
+  }
+}

@@ -51,7 +51,7 @@ export class AnalysisService {
       // Check cache if enabled
       if (request.useCache !== false) {
         const dataHash = generateDataHash(JSON.stringify(request.data))
-        const cached = getCachedAnalysis(dataHash)
+        const cached = await getCachedAnalysis(dataHash)
         if (cached) {
           logger.info('[AnalysisService] Using cached analysis')
           return cached
@@ -144,7 +144,7 @@ export class AnalysisService {
       // Cache result if enabled
       if (request.useCache !== false) {
         const dataHash = generateDataHash(JSON.stringify(request.data))
-        setCachedAnalysis(dataHash, result, JSON.stringify(request.data).length)
+        await setCachedAnalysis(dataHash, result, JSON.stringify(request.data).length)
       }
 
       const duration = Date.now() - startTime

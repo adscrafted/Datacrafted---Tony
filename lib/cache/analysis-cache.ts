@@ -1,13 +1,20 @@
 /**
- * Analysis Cache Utility
+ * Analysis Cache Utility - Dual-Mode (In-Memory + Redis)
  *
- * Simple in-memory cache for AI analysis results to reduce redundant OpenAI API calls.
+ * Production-ready cache for AI analysis results to reduce redundant OpenAI API calls.
  * Implements TTL (Time-To-Live) based expiration and size limits.
+ *
+ * DUAL-MODE BEHAVIOR:
+ * - If UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are set: Uses Redis (distributed cache)
+ * - If not configured: Falls back to in-memory Map (local development)
+ * - Redis failures automatically fall back to in-memory cache (graceful degradation)
  *
  * Performance Impact:
  * - 90% reduction in duplicate AI API calls (after initial analysis)
  * - Instant response for cached results (vs 30-180s for AI)
  * - Cost savings: $1,350/month (estimated)
+ * - Redis mode: Shared cache across all server instances (horizontal scaling)
+ * - In-memory mode: Per-instance cache (development/testing)
  *
  * @example
  * ```typescript
@@ -17,26 +24,55 @@
  * const dataHash = generateDataHash(JSON.stringify(data))
  *
  * // Check cache
- * const cached = getCachedAnalysis(dataHash)
+ * const cached = await getCachedAnalysis(dataHash)
  * if (cached) {
  *   return NextResponse.json(cached)
  * }
  *
  * // Run analysis and cache
  * const result = await analyzeData(data)
- * setCachedAnalysis(dataHash, result)
+ * await setCachedAnalysis(dataHash, result)
  * ```
  */
 
 import crypto from 'crypto'
+import { Redis } from '@upstash/redis'
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
 const CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
-const MAX_CACHE_SIZE = 100 // Maximum number of cached entries
-const CLEANUP_INTERVAL = 60 * 60 * 1000 // Cleanup every hour
+const CACHE_TTL_SECONDS = 24 * 60 * 60 // 24 hours in seconds (for Redis)
+const MAX_CACHE_SIZE = 100 // Maximum number of cached entries (in-memory only)
+const CLEANUP_INTERVAL = 60 * 60 * 1000 // Cleanup every hour (in-memory only)
+
+// ============================================================================
+// Redis Client Setup
+// ============================================================================
+
+let redisClient: Redis | null = null
+let useRedis = false
+
+// Initialize Redis if environment variables are present
+try {
+  const redisUrl = process.env.UPSTASH_REDIS_REST_URL
+  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN
+
+  if (redisUrl && redisToken) {
+    redisClient = new Redis({
+      url: redisUrl,
+      token: redisToken,
+    })
+    useRedis = true
+    console.log('[CACHE] Redis mode enabled (distributed cache)')
+  } else {
+    console.log('[CACHE] In-memory mode enabled (local cache)')
+  }
+} catch (error) {
+  console.error('[CACHE] Redis initialization failed, falling back to in-memory:', error)
+  useRedis = false
+}
 
 // ============================================================================
 // Types
@@ -89,7 +125,39 @@ export function generateDataHash(data: string): string {
  * @param dataHash Hash of the input data
  * @returns Cached result or null if not found/expired
  */
-export function getCachedAnalysis<T = any>(dataHash: string): T | null {
+export async function getCachedAnalysis<T = any>(dataHash: string): Promise<T | null> {
+  // Try Redis first if enabled
+  if (useRedis && redisClient) {
+    try {
+      const cached = await redisClient.get<CacheEntry<T>>(dataHash)
+
+      if (cached) {
+        // Update hit counter (fire and forget)
+        cached.hits++
+        cacheStats.hits++
+        redisClient.set(dataHash, cached, { ex: CACHE_TTL_SECONDS }).catch(() => {
+          // Silently fail hit counter update
+        })
+
+        const age = Date.now() - cached.timestamp
+        console.log('[CACHE] Redis Hit:', {
+          hash: dataHash.substring(0, 8) + '...',
+          age: Math.round(age / 1000) + 's',
+          hits: cached.hits
+        })
+
+        return cached.result
+      }
+
+      cacheStats.misses++
+      return null
+    } catch (error) {
+      console.error('[CACHE] Redis get failed, falling back to in-memory:', error)
+      // Fall through to in-memory cache
+    }
+  }
+
+  // In-memory cache (fallback or default)
   const entry = cache.get(dataHash)
 
   if (!entry) {
@@ -109,7 +177,7 @@ export function getCachedAnalysis<T = any>(dataHash: string): T | null {
   entry.hits++
   cacheStats.hits++
 
-  console.log('[CACHE] Hit:', {
+  console.log('[CACHE] Memory Hit:', {
     hash: dataHash.substring(0, 8) + '...',
     age: Math.round(age / 1000) + 's',
     hits: entry.hits
@@ -124,24 +192,44 @@ export function getCachedAnalysis<T = any>(dataHash: string): T | null {
  * @param result Analysis result to cache
  * @param dataSize Optional size of original data in bytes
  */
-export function setCachedAnalysis<T = any>(
+export async function setCachedAnalysis<T = any>(
   dataHash: string,
   result: T,
   dataSize?: number
-): void {
+): Promise<void> {
+  const cacheEntry: CacheEntry<T> = {
+    result,
+    timestamp: Date.now(),
+    hits: 0,
+    dataSize: dataSize || 0
+  }
+
+  // Try Redis first if enabled
+  if (useRedis && redisClient) {
+    try {
+      await redisClient.set(dataHash, cacheEntry, { ex: CACHE_TTL_SECONDS })
+
+      console.log('[CACHE] Redis Set:', {
+        hash: dataHash.substring(0, 8) + '...',
+        dataSize: dataSize ? `${Math.round(dataSize / 1024)}KB` : 'unknown',
+        ttl: `${CACHE_TTL_SECONDS}s`
+      })
+      return
+    } catch (error) {
+      console.error('[CACHE] Redis set failed, falling back to in-memory:', error)
+      // Fall through to in-memory cache
+    }
+  }
+
+  // In-memory cache (fallback or default)
   // Enforce size limit - evict oldest entries if needed
   if (cache.size >= MAX_CACHE_SIZE) {
     evictOldestEntry()
   }
 
-  cache.set(dataHash, {
-    result,
-    timestamp: Date.now(),
-    hits: 0,
-    dataSize: dataSize || 0
-  })
+  cache.set(dataHash, cacheEntry)
 
-  console.log('[CACHE] Set:', {
+  console.log('[CACHE] Memory Set:', {
     hash: dataHash.substring(0, 8) + '...',
     cacheSize: cache.size,
     dataSize: dataSize ? `${Math.round(dataSize / 1024)}KB` : 'unknown'
@@ -153,12 +241,31 @@ export function setCachedAnalysis<T = any>(
  * @param dataHash Hash to remove
  * @returns true if entry was found and removed
  */
-export function clearCachedAnalysis(dataHash: string): boolean {
-  const existed = cache.has(dataHash)
+export async function clearCachedAnalysis(dataHash: string): Promise<boolean> {
+  let existed = false
+
+  // Try Redis first if enabled
+  if (useRedis && redisClient) {
+    try {
+      const result = await redisClient.del(dataHash)
+      existed = result > 0
+
+      if (existed) {
+        console.log('[CACHE] Redis Cleared:', dataHash.substring(0, 8) + '...')
+      }
+      return existed
+    } catch (error) {
+      console.error('[CACHE] Redis clear failed, falling back to in-memory:', error)
+      // Fall through to in-memory cache
+    }
+  }
+
+  // In-memory cache (fallback or default)
+  existed = cache.has(dataHash)
   cache.delete(dataHash)
 
   if (existed) {
-    console.log('[CACHE] Cleared:', dataHash.substring(0, 8) + '...')
+    console.log('[CACHE] Memory Cleared:', dataHash.substring(0, 8) + '...')
   }
 
   return existed
@@ -167,17 +274,28 @@ export function clearCachedAnalysis(dataHash: string): boolean {
 /**
  * Clear all cache entries
  * Useful for testing or memory management
+ * NOTE: Redis mode only clears in-memory cache (Redis flushall would affect all apps)
  */
-export function clearAllCache(): void {
+export async function clearAllCache(): Promise<void> {
+  // For Redis, we only clear the in-memory fallback cache
+  // We don't call FLUSHALL because that would clear ALL data in Redis (dangerous)
+  // In production, individual keys expire naturally via TTL
+
   const size = cache.size
   cache.clear()
-  console.log('[CACHE] Cleared all entries:', size)
+
+  if (useRedis) {
+    console.log('[CACHE] Cleared in-memory fallback cache:', size, '(Redis keys will expire via TTL)')
+  } else {
+    console.log('[CACHE] Cleared all entries:', size)
+  }
 }
 
 /**
  * Get cache statistics for monitoring
+ * NOTE: Redis mode stats only reflect session-level counters, not distributed cache state
  */
-export function getCacheStats(): CacheStats {
+export async function getCacheStats(): Promise<CacheStats> {
   const entries = Array.from(cache.values())
   const totalHits = entries.reduce((sum, entry) => sum + entry.hits, 0)
   const timestamps = entries.map(e => e.timestamp)

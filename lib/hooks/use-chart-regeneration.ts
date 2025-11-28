@@ -81,46 +81,98 @@ function buildDataMapping(chartType: string, columns: string[]): any {
 
 export function useChartRegeneration() {
   const analysis = useDataStore((state) => state.analysis)
+  const rawData = useDataStore((state) => state.rawData)
   const setAnalysis = useDataStore((state) => state.setAnalysis)
   const updateChartCustomization = useChartStore((state) => state.updateChartCustomization)
 
   const regenerateChartFromSuggestion = useCallback((suggestion: ChartSuggestion) => {
+    console.log('🎯 [CHART-REGEN] Starting chart addition with suggestion:', {
+      type: suggestion.type,
+      title: suggestion.title,
+      dataKey: suggestion.dataKey,
+      description: suggestion.description
+    })
+
     // Validate that we have analysis data before proceeding
     if (!analysis) {
-      console.warn('[CHART-REGEN] Cannot add chart - no analysis data available')
+      console.error('❌ [CHART-REGEN] Cannot add chart - no analysis data available')
       return
     }
 
+    // Get available columns from data
+    const availableColumns = rawData && rawData.length > 0 ? Object.keys(rawData[0]) : []
+    console.log('📋 [CHART-REGEN] Available columns:', availableColumns)
+
+    // Validate and filter suggested columns against actual data columns
+    const validColumns = suggestion.dataKey.filter(col => {
+      const isValid = availableColumns.includes(col)
+      if (!isValid) {
+        console.warn(`⚠️ [CHART-REGEN] Invalid column "${col}" not found in data. Available: ${availableColumns.join(', ')}`)
+      }
+      return isValid
+    })
+
+    // If no valid columns, try case-insensitive matching as fallback
+    if (validColumns.length === 0 && suggestion.dataKey.length > 0) {
+      console.log('🔄 [CHART-REGEN] Attempting case-insensitive column matching...')
+      const fallbackColumns = suggestion.dataKey.map(col => {
+        const match = availableColumns.find(
+          avail => avail.toLowerCase() === col.toLowerCase() ||
+                   avail.toLowerCase().replace(/[_\s]/g, '') === col.toLowerCase().replace(/[_\s]/g, '')
+        )
+        if (match) {
+          console.log(`✅ [CHART-REGEN] Fuzzy matched "${col}" to "${match}"`)
+        }
+        return match
+      }).filter((col): col is string => col !== undefined)
+
+      if (fallbackColumns.length > 0) {
+        suggestion = { ...suggestion, dataKey: fallbackColumns }
+        console.log('📝 [CHART-REGEN] Using fuzzy-matched columns:', fallbackColumns)
+      } else {
+        console.error('❌ [CHART-REGEN] Cannot add chart - no valid columns found in suggestion:', suggestion.dataKey)
+        return null
+      }
+    } else if (validColumns.length !== suggestion.dataKey.length) {
+      // Some columns were invalid, use only valid ones
+      suggestion = { ...suggestion, dataKey: validColumns }
+      console.log('📝 [CHART-REGEN] Using filtered valid columns:', validColumns)
+    }
+
+    console.log('📊 [CHART-REGEN] Current analysis state:', {
+      chartCount: analysis.chartConfig?.length || 0,
+      insightsCount: analysis.insights?.length || 0
+    })
+
     // Generate unique chart ID
-    const chartId = `chart-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    const chartId = `chart-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
 
     // Build proper dataMapping from suggestion columns
     const dataMapping = buildDataMapping(suggestion.type, suggestion.dataKey)
+    console.log('🗺️ [CHART-REGEN] Built dataMapping:', dataMapping)
 
     const newChartConfig = {
       id: chartId,
       type: suggestion.type,
       title: suggestion.title,
       description: suggestion.description,
-      dataMapping: dataMapping, // ✅ Add structured dataMapping
-      dataKey: suggestion.dataKey // Keep original dataKey for reference
+      dataMapping: dataMapping,
+      dataKey: suggestion.dataKey
     }
 
     // Get default dimensions for this chart type
     const dimensions = getDefaultChartDimensions(suggestion.type)
 
     // Create chart customization with default position and dimensions
-    // The FlexibleDashboardLayout will auto-place it using findAvailablePosition
+    console.log('📐 [CHART-REGEN] Setting customization with dimensions:', dimensions)
     updateChartCustomization(chartId, {
       id: chartId,
       position: { x: 0, y: 0, w: dimensions.w, h: dimensions.h },
       isVisible: true,
       chartType: suggestion.type,
-      title: suggestion.title,
+      customTitle: suggestion.title, // Use customTitle, not title
       dataMapping: dataMapping
     })
-
-    console.log('✅ [CHART-REGEN] Added chart from AI suggestion:', chartId, suggestion.title)
 
     // Update analysis with the new chart
     const updatedAnalysis: AnalysisResult = {
@@ -131,10 +183,18 @@ export function useChartRegeneration() {
         `Added ${suggestion.type} chart: ${suggestion.title} - ${suggestion.reason}`
       ]
     }
+
+    console.log('✅ [CHART-REGEN] Calling setAnalysis with new chart count:', updatedAnalysis.chartConfig.length)
     setAnalysis(updatedAnalysis)
 
+    console.log('🎉 [CHART-REGEN] Chart added successfully:', {
+      chartId,
+      title: suggestion.title,
+      newTotalCharts: updatedAnalysis.chartConfig.length
+    })
+
     return newChartConfig
-  }, [analysis, setAnalysis, updateChartCustomization])
+  }, [analysis, rawData, setAnalysis, updateChartCustomization])
 
   const replaceChart = useCallback((chartIndex: number, suggestion: ChartSuggestion) => {
     if (!analysis || chartIndex < 0 || chartIndex >= analysis.chartConfig.length) return

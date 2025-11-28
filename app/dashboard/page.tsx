@@ -428,8 +428,9 @@ function DashboardContent() {
                 const analysis = projectData.analysis // Save to local variable for TypeScript
                 const updatedAnalysis = {
                   ...analysis,
-                  chartConfig: analysis.chartConfig.map((chart: any) => {
-                    const chartId = chart.id || `chart-${analysis.chartConfig.indexOf(chart)}`
+                  chartConfig: analysis.chartConfig.map((chart: any, index: number) => {
+                    // Use chart.id if available, otherwise use map index for stable ID
+                    const chartId = chart.id || `chart-${index}`
                     const customization = savedConfig.chartCustomizations[chartId]
 
                     if (customization) {
@@ -560,8 +561,9 @@ function DashboardContent() {
                 const analysis = projectData.analysis // Save to local variable for TypeScript
                 const updatedAnalysis = {
                   ...analysis,
-                  chartConfig: analysis.chartConfig.map((chart: any) => {
-                    const chartId = chart.id || `chart-${analysis.chartConfig.indexOf(chart)}`
+                  chartConfig: analysis.chartConfig.map((chart: any, index: number) => {
+                    // Use chart.id if available, otherwise use map index for stable ID
+                    const chartId = chart.id || `chart-${index}`
                     const customization = savedConfig.chartCustomizations[chartId]
 
                     if (customization) {

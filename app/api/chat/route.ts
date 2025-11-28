@@ -41,6 +41,9 @@ function generateDataContext(data: DataRow[], schema: DataSchema | null, fileNam
     return "No data is currently loaded."
   }
 
+  // Get column names from data - this is the authoritative list
+  const availableColumns = Object.keys(data[0] || {})
+
   // If we have a rich schema, use it for better context
   if (schema && schema.columns) {
     const columnInfo = schema.columns.map(col => {
@@ -72,6 +75,9 @@ function generateDataContext(data: DataRow[], schema: DataSchema | null, fileNam
 File: ${fileName || schema.fileName || 'Uploaded data'}
 Rows: ${schema.rowCount ? schema.rowCount.toLocaleString() : data.length.toLocaleString()}
 Columns: ${schema.columnCount || 'Unknown'}
+
+⚠️ AVAILABLE COLUMNS (USE ONLY THESE EXACT NAMES):
+${availableColumns.map(col => `• ${col}`).join('\n')}
 `
 
     // Add business context if available
@@ -90,7 +96,7 @@ Columns: ${schema.columnCount || 'Unknown'}
   }
 
   // Fallback to basic analysis if no schema
-  const columns = Object.keys(data[0] || {})
+  const columns = availableColumns
   const columnInfo = columns.map(col => {
     const values = data.map(row => row[col])
     const nonNullValues = values.filter(v => v !== null && v !== undefined)
@@ -131,6 +137,9 @@ Columns: ${schema.columnCount || 'Unknown'}
 File: ${fileName || 'Uploaded data'}
 Rows: ${data.length.toLocaleString()}
 Columns: ${columns.length}
+
+⚠️ AVAILABLE COLUMNS (USE ONLY THESE EXACT NAMES):
+${availableColumns.map(col => `• ${col}`).join('\n')}
 
 Column Details:
 ${columnInfo.join('\n')}
@@ -254,6 +263,13 @@ Title: Campaign Profitability - ROI
 Columns: Campaign, Sales, Spent
 Description: This bar chart shows the ROI percentage for each campaign.
 **END_SUGGESTION**
+
+⚠️ CRITICAL - COLUMN NAMES RULE:
+- The "Columns:" field MUST contain ONLY exact column names from the "AVAILABLE COLUMNS" list above
+- DO NOT invent, rename, or modify column names (e.g., don't use "Total Income" if column is named "Income")
+- DO NOT use spaces or change capitalization
+- Copy column names EXACTLY as they appear in the available columns list
+- If you're unsure about a column name, refer back to the AVAILABLE COLUMNS list
 
 IMPORTANT:
 - Put each field (Type, Title, Columns, Description) on a SINGLE line

@@ -11,6 +11,7 @@
  * - X-RateLimit-* headers for client transparency
  * - Automatic cleanup of expired entries
  * - Production-ready Redis integration support
+ * - Automatic fallback to in-memory for development
  *
  * @example Basic usage
  * ```typescript
@@ -41,6 +42,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { Ratelimit } from '@upstash/ratelimit'
+import { Redis } from '@upstash/redis'
 
 /**
  * Rate limit tracking data for a single client
@@ -61,8 +64,8 @@ export interface RateLimitConfig {
 }
 
 /**
- * In-memory store for rate limiting
- * For production with multiple servers, replace with Redis
+ * In-memory store for rate limiting (fallback for development)
+ * For production with multiple servers, uses Redis
  */
 const rateLimits = new Map<string, RateLimitStore>()
 
@@ -75,6 +78,78 @@ const MAX_ENTRIES = 10000
  * Debug mode flag
  */
 const DEBUG_MODE = process.env.NODE_ENV === 'development'
+
+/**
+ * Redis client and rate limiter instances
+ */
+let redisClient: Redis | null = null
+let rateLimiterCache: Map<string, Ratelimit> = new Map()
+
+/**
+ * Initialize Redis client if credentials are available
+ */
+function initializeRedis(): Redis | null {
+  const upstashUrl = process.env.UPSTASH_REDIS_REST_URL
+  const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN
+
+  if (!upstashUrl || !upstashToken) {
+    if (DEBUG_MODE) {
+      console.log('[RATE-LIMIT] Redis not configured, using in-memory rate limiting')
+    }
+    return null
+  }
+
+  try {
+    const redis = new Redis({
+      url: upstashUrl,
+      token: upstashToken,
+    })
+
+    console.log('[RATE-LIMIT] Redis initialized successfully - using distributed rate limiting')
+    return redis
+  } catch (error) {
+    console.error('[RATE-LIMIT] Failed to initialize Redis:', error)
+    console.log('[RATE-LIMIT] Falling back to in-memory rate limiting')
+    return null
+  }
+}
+
+/**
+ * Get or create Upstash rate limiter for specific config
+ */
+function getUpstashRateLimiter(config: RateLimitConfig): Ratelimit | null {
+  if (!redisClient) {
+    redisClient = initializeRedis()
+  }
+
+  if (!redisClient) {
+    return null
+  }
+
+  // Create cache key based on config
+  const cacheKey = `${config.windowMs}-${config.maxRequests}`
+
+  // Return cached instance if exists
+  if (rateLimiterCache.has(cacheKey)) {
+    return rateLimiterCache.get(cacheKey)!
+  }
+
+  try {
+    // Create new rate limiter with sliding window algorithm
+    const limiter = new Ratelimit({
+      redis: redisClient,
+      limiter: Ratelimit.slidingWindow(config.maxRequests, `${config.windowMs} ms`),
+      analytics: true,
+      prefix: 'datacrafted:ratelimit',
+    })
+
+    rateLimiterCache.set(cacheKey, limiter)
+    return limiter
+  } catch (error) {
+    console.error('[RATE-LIMIT] Failed to create Upstash rate limiter:', error)
+    return null
+  }
+}
 
 /**
  * Get client identifier from request
@@ -128,7 +203,7 @@ function cleanupExpiredEntries(): void {
 }
 
 /**
- * Periodic cleanup of expired entries
+ * Periodic cleanup of expired entries (only for in-memory mode)
  * Runs every minute to prevent memory leaks
  */
 setInterval(() => {
@@ -136,13 +211,48 @@ setInterval(() => {
 }, 60000) // 60 seconds
 
 /**
- * Check if client has exceeded rate limit
+ * Check rate limit using Upstash Redis
+ */
+async function checkRateLimitRedis(
+  clientId: string,
+  config: RateLimitConfig
+): Promise<{
+  allowed: boolean
+  limit: number
+  remaining: number
+  resetTime: number
+  retryAfter?: number
+} | null> {
+  const limiter = getUpstashRateLimiter(config)
+
+  if (!limiter) {
+    return null // Fall back to in-memory
+  }
+
+  try {
+    const result = await limiter.limit(clientId)
+
+    return {
+      allowed: result.success,
+      limit: result.limit,
+      remaining: result.remaining,
+      resetTime: result.reset,
+      retryAfter: result.success ? undefined : Math.ceil((result.reset - Date.now()) / 1000)
+    }
+  } catch (error) {
+    console.error('[RATE-LIMIT] Redis check failed, falling back to in-memory:', error)
+    return null // Fall back to in-memory on error
+  }
+}
+
+/**
+ * Check if client has exceeded rate limit (in-memory implementation)
  *
  * @param clientId - Client identifier (usually IP address)
  * @param config - Rate limit configuration
  * @returns Object with allowed flag and rate limit info
  */
-function checkRateLimit(
+function checkRateLimitInMemory(
   clientId: string,
   config: RateLimitConfig
 ): {
@@ -209,6 +319,30 @@ function checkRateLimit(
 }
 
 /**
+ * Check rate limit - tries Redis first, falls back to in-memory
+ */
+async function checkRateLimit(
+  clientId: string,
+  config: RateLimitConfig
+): Promise<{
+  allowed: boolean
+  limit: number
+  remaining: number
+  resetTime: number
+  retryAfter?: number
+}> {
+  // Try Redis first if available
+  const redisResult = await checkRateLimitRedis(clientId, config)
+
+  if (redisResult !== null) {
+    return redisResult
+  }
+
+  // Fall back to in-memory
+  return checkRateLimitInMemory(clientId, config)
+}
+
+/**
  * Create rate limit response headers
  * Following standard HTTP rate limiting header conventions
  *
@@ -251,8 +385,8 @@ export function createRateLimiter(config: RateLimitConfig) {
     // Get client identifier (IP address)
     const clientId = getClientIdentifier(request)
 
-    // Check rate limit
-    const rateLimitResult = checkRateLimit(clientId, config)
+    // Check rate limit (Redis or in-memory)
+    const rateLimitResult = await checkRateLimit(clientId, config)
 
     // If limit exceeded, return 429 Too Many Requests
     if (!rateLimitResult.allowed) {
@@ -332,23 +466,26 @@ export function withRateLimit<P = any>(
 /**
  * Predefined rate limit configurations for common use cases
  */
+// Increase limits in development mode
+const isDev = process.env.NODE_ENV === 'development'
+
 export const RATE_LIMITS = {
   // Authentication endpoints - strict limits to prevent brute force
   AUTH: {
     windowMs: 60 * 1000,      // 1 minute
-    maxRequests: 10           // 10 requests per minute
+    maxRequests: isDev ? 100 : 10  // 100 in dev, 10 in prod
   },
 
   // Session/dashboard endpoints - moderate limits
   SESSION: {
     windowMs: 60 * 1000,      // 1 minute
-    maxRequests: 30           // 30 requests per minute
+    maxRequests: isDev ? 200 : 30  // 200 in dev, 30 in prod
   },
 
   // Analysis/AI endpoints - strict limits due to expensive operations
   ANALYSIS: {
     windowMs: 60 * 60 * 1000, // 1 hour
-    maxRequests: 10           // 10 requests per hour
+    maxRequests: isDev ? 100 : 10  // 100 in dev, 10 in prod
   },
 
   // General API endpoints - generous limits
@@ -387,52 +524,35 @@ export function combineAuthAndRateLimit<P = any>(
 }
 
 /**
- * Production Note: Redis Integration
+ * Production Deployment Guide: Redis Integration
  *
- * For production deployments with multiple servers, replace the in-memory
- * Map with a shared Redis store:
+ * This middleware automatically detects Redis configuration and uses it when available.
  *
- * @example Using Upstash Redis
- * ```typescript
- * import { Redis } from '@upstash/redis'
+ * Setup Instructions:
  *
- * const redis = new Redis({
- *   url: process.env.UPSTASH_REDIS_URL!,
- *   token: process.env.UPSTASH_REDIS_TOKEN!
- * })
+ * 1. Create an Upstash Redis instance:
+ *    - Go to https://console.upstash.com/
+ *    - Create a new Redis database
+ *    - Choose your region (closer to your deployment for lower latency)
  *
- * async function checkRateLimit(clientId: string, config: RateLimitConfig) {
- *   const key = `ratelimit:${clientId}`
- *   const now = Date.now()
+ * 2. Add environment variables to your deployment:
+ *    - UPSTASH_REDIS_REST_URL=https://your-redis-instance.upstash.io
+ *    - UPSTASH_REDIS_REST_TOKEN=your-token-here
  *
- *   const data = await redis.get<RateLimitStore>(key)
+ * 3. Deploy your application
+ *    - The middleware will automatically detect Redis and use it
+ *    - If Redis is not configured, it falls back to in-memory (safe for development)
+ *    - Redis failures are gracefully handled - rate limiting is skipped on errors
  *
- *   if (!data || now > data.resetTime) {
- *     const resetTime = now + config.windowMs
- *     await redis.set(key, { count: 1, resetTime }, {
- *       ex: Math.ceil(config.windowMs / 1000)
- *     })
- *     return { allowed: true, limit: config.maxRequests, remaining: config.maxRequests - 1, resetTime }
- *   }
+ * Benefits of Redis/Upstash:
+ * - Distributed rate limiting across multiple servers/instances
+ * - Persistent rate limit data (survives deployments and restarts)
+ * - Better performance under high load
+ * - Sliding window algorithm for more accurate rate limiting
+ * - Analytics and monitoring capabilities
  *
- *   if (data.count >= config.maxRequests) {
- *     const retryAfter = Math.ceil((data.resetTime - now) / 1000)
- *     return { allowed: false, limit: config.maxRequests, remaining: 0, resetTime: data.resetTime, retryAfter }
- *   }
- *
- *   data.count++
- *   await redis.set(key, data, { ex: Math.ceil(config.windowMs / 1000) })
- *   return { allowed: true, limit: config.maxRequests, remaining: config.maxRequests - data.count, resetTime: data.resetTime }
- * }
- * ```
- *
- * @example Using Vercel KV
- * ```typescript
- * import { kv } from '@vercel/kv'
- *
- * async function checkRateLimit(clientId: string, config: RateLimitConfig) {
- *   const key = `ratelimit:${clientId}`
- *   // Similar implementation using kv.get(), kv.set()
- * }
- * ```
+ * Monitoring:
+ * - Check application logs for "[RATE-LIMIT]" messages
+ * - In development: "using in-memory rate limiting"
+ * - In production with Redis: "Redis initialized successfully - using distributed rate limiting"
  */
