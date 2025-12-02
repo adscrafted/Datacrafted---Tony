@@ -8,7 +8,8 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  // Note: directUrl is not needed for Railway's direct PostgreSQL connection
+  // Only add it if using a connection pooler like PgBouncer or Supabase pooling
 }
 
 model User {
