@@ -81,16 +81,16 @@ export function buildCSPDirectives(
   // Base script sources that are always allowed
   const scriptSrcBase = [
     "'self'",
-    `'nonce-${nonce}'`,
     // External trusted scripts
     'https://apis.google.com',
     'https://accounts.google.com',
   ]
 
   // Production: Allow inline scripts for Next.js compatibility
-  // NOTE: Next.js injects inline scripts that don't have nonce attributes,
-  // so we need 'unsafe-inline' for the app to function.
-  // TODO: Implement custom document with nonce injection for stricter CSP
+  // NOTE: We do NOT use nonces in production because:
+  // 1. Next.js injects inline scripts without nonce attributes
+  // 2. When a nonce is present, browsers IGNORE 'unsafe-inline'
+  // 3. This would block all Next.js inline scripts
   const scriptSrcProduction = [
     ...scriptSrcBase,
     "'unsafe-inline'", // Required for Next.js inline scripts
@@ -112,14 +112,20 @@ export function buildCSPDirectives(
     // Script sources with nonce-based security
     'script-src': isDevelopment ? scriptSrcDevelopment : scriptSrcProduction,
 
-    // Style sources - keeping unsafe-inline for CSS-in-JS libraries
-    // Can be enhanced with style nonces if needed
-    'style-src': [
-      "'self'",
-      `'nonce-${nonce}'`,
-      "'unsafe-inline'", // Required for CSS-in-JS (Tailwind, styled-components, etc.)
-      'https://fonts.googleapis.com',
-    ],
+    // Style sources - using unsafe-inline for CSS-in-JS libraries
+    // NOTE: No nonce in production (same reason as script-src)
+    'style-src': isDevelopment
+      ? [
+          "'self'",
+          `'nonce-${nonce}'`,
+          "'unsafe-inline'",
+          'https://fonts.googleapis.com',
+        ]
+      : [
+          "'self'",
+          "'unsafe-inline'", // Required for CSS-in-JS (Tailwind, styled-components, etc.)
+          'https://fonts.googleapis.com',
+        ],
 
     // Font sources
     'font-src': [
