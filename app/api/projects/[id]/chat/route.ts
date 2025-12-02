@@ -31,10 +31,13 @@ const getHandler = withAuth(async (request, authUser, context) => {
     })
 
     if (!project) {
-      return NextResponse.json(
-        { error: 'Project not found or access denied' },
-        { status: 404 }
-      )
+      // Return empty messages for local-only projects
+      return NextResponse.json({
+        messages: [],
+        conversationId: null,
+        messageCount: 0,
+        localOnly: true
+      })
     }
 
     // Find or create the auto-conversation for this project
@@ -126,10 +129,12 @@ const postHandler = withAuth(async (request, authUser, context) => {
     })
 
     if (!project) {
-      return NextResponse.json(
-        { error: 'Project not found or access denied' },
-        { status: 404 }
-      )
+      // For local-only projects, just return success without saving
+      return NextResponse.json({
+        message: null,
+        localOnly: true,
+        success: true
+      })
     }
 
     // Validate request body with Zod
@@ -206,7 +211,7 @@ export const POST = withRateLimit(RATE_LIMITS.SESSION, postHandler)
 
 // DELETE /api/projects/[id]/chat
 // Clears all chat history for the project
-const deleteHandler = withAuth(async (request, authUser, context) => {
+const deleteHandler = withAuth(async (_request, authUser, context) => {
   try {
     const { id: projectId } = await context!.params
 

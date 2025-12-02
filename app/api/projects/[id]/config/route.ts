@@ -12,34 +12,39 @@ const getHandler = withAuth(async (request, authUser, context) => {
   try {
     const { id: projectId } = await context!.params
 
-    // Verify project exists and user has access
-    const project = await db.projects.findUnique({
-      where: { id: projectId },
-      include: {
-        users: {
-          select: { firebaseUid: true, id: true }
-        }
-      }
+    // First, get the database user
+    const dbUser = await db.user.findUnique({
+      where: { firebaseUid: authUser.uid }
     })
 
-    if (!project) {
+    if (!dbUser) {
       return NextResponse.json(
-        { error: 'Project not found' },
+        { error: 'User not found in database' },
         { status: 404 }
       )
     }
 
-    // AUTHORIZATION: Verify user owns this project
-    // Compare Firebase UID to Firebase UID (not database CUID)
-    if (project.users.firebaseUid !== authUser.uid) {
-      return NextResponse.json(
-        { error: 'Forbidden' },
-        { status: 403 }
-      )
+    // Verify project exists and user owns it
+    const project = await db.projects.findFirst({
+      where: {
+        id: projectId,
+        userId: dbUser.id
+      }
+    })
+
+    if (!project) {
+      // Return empty config for non-existent projects (allows local-only projects)
+      return NextResponse.json({
+        chartCustomizations: {},
+        currentTheme: null,
+        currentLayout: null,
+        dashboardFilters: null,
+        version: 1,
+      })
     }
 
-    // Use database user ID (CUID) not Firebase UID
-    const databaseUserId = project.users.id
+    // Use database user ID (CUID)
+    const databaseUserId = dbUser.id
 
     // Get dashboard config
     const config = await db.dashboard_configs.findFirst({
@@ -114,30 +119,33 @@ const putHandler = withAuth(async (request, authUser, context) => {
   try {
     const { id: projectId } = await context!.params
 
-    // Verify project exists and user has access
-    const project = await db.projects.findUnique({
-      where: { id: projectId },
-      include: {
-        users: {
-          select: { firebaseUid: true, id: true }
-        }
-      }
+    // First, get the database user
+    const dbUser = await db.user.findUnique({
+      where: { firebaseUid: authUser.uid }
     })
 
-    if (!project) {
+    if (!dbUser) {
       return NextResponse.json(
-        { error: 'Project not found' },
+        { error: 'User not found in database' },
         { status: 404 }
       )
     }
 
-    // AUTHORIZATION: Verify user owns this project
-    // Compare Firebase UID to Firebase UID (not database CUID)
-    if (project.users.firebaseUid !== authUser.uid) {
-      return NextResponse.json(
-        { error: 'Forbidden' },
-        { status: 403 }
-      )
+    // Verify project exists and user owns it
+    const project = await db.projects.findFirst({
+      where: {
+        id: projectId,
+        userId: dbUser.id
+      }
+    })
+
+    if (!project) {
+      // For local-only projects, just return success without saving
+      return NextResponse.json({
+        success: true,
+        configId: null,
+        message: 'Config not saved - project not in database',
+      })
     }
 
     // Validate request body with Zod
@@ -156,8 +164,8 @@ const putHandler = withAuth(async (request, authUser, context) => {
       chatMessages = null,
     } = validation.data
 
-    // Use database user ID (CUID) not Firebase UID
-    const databaseUserId = project.users.id
+    // Use database user ID (CUID)
+    const databaseUserId = dbUser.id
 
     // Generate config ID (combination of database userId and projectId)
     const configId = `${databaseUserId}_${projectId}`
