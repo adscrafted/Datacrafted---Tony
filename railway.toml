@@ -1,9 +1,5 @@
 # Railway Configuration
-# Use Nixpacks instead of Docker for automatic env var handling
-
-[build]
-# Use Nixpacks (default) - it automatically includes NEXT_PUBLIC_* vars during build
-builder = "nixpacks"
+# Uses Dockerfile for production builds
 
 [deploy]
 # Start command: Run the standalone Next.js server
