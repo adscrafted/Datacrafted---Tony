@@ -11,26 +11,31 @@ const globalForPrisma = globalThis as unknown as {
 // Configure Prisma Client with connection pooling and query logging
 const createPrismaClient = () => {
   const isDevelopment = process.env.NODE_ENV === 'development'
-  const isProduction = process.env.NODE_ENV === 'production'
 
   // Log configuration for development
   const logConfig: Prisma.LogLevel[] = isDevelopment
     ? ['query', 'error', 'warn']
     : ['error']
 
-  return new PrismaClient({
+  // Only include datasources config if DATABASE_URL is defined
+  // This allows build to succeed without DATABASE_URL (Prisma uses schema default)
+  const config: any = {
     log: logConfig.map((level) => ({
       emit: 'event',
       level,
     })),
-    // Connection pool configuration is set via DATABASE_URL parameters
-    // See .env.example for recommended connection pooling settings
-    datasources: {
+  }
+
+  // Only override datasources at runtime when DATABASE_URL is available
+  if (process.env.DATABASE_URL) {
+    config.datasources = {
       db: {
         url: process.env.DATABASE_URL,
       },
-    },
-  })
+    }
+  }
+
+  return new PrismaClient(config)
 }
 
 // Use singleton pattern - only create client once
