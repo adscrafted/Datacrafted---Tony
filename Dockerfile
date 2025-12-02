@@ -23,15 +23,55 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# =============================================================================
+# BUILD-TIME ENVIRONMENT VARIABLES (NEXT_PUBLIC_*)
+# =============================================================================
+# These variables are baked into the client bundle at build time.
+# Railway injects these automatically if you define them as build variables.
+#
+# To set in Railway:
+# 1. Go to your project settings
+# 2. Add these as "Build Variables" (not just runtime variables)
+# 3. Redeploy to rebuild with the new values
+# =============================================================================
+
+# Firebase Configuration (client-side)
+ARG NEXT_PUBLIC_FIREBASE_API_KEY
+ARG NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+ARG NEXT_PUBLIC_FIREBASE_PROJECT_ID
+ARG NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+ARG NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+ARG NEXT_PUBLIC_FIREBASE_APP_ID
+ARG NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+
+# Application URL (used for metadata and CORS fallback)
+ARG NEXT_PUBLIC_APP_URL
+
+# Feature flags
+ARG NEXT_PUBLIC_ENABLE_AI_ANALYSIS=true
+ARG NEXT_PUBLIC_ENABLE_EXPORT=true
+ARG NEXT_PUBLIC_MAX_FILE_SIZE_MB=50
+ARG NEXT_PUBLIC_MAX_ROWS=100000
+
+# Convert ARGs to ENVs so they're available during build
+ENV NEXT_PUBLIC_FIREBASE_API_KEY=$NEXT_PUBLIC_FIREBASE_API_KEY
+ENV NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=$NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+ENV NEXT_PUBLIC_FIREBASE_PROJECT_ID=$NEXT_PUBLIC_FIREBASE_PROJECT_ID
+ENV NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+ENV NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=$NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+ENV NEXT_PUBLIC_FIREBASE_APP_ID=$NEXT_PUBLIC_FIREBASE_APP_ID
+ENV NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=$NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+ENV NEXT_PUBLIC_ENABLE_AI_ANALYSIS=$NEXT_PUBLIC_ENABLE_AI_ANALYSIS
+ENV NEXT_PUBLIC_ENABLE_EXPORT=$NEXT_PUBLIC_ENABLE_EXPORT
+ENV NEXT_PUBLIC_MAX_FILE_SIZE_MB=$NEXT_PUBLIC_MAX_FILE_SIZE_MB
+ENV NEXT_PUBLIC_MAX_ROWS=$NEXT_PUBLIC_MAX_ROWS
+
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
 
 # Copy application source
 COPY . .
-
-# Copy environment variables template (actual values injected at runtime)
-# IMPORTANT: Never include .env.local in the image - use runtime env vars
-COPY .env.example .env.local
 
 # Generate Prisma Client
 RUN npx prisma generate
@@ -41,6 +81,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 # Build the Next.js application
 # The 'standalone' output mode creates a minimal server in .next/standalone
+# NEXT_PUBLIC_* variables are now available from ARGs above
 RUN npm run build
 
 # Stage 3: Runner
