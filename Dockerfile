@@ -64,21 +64,13 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
-# Copy Prisma schema and package files for generating client
+# Copy Prisma schema and generated client
+# CRITICAL: The schema.prisma has binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+# This ensures the builder generates binaries for both local dev AND Alpine Linux
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/package.json ./package.json
-
-# Copy Prisma dependencies needed to generate client
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-
-# CRITICAL: Regenerate Prisma Client in the runner stage
-# This ensures binary targets match Alpine Linux runtime
-# The schema.prisma includes binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
-RUN npx prisma generate
-
-# Copy the rest of the generated files
 COPY --from=builder /app/lib/generated ./lib/generated
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 # Change ownership to non-root user
 RUN chown -R nextjs:nodejs /app
