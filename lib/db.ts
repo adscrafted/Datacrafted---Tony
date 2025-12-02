@@ -8,6 +8,25 @@ const globalForPrisma = globalThis as unknown as {
   connectionHealthy: boolean | undefined
 }
 
+/**
+ * Ensure DATABASE_URL has pgbouncer=true for Supabase transaction pooler
+ * PgBouncer in transaction mode doesn't support prepared statements,
+ * so we need to tell Prisma to disable them
+ */
+function getPgBouncerUrl(url: string): string {
+  // Check if using Supabase pooler (port 6543) or contains pooler.supabase.com
+  const isPooler = url.includes(':6543') || url.includes('pooler.supabase.com')
+
+  if (!isPooler) return url
+
+  // Check if pgbouncer param already exists
+  if (url.includes('pgbouncer=')) return url
+
+  // Add pgbouncer=true parameter
+  const separator = url.includes('?') ? '&' : '?'
+  return `${url}${separator}pgbouncer=true`
+}
+
 // Configure Prisma Client with connection pooling and query logging
 const createPrismaClient = () => {
   const isDevelopment = process.env.NODE_ENV === 'development'
@@ -28,9 +47,11 @@ const createPrismaClient = () => {
 
   // Only override datasources at runtime when DATABASE_URL is available
   if (process.env.DATABASE_URL) {
+    // Ensure pgbouncer=true for Supabase transaction pooler
+    const dbUrl = getPgBouncerUrl(process.env.DATABASE_URL)
     config.datasources = {
       db: {
-        url: process.env.DATABASE_URL,
+        url: dbUrl,
       },
     }
   }
