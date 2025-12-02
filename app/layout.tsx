@@ -35,9 +35,9 @@ export const metadata: Metadata = {
     description: 'Transform your data into beautiful insights with AI-powered analytics. Upload CSV, Excel files and get instant visualizations.',
     images: [
       {
-        url: '/og-image.png',
-        width: 1200,
-        height: 630,
+        url: '/icon.svg',
+        width: 100,
+        height: 100,
         alt: 'DataCrafted - AI-Powered Data Analytics'
       }
     ]
@@ -46,7 +46,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'DataCrafted - AI-Powered Data Analytics Dashboard',
     description: 'Transform your data into beautiful insights with AI-powered analytics',
-    images: ['/og-image.png'],
+    images: ['/icon.svg'],
     creator: '@datacrafted'
   },
   robots: {
@@ -61,9 +61,9 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: '/favicon.ico',
-    shortcut: '/favicon-16x16.png',
-    apple: '/apple-touch-icon.png',
+    icon: '/icon.svg',
+    shortcut: '/icon.svg',
+    apple: '/icon.svg',
   },
   manifest: '/site.webmanifest',
   verification: {

@@ -1,0 +1,16 @@
+{
+  "name": "DataCrafted",
+  "short_name": "DataCrafted",
+  "description": "AI-Powered Data Analytics Dashboard",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0088FE",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

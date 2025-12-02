@@ -77,10 +77,9 @@ if (!globalForPrisma.prismaInitialized) {
         console.error('[Prisma] Current connections may not be properly released')
       }
 
-      // Don't throw in production to allow graceful degradation
-      if (process.env.NODE_ENV !== 'production') {
-        throw error
-      }
+      // ALWAYS throw database connection errors - app cannot function without DB
+      // Railway health checks will catch this and prevent serving bad deployments
+      throw error
     })
 
   // Graceful shutdown handling (server-side only)
