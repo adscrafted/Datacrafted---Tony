@@ -65,7 +65,9 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
 # Copy Prisma schema and generated client for database operations
+# CRITICAL: The Prisma client is generated to lib/generated/prisma (see prisma/schema.prisma)
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/lib/generated ./lib/generated
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
