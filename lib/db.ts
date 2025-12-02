@@ -77,9 +77,11 @@ if (!globalForPrisma.prismaInitialized) {
         console.error('[Prisma] Current connections may not be properly released')
       }
 
-      // ALWAYS throw database connection errors - app cannot function without DB
-      // Railway health checks will catch this and prevent serving bad deployments
-      throw error
+      // Log the error but DON'T crash the app
+      // The app will start, allowing health checks to return 503
+      // Individual database operations will fail with appropriate errors
+      console.error('[Prisma] ⚠️ App started WITHOUT database connection')
+      console.error('[Prisma] Database features will be unavailable until connection is restored')
     })
 
   // Graceful shutdown handling (server-side only)
