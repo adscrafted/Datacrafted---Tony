@@ -1,6 +1,6 @@
 // Web Worker for file parsing to avoid blocking the main thread
 import Papa from 'papaparse'
-import * as XLSX from 'xlsx'
+import { parseExcelSecurely } from '../utils/secure-xlsx-parser'
 
 export interface ParseProgress {
   loaded: number
@@ -130,93 +130,55 @@ async function parseCSVChunked(file: File): Promise<ParseResult> {
   })
 }
 
-// Optimized Excel parsing with progress tracking
+// Optimized Excel parsing with progress tracking and security
 async function parseExcelOptimized(file: File): Promise<ParseResult> {
-  return new Promise((resolve, reject) => {
-    const startTime = performance.now()
-    const reader = new FileReader()
+  const startTime = performance.now()
 
+  reportProgress({
+    loaded: 0,
+    total: file.size,
+    percentage: 0,
+    stage: 'reading'
+  })
+
+  try {
+    // Report reading progress
     reportProgress({
-      loaded: 0,
+      loaded: file.size * 0.5,
       total: file.size,
-      percentage: 0,
-      stage: 'reading'
+      percentage: 50,
+      stage: 'parsing'
     })
 
-    reader.onprogress = (e) => {
-      if (e.lengthComputable) {
-        reportProgress({
-          loaded: e.loaded,
-          total: e.total,
-          percentage: (e.loaded / e.total) * 50, // Reading is 50% of the process
-          stage: 'reading'
-        })
+    // Use secure parser
+    const jsonData = await parseExcelSecurely(file, {
+      sheetIndex: 0,
+      dateFormat: 'yyyy-mm-dd',
+      raw: false
+    })
+
+    const parseTime = performance.now() - startTime
+
+    reportProgress({
+      loaded: file.size,
+      total: file.size,
+      percentage: 100,
+      stage: 'complete',
+      rowsProcessed: jsonData.length
+    })
+
+    return {
+      data: jsonData,
+      meta: {
+        fields: Object.keys(jsonData[0] || {}),
+        rowCount: jsonData.length,
+        parseTime,
+        fileSize: file.size
       }
     }
-
-    reader.onload = (e) => {
-      try {
-        reportProgress({
-          loaded: file.size,
-          total: file.size,
-          percentage: 50,
-          stage: 'parsing'
-        })
-
-        const data = e.target?.result
-        const workbook = XLSX.read(data, { type: 'binary' })
-
-        // Get the first worksheet
-        const firstSheetName = workbook.SheetNames[0]
-        const worksheet = workbook.Sheets[firstSheetName]
-
-        // Get range to estimate progress
-        const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:A1')
-        const totalCells = (range.e.r - range.s.r + 1) * (range.e.c - range.s.c + 1)
-
-        reportProgress({
-          loaded: file.size,
-          total: file.size,
-          percentage: 75,
-          stage: 'analyzing'
-        })
-
-        // Convert to JSON with progress simulation
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, {
-          raw: false,
-          dateNF: 'yyyy-mm-dd'
-        })
-
-        const parseTime = performance.now() - startTime
-
-        reportProgress({
-          loaded: file.size,
-          total: file.size,
-          percentage: 100,
-          stage: 'complete',
-          rowsProcessed: jsonData.length
-        })
-
-        resolve({
-          data: jsonData,
-          meta: {
-            fields: Object.keys(jsonData[0] || {}),
-            rowCount: jsonData.length,
-            parseTime,
-            fileSize: file.size
-          }
-        })
-      } catch (error) {
-        reject(new Error(`Excel parsing failed: ${(error as Error).message}`))
-      }
-    }
-
-    reader.onerror = () => {
-      reject(new Error('Failed to read file'))
-    }
-
-    reader.readAsBinaryString(file)
-  })
+  } catch (error) {
+    throw new Error(`Excel parsing failed: ${(error as Error).message}`)
+  }
 }
 
 // Main message handler

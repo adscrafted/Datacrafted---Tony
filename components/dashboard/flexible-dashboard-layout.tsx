@@ -76,7 +76,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
   const isCustomizing = false
   const setIsCustomizing = (_value: boolean) => {}
   const autoSaveLayouts = true
-  const setAvailableColumns = (_columns: string[]) => {}
+  const setAvailableColumns = React.useCallback((_columns: string[]) => {}, [])
   const selectedDateColumn = ''
   const draftChart: { id: string; title: string; description: string; type: string; dataMapping?: any } | null = null
 
@@ -96,7 +96,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       return data
     }
     return result
-  }, [dateRange, granularity, selectedDateColumn, data])
+  }, [dateRange, data]) // getFilteredData reads from stores internally
 
   // Update available columns when data changes
   useEffect(() => {
@@ -274,7 +274,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       others: otherCharts.length
     })
     return result
-  }, [validCharts, draftChart, analysis.chartConfig, chartCustomizations])
+  }, [validCharts, analysis.chartConfig, chartCustomizations])
 
   // Extract quality scores from enhanced analysis if available
   const qualityScores = useMemo(() => {
@@ -352,12 +352,15 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     // Separate into three groups: scorecards, tables, and other charts
     // CRITICAL FIX: Use EFFECTIVE chart type (considering customization overrides)
     charts.forEach(config => {
-      const originalIndex = analysis.chartConfig.indexOf(config)
-      const chartId = config.id || `chart-${originalIndex}`
+      // Type assertion for chart config compatibility (handles WaterfallChartConfig union type)
+      const chartConfig = config as { id?: string; type?: string; title?: string; description?: string; dataKey?: string[]; dataMapping?: any }
+      const configId = chartConfig.id
+      const originalIndex = analysis.chartConfig.findIndex((c: any) => c.id === configId || c === config)
+      const chartId = configId || `chart-${originalIndex}`
 
       // Get effective chart type (customization can override original type)
       const customization = chartCustomizations[chartId]
-      const effectiveType = customization?.chartType || config.type
+      const effectiveType = customization?.chartType || chartConfig.type
 
       if (effectiveType === 'scorecard') {
         scorecards.push({ config, chartId })
@@ -472,8 +475,10 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     // CRITICAL FIX: Filter out invisible charts before calculating positions
     // This prevents gaps where hidden charts would be positioned
     const visibleCharts = sortedCharts.filter(config => {
-      const originalIndex = analysis.chartConfig.indexOf(config)
-      const chartId = config.id || `chart-${originalIndex}`
+      // Type assertion for chart config compatibility (handles WaterfallChartConfig union type)
+      const chartConfig = config as { id?: string; type?: string }
+      const originalIndex = analysis.chartConfig.findIndex((c: any) => c === config || c.id === chartConfig.id)
+      const chartId = chartConfig.id || `chart-${originalIndex}`
       const customization = chartCustomizations[chartId]
       return customization?.isVisible !== false
     })
@@ -492,8 +497,10 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
 
     // CRITICAL: REMOVE positions from invisible charts to eliminate ghost spots
     sortedCharts.forEach(config => {
-      const originalIndex = analysis.chartConfig.indexOf(config)
-      const chartId = config.id || `chart-${originalIndex}`
+      // Type assertion for chart config compatibility (handles WaterfallChartConfig union type)
+      const chartConfig = config as { id?: string; type?: string }
+      const originalIndex = analysis.chartConfig.findIndex((c: any) => c === config || c.id === chartConfig.id)
+      const chartId = chartConfig.id || `chart-${originalIndex}`
       const customization = chartCustomizations[chartId]
       const isVisible = customization?.isVisible !== false
 
@@ -529,8 +536,10 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
 
     // Check if any visible charts are missing positions OR have incorrect sparkline dimensions
     const needsLayout = sortedCharts.some(config => {
-      const originalIndex = analysis.chartConfig.indexOf(config)
-      const chartId = config.id || `chart-${originalIndex}`
+      // Type assertion for chart config compatibility (handles WaterfallChartConfig union type)
+      const chartConfig = config as { id?: string; type?: string }
+      const originalIndex = analysis.chartConfig.findIndex((c: any) => c === config || c.id === chartConfig.id)
+      const chartId = chartConfig.id || `chart-${originalIndex}`
       const customization = chartCustomizations[chartId]
       const isVisible = customization?.isVisible !== false
 
@@ -540,7 +549,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       if (!customization?.position) return true
 
       // Check for sparklines with incorrect dimensions (should be w:6, h:2)
-      const effectiveType = customization?.chartType || config.type
+      const effectiveType = customization?.chartType || chartConfig.type
       if (effectiveType === 'sparkline' && (customization.position.w !== 6 || customization.position.h !== 2)) {
         console.log('📊 [LAYOUT_INIT] Found sparkline with incorrect dimensions:', {
           chartId,
@@ -582,8 +591,10 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
     }> = []
 
     sortedCharts.forEach((config) => {
-      const originalIndex = analysis.chartConfig.indexOf(config)
-      const chartId = config.id || `chart-${originalIndex}`
+      // Type assertion for chart config compatibility (handles WaterfallChartConfig union type)
+      const chartConfig = config as { id?: string; type?: string }
+      const originalIndex = analysis.chartConfig.findIndex((c: any) => c === config || c.id === chartConfig.id)
+      const chartId = chartConfig.id || `chart-${originalIndex}`
       const customization = chartCustomizations[chartId]
 
       // Skip invisible charts
@@ -596,7 +607,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       // This prevents React Grid Layout from trying to position charts with undefined positions
       // which could cause layout issues and ghost spots
       if (!customization?.position) {
-        console.warn('⚠️ [LAYOUT_ITEMS] Chart missing position, skipping:', chartId, config.type)
+        console.warn('⚠️ [LAYOUT_ITEMS] Chart missing position, skipping:', chartId, chartConfig.type)
         return
       }
 
@@ -604,15 +615,15 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
 
       console.log('🔷 [LAYOUT_ITEMS] Creating layout item:', {
         chartId,
-        type: config.type,
-        effectiveType: customization?.chartType || config.type,
+        type: chartConfig.type,
+        effectiveType: customization?.chartType || chartConfig.type,
         position,
-        isScorecard: (customization?.chartType || config.type) === 'scorecard'
+        isScorecard: (customization?.chartType || chartConfig.type) === 'scorecard'
       })
 
       // CRITICAL FIX: Use EFFECTIVE type (considering customization overrides)
       // This fixes the sizing issue where scorecards were sized as regular charts
-      const effectiveType = customization?.chartType || config.type
+      const effectiveType = customization?.chartType || chartConfig.type
       const isScorecard = effectiveType === 'scorecard'
       const isSparkline = effectiveType === 'sparkline'
       const isTable = effectiveType === 'table'
@@ -681,8 +692,10 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
       // This prevents ghost spots from invisible/filtered charts
       const layoutItemIds = new Set(validatedLayout.map(item => item.i))
       sortedCharts.forEach(config => {
-        const originalIndex = analysis.chartConfig.indexOf(config)
-        const chartId = config.id || `chart-${originalIndex}`
+        // Type assertion for chart config compatibility (handles WaterfallChartConfig union type)
+        const chartConfig = config as { id?: string; type?: string }
+        const originalIndex = analysis.chartConfig.findIndex((c: any) => c === config || c.id === chartConfig.id)
+        const chartId = chartConfig.id || `chart-${originalIndex}`
         const customization = chartCustomizations[chartId]
         const isVisible = customization?.isVisible !== false
 
@@ -890,9 +903,11 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
             isDroppable={false}
           >
             {sortedCharts.map((config, index) => {
+              // Type assertion for chart config compatibility (handles WaterfallChartConfig union type)
+              const chartConfig = config as { id?: string; type?: string; title?: string; description?: string; dataKey?: string[]; dataMapping?: any }
               // Use config.id if available, otherwise use the map index for a stable unique key
               // Note: indexOf can return -1 if object reference doesn't match (after cloning/sorting)
-              const chartId = config.id || `chart-${index}`
+              const chartId = chartConfig.id || `chart-${index}`
               const isSelected = selectedChartId === chartId
               const customization = chartCustomizations[chartId]
               // CRITICAL FIX: Default to visible=true, not false
@@ -905,22 +920,22 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
               }
 
               // PERFORMANCE: Use stable references to prevent unnecessary re-renders
-              const dataKey = config.dataKey || EMPTY_DATA_KEY
+              const dataKey = chartConfig.dataKey || EMPTY_DATA_KEY
 
               return (
                 <div
                   key={chartId}
                   className={cn(!isVisible && "opacity-50")}
-                  data-chart-type={config.type}
+                  data-chart-type={chartConfig.type}
                 >
                   <EnhancedChartWrapper
                     id={chartId}
-                    type={config.type}
-                    title={config.title || `Chart ${index + 1}`}
-                    description={config.description || ''}
+                    type={(chartConfig.type || 'bar') as import('@/lib/stores/chart-store').ChartType}
+                    title={chartConfig.title || `Chart ${index + 1}`}
+                    description={chartConfig.description || ''}
                     data={filteredData}
                     dataKey={dataKey}
-                    configDataMapping={config.dataMapping}
+                    configDataMapping={chartConfig.dataMapping}
                     isDragging={isDragging}
                     isSelected={isSelected}
                     onSelect={handleChartSelect}

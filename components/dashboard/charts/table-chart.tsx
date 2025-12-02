@@ -15,18 +15,7 @@ interface TableChartProps {
 const VIRTUALIZATION_THRESHOLD = 500 // Use virtualization if more than 500 rows
 
 export function TableChart({ data, dataKey, maxRows = 100, highlightedRow, onHighlightComplete }: TableChartProps) {
-  // Use virtualized table for large datasets
-  if (data.length > VIRTUALIZATION_THRESHOLD) {
-    return (
-      <VirtualizedTableChart
-        data={data}
-        dataKey={dataKey}
-        maxRows={maxRows}
-        highlightedRow={highlightedRow}
-        onHighlightComplete={onHighlightComplete}
-      />
-    )
-  }
+  // All hooks must be called before any early returns (React Rules of Hooks)
   const [sortConfig, setSortConfig] = useState<{
     key: string | null
     direction: 'asc' | 'desc' | null
@@ -149,6 +138,20 @@ export function TableChart({ data, dataKey, maxRows = 100, highlightedRow, onHig
       return () => clearTimeout(timer)
     }
   }, [highlightedRow, sortedData, dataKey, onHighlightComplete])
+
+  // Early return for large datasets - use virtualized table
+  // This must come after all hooks
+  if (data.length > VIRTUALIZATION_THRESHOLD) {
+    return (
+      <VirtualizedTableChart
+        data={data}
+        dataKey={dataKey}
+        maxRows={maxRows}
+        highlightedRow={highlightedRow}
+        onHighlightComplete={onHighlightComplete}
+      />
+    )
+  }
 
   const getSortIcon = (key: string) => {
     if (sortConfig.key !== key) {

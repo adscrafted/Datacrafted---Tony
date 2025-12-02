@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Table, Database, FileText, X, Info, Hash, Calendar, ToggleLeft, Type, FileCode } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { Button } from '@/components/ui/button'
@@ -53,13 +53,7 @@ export function SchemaViewer({ className }: SchemaViewerProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [schema, setSchema] = useState<ColumnSchema[]>([])
 
-  useEffect(() => {
-    if (rawData && rawData.length > 0) {
-      generateSchema(rawData)
-    }
-  }, [rawData])
-
-  const generateSchema = (data: DataRow[]) => {
+  const generateSchema = useCallback((data: DataRow[]) => {
     const columns = Object.keys(data[0] || {})
     
     const columnSchemas: ColumnSchema[] = columns.map(col => {
@@ -138,7 +132,13 @@ export function SchemaViewer({ className }: SchemaViewerProps) {
     })
     
     setSchema(columnSchemas)
-  }
+  }, [])
+
+  useEffect(() => {
+    if (rawData && rawData.length > 0) {
+      generateSchema(rawData)
+    }
+  }, [rawData, generateSchema])
 
   const inferDescription = (columnName: string, type: string, format: string): string => {
     const name = columnName.toLowerCase()

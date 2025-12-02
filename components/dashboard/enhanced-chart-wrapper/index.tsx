@@ -149,7 +149,7 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
     title,
     customization,
     configDataMapping,
-    schema
+    schema: schema?.columns
   })
 
   // Safe dataKey handling

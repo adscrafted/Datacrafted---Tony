@@ -13,6 +13,17 @@ import { withAuth, isAuthenticated } from '@/lib/middleware/auth'
 import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 import { getCachedAnalysis, setCachedAnalysis, generateDataHash } from '@/lib/cache/analysis-cache'
 import { withTimeout, isTimeoutError } from '@/lib/utils/timeout'
+import { validateRequest, analyzeRequestSchema, validateDataSize } from '@/lib/utils/api-validation'
+import type {
+  Logger,
+  OpenAIError,
+  OpenAIChatParams,
+  OpenAIChatResponse,
+  DataStructure,
+  DataMapping,
+  CorrectedColumn,
+  BusinessDomain,
+} from '@/lib/types/api-types'
 
 // Security: Input validation limits
 const MAX_ROWS = 10000
@@ -21,17 +32,17 @@ const MAX_PAYLOAD_SIZE = 10 * 1024 * 1024 // 10MB
 
 // Production-ready logging utility
 const isDevelopment = process.env.NODE_ENV === 'development'
-const logger = {
-  debug: (...args: any[]) => {
+const logger: Logger = {
+  debug: (...args: unknown[]) => {
     if (isDevelopment) console.log(...args)
   },
-  info: (...args: any[]) => {
+  info: (...args: unknown[]) => {
     console.log(...args)
   },
-  warn: (...args: any[]) => {
+  warn: (...args: unknown[]) => {
     console.warn(...args)
   },
-  error: (...args: any[]) => {
+  error: (...args: unknown[]) => {
     console.error(...args)
   }
 }
@@ -62,14 +73,14 @@ interface AnalyzeRequest {
 // AI Analysis Response structure from OpenAI
 interface AIAnalysisResponse {
   insights: string[]
-  chartConfig: any[] // Will be validated and typed properly later in the flow
+  chartConfig: ChartRecommendation[]
   summary?: {
-    dataQuality?: any
-    keyFindings?: any
-    recommendations?: any
-    businessContext?: any
+    dataQuality?: string
+    keyFindings?: string
+    recommendations?: string
+    businessContext?: string
   }
-  dataContext?: any
+  dataContext?: DataContext
 }
 
 // Supported chart types - SINGLE SOURCE OF TRUTH
@@ -168,7 +179,7 @@ interface ChartRecommendation {
       column: string              // Column to filter on
       operator: 'equals' | 'not_equals' | 'in' | 'not_in' | 'contains' | 'not_contains' |
                 'greater_than' | 'less_than' | 'between' | 'is_null' | 'is_not_null'
-      value: any                  // Filter value(s)
+      value: string | number | boolean | null | Array<string | number>  // Filter value(s)
       reason?: string             // Why this filter is recommended
     }>
   }
@@ -186,20 +197,34 @@ interface ChartRecommendation {
  * @param config Chart configuration with legacy format
  * @returns dataMapping object for the chart type
  */
-function migrateLegacyFormat(config: any): any {
-  const dataMapping: any = {}
+interface LegacyConfig {
+  type: string
+  xAxis?: string | string[]
+  yAxis?: string | string[]
+  dataKey?: string | string[]
+  aggregation?: string
+}
+
+function migrateLegacyFormat(config: LegacyConfig): DataMapping {
+  const dataMapping: Partial<DataMapping> = {}
 
   // Get data from legacy fields
   const xAxis = config.xAxis
   const yAxis = config.yAxis
   const dataKey = config.dataKey ? (Array.isArray(config.dataKey) ? config.dataKey : [config.dataKey]) : []
 
+  // Helper to get first string from string or array
+  const getFirstString = (val: string | string[] | undefined): string | undefined => {
+    if (!val) return undefined
+    return Array.isArray(val) ? val[0] : val
+  }
+
   // Migrate based on chart type
   switch (config.type) {
     case 'bar':
       // Bar: category + values
       if (xAxis) {
-        dataMapping.category = xAxis
+        dataMapping.category = getFirstString(xAxis)
       } else if (dataKey.length > 0) {
         dataMapping.category = dataKey[0]
       }
@@ -215,7 +240,7 @@ function migrateLegacyFormat(config: any): any {
     case 'area':
       // Line/Area: xAxis + yAxis
       if (xAxis) {
-        dataMapping.xAxis = xAxis
+        dataMapping.xAxis = getFirstString(xAxis)
       } else if (dataKey.length > 0) {
         dataMapping.xAxis = dataKey[0]
       }
@@ -232,7 +257,7 @@ function migrateLegacyFormat(config: any): any {
     case 'pie':
       // Pie: category + value
       if (xAxis) {
-        dataMapping.category = xAxis
+        dataMapping.category = getFirstString(xAxis)
       } else if (dataKey.length > 0) {
         dataMapping.category = dataKey[0]
       }
@@ -280,10 +305,10 @@ function migrateLegacyFormat(config: any): any {
 
   // Copy aggregation if present
   if (config.aggregation) {
-    dataMapping.aggregation = config.aggregation
+    dataMapping.aggregation = config.aggregation as DataMapping['aggregation']
   }
 
-  return dataMapping
+  return dataMapping as DataMapping
 }
 
 /**
@@ -291,7 +316,7 @@ function migrateLegacyFormat(config: any): any {
  * @param chartConfigs Raw chart configurations from OpenAI
  * @returns Filtered array with only supported chart types
  */
-function filterSupportedChartTypes(chartConfigs: any[]): any[] {
+function filterSupportedChartTypes(chartConfigs: ChartRecommendation[]): ChartRecommendation[] {
   const filtered = chartConfigs.filter(config => {
     const isSupported = SUPPORTED_CHART_TYPES.includes(config.type)
 
@@ -342,19 +367,20 @@ function getOpenAIClient() {
  */
 async function callOpenAIWithRetry(
   openai: OpenAI,
-  params: any,
+  params: OpenAIChatParams,
   maxRetries: number = 3
-): Promise<any> {
+): Promise<OpenAIChatResponse> {
   let lastError: Error | null = null
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      return await openai.chat.completions.create(params)
-    } catch (error: any) {
-      lastError = error
+      return await openai.chat.completions.create(params) as unknown as OpenAIChatResponse
+    } catch (error) {
+      const openAIError = error as OpenAIError
+      lastError = error as Error
 
       // Don't retry on client errors (4xx) except rate limits
-      if (error.status && error.status >= 400 && error.status < 500 && error.status !== 429) {
+      if (openAIError.status && openAIError.status >= 400 && openAIError.status < 500 && openAIError.status !== 429) {
         throw error
       }
 
@@ -414,7 +440,7 @@ function getDataSample(data: DataRow[], maxRows: number = 25): DataRow[] {
 /**
  * Detect business domain based on column names
  */
-function detectBusinessDomain(columns: string[]): 'advertising' | 'ecommerce' | 'sales' | 'operations' | 'general' {
+function detectBusinessDomain(columns: string[]): BusinessDomain {
   const lowerColumns = columns.map(c => c.toLowerCase())
 
   const adKeywords = ['impressions', 'clicks', 'cpc', 'ctr', 'roas', 'spend', 'campaign', 'ad group', 'keyword', 'bid']
@@ -534,12 +560,12 @@ Select chart types based on insights:
  * - Structured for prompt caching (static vs dynamic sections)
  */
 function buildEnhancedPrompt(
-  dataStructure: any,
+  dataStructure: DataStructure,
   schema?: DataSchema,
-  correctedSchema?: Array<{ name: string; type: string; description: string; userCorrected: boolean }>,
+  correctedSchema?: CorrectedColumn[],
   feedback?: string
 ): string {
-  const domain = detectBusinessDomain(dataStructure.columns.map((c: any) => c.name))
+  const domain = detectBusinessDomain(dataStructure.columns.map(c => c.name))
 
   // Domain-specific concise guidance with advanced chart recommendations
   const domainHints: Record<string, string> = {
@@ -718,21 +744,21 @@ ${domainGuidance}
 <AVAILABLE_COLUMNS>`
 
   // Add column information
-  dataStructure.columns.forEach((col: any) => {
+  dataStructure.columns.forEach(col => {
     prompt += `\n### "${col.name}" (${col.type})`
     if (col.stats && Object.keys(col.stats).length > 0) {
       if (col.type === 'number') {
         prompt += `\n  Range: ${col.stats.min} to ${col.stats.max} | Avg: ${col.stats.avg} | Sum: ${col.stats.sum}`
-        if (col.stats.nonZeroCount < dataStructure.rowCount * 0.5) {
+        if (col.stats.nonZeroCount && col.stats.nonZeroCount < dataStructure.rowCount * 0.5) {
           prompt += ` | WARNING: ${Math.round((1 - col.stats.nonZeroCount / dataStructure.rowCount) * 100)}% zeros`
         }
       } else if (col.type === 'categorical' && col.stats.distribution) {
-        prompt += `\n  Top: ${col.stats.distribution.slice(0, 3).map((d: any) => `${d.value} (${d.percentage}%)`).join(', ')} | ${col.stats.categoryCount} unique`
+        prompt += `\n  Top: ${col.stats.distribution.slice(0, 3).map(d => `${d.value} (${d.percentage}%)`).join(', ')} | ${col.stats.categoryCount} unique`
       } else if (col.type === 'date' && col.stats.earliest) {
         prompt += `\n  Range: ${col.stats.earliest} to ${col.stats.latest} (${col.stats.spanDays} days)`
       }
     }
-    if (col.nullPercentage > 0) {
+    if (col.nullPercentage && col.nullPercentage > 0) {
       prompt += `\n  WARNING: ${col.nullPercentage}% missing values`
     }
   })
@@ -1234,7 +1260,7 @@ NOTE: This example shows 7 scorecards + 10 visualizations = 17 total charts (wit
   // Add sample data if available
   if (dataStructure.dataSample && dataStructure.dataSample.length > 0) {
     prompt += `\n\n<SAMPLE_DATA>`
-    dataStructure.dataSample.slice(0, 5).forEach((row: any, idx: number) => {
+    dataStructure.dataSample.slice(0, 5).forEach((row, idx) => {
       prompt += `\nRow ${idx + 1}: ${JSON.stringify(row).slice(0, 200)}...`
     })
     prompt += `\n</SAMPLE_DATA>`
@@ -1260,7 +1286,7 @@ NOTE: This example shows 7 scorecards + 10 visualizations = 17 total charts (wit
  * Converts ChartRecommendation to ChartSuggestion format for scoring
  * Handles both new dataMapping format and legacy dataKey format
  */
-function convertToChartSuggestion(config: any, index: number): ChartSuggestion {
+function convertToChartSuggestion(config: ChartRecommendation, index: number): ChartSuggestion {
   // Extract column names from dataMapping (new format) or dataKey (legacy)
   let dataKey: string[] = []
 
@@ -1285,8 +1311,10 @@ function convertToChartSuggestion(config: any, index: number): ChartSuggestion {
         break
       case 'scorecard':
         // For formula-based scorecards, use formulaAlias; otherwise use metric
-        if (dm.formula && dm.formulaAlias) {
-          dataKey.push(dm.formulaAlias)
+        // Type assertion for extended DataMapping properties
+        const extDm = dm as DataMapping
+        if (extDm.formula && extDm.formulaAlias) {
+          dataKey.push(extDm.formulaAlias)
         } else if (dm.metric) {
           dataKey.push(dm.metric)
         }
@@ -1319,19 +1347,24 @@ function convertToChartSuggestion(config: any, index: number): ChartSuggestion {
   }
 
   // Map priority from confidence
+  const confidence = config.confidence ?? 50
   const priority: 'high' | 'medium' | 'low' =
-    config.confidence >= 80 ? 'high' :
-    config.confidence >= 60 ? 'medium' : 'low'
+    confidence >= 80 ? 'high' :
+    confidence >= 60 ? 'medium' : 'low'
+
+  // Get aggregation from config or dataMapping (with type assertion for extended properties)
+  const extendedConfig = config as ChartRecommendation & { aggregation?: string }
+  const aggregation = extendedConfig.aggregation || config.dataMapping?.aggregation
 
   return {
     id: `chart-${index}-${config.type}`,
-    type: config.type,
+    type: config.type as ChartSuggestion['type'],
     title: config.title,
     description: config.description || '',
     dataTransform: {
-      aggregations: config.aggregation || config.dataMapping?.aggregation ? [{
+      aggregations: aggregation ? [{
         column: dataKey[dataKey.length - 1],
-        function: config.aggregation || config.dataMapping?.aggregation,
+        function: aggregation as 'sum' | 'avg' | 'count' | 'min' | 'max' | 'median' | 'mode' | 'std' | 'variance' | 'percentile' | 'count_distinct',
       }] : undefined
     },
     chartConfig: {
@@ -1346,7 +1379,7 @@ function convertToChartSuggestion(config: any, index: number): ChartSuggestion {
         sortable: true
       })),
     } : undefined,
-    confidence: config.confidence / 100, // Convert to 0-1 scale
+    confidence: confidence / 100, // Convert to 0-1 scale
     reasoning: config.reasoning || '',
     tags: [],
     priority
@@ -1414,19 +1447,28 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
     // NOTE: Rate limiting is now handled by withRateLimit middleware
     // No need for manual rate limit checks here
 
-    // Parse request body with enhanced interface
+    // Validate request body with Zod
     console.log('[API-ANALYZE] ===== REQUEST RECEIVED =====')
-    console.log('[API-ANALYZE] Starting to parse request body...')
+    console.log('[API-ANALYZE] Starting to parse and validate request body...')
 
-    const {
-      data,
-      schema,
-      correctedSchema,
-      feedback,
-      fileName
-    }: AnalyzeRequest = await request.json()
+    const validation = await validateRequest(request, analyzeRequestSchema)
+    if (!validation.success) {
+      logger.error('[API-ANALYZE] Validation failed:', { requestId })
+      return validation.response
+    }
 
-    console.log('[API-ANALYZE] Request parsed successfully:', {
+    const { data, schema, correctedSchema, feedback, fileName } = validation.data
+
+    // Additional validation: check data payload size
+    if (!validateDataSize(data)) {
+      logger.error('[API-ANALYZE] Payload too large:', { requestId })
+      return NextResponse.json(
+        { error: `Payload too large. Maximum ${MAX_PAYLOAD_SIZE / 1024 / 1024}MB allowed.`, requestId },
+        { status: 413, headers: corsHeaders() }
+      )
+    }
+
+    console.log('[API-ANALYZE] Request parsed and validated successfully:', {
       dataLength: data?.length,
       columnCount: data?.[0] ? Object.keys(data[0]).length : 0,
       hasSchema: !!schema,
@@ -1435,29 +1477,12 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
       feedback: feedback?.substring(0, 50)
     })
 
-    logger.info('[API-ANALYZE] Request parsed successfully:', {
+    logger.info('[API-ANALYZE] Request validated successfully:', {
       dataLength: data?.length,
       columnCount: data?.[0] ? Object.keys(data[0]).length : 0,
       hasSchema: !!schema,
       hasCorrectedSchema: !!correctedSchema
     })
-
-    if (!data || !Array.isArray(data) || data.length === 0) {
-      logger.error('[API-ANALYZE] Invalid data provided:', { requestId, isArray: Array.isArray(data), length: data?.length })
-      return NextResponse.json(
-        { error: 'Invalid data provided', requestId },
-        { status: 400, headers: corsHeaders() }
-      )
-    }
-
-    // Security: Validate input size limits
-    if (data.length > MAX_ROWS) {
-      logger.error('[API-ANALYZE] Dataset too large:', { requestId, rows: data.length, maxRows: MAX_ROWS })
-      return NextResponse.json(
-        { error: `Dataset too large. Maximum ${MAX_ROWS.toLocaleString()} rows allowed.`, requestId },
-        { status: 413, headers: corsHeaders() }
-      )
-    }
 
     const columnCount = data[0] ? Object.keys(data[0]).length : 0
     if (columnCount > MAX_COLUMNS) {
@@ -1487,14 +1512,14 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
       hash: dataHash.substring(0, 8) + '...'
     })
 
-    // Analyze data structure
-    const dataStructure = analyzeDataStructure(data)
+    // Analyze data structure (cast validated data to DataRow[])
+    const dataStructure = analyzeDataStructure(data as DataRow[])
     logger.debug('[API-ANALYZE] Data structure analyzed:', {
       rowCount: dataStructure.rowCount,
       columnCount: dataStructure.columnCount
     })
 
-    const prompt = buildEnhancedPrompt(dataStructure, schema, correctedSchema, feedback)
+    const prompt = buildEnhancedPrompt(dataStructure, (schema ?? undefined) as DataSchema | undefined, correctedSchema, feedback)
 
     // Get OpenAI client and call API with timeout
     const openai = getOpenAIClient()
@@ -1506,7 +1531,7 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
       promptTokensEstimate: promptTokensEst,
       maxTokens: 16000,
       timeout: '4 minutes (240 seconds)',
-      datasetSize: `${data.length} rows, ${schema?.length || 0} columns`,
+      datasetSize: `${data.length} rows, ${schema?.columnCount || schema?.columns?.length || 0} columns`,
       timestamp: new Date().toISOString()
     })
     const startTime = Date.now()
@@ -1630,7 +1655,7 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
       const aiAnalysis = parseJSONFromString<AIAnalysisResponse>(response)
 
       // Log filter recommendations from AI
-      const chartsWithFilters = aiAnalysis.chartConfig?.filter((c: any) =>
+      const chartsWithFilters = aiAnalysis.chartConfig?.filter(c =>
         c.dataMapping?.filters && c.dataMapping.filters.length > 0
       ) || []
 
@@ -1638,7 +1663,7 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
         chartsCount: aiAnalysis.chartConfig?.length || 0,
         insightsCount: aiAnalysis.insights?.length || 0,
         chartsWithFilters: chartsWithFilters.length,
-        filterDetails: chartsWithFilters.map((c: any) => ({
+        filterDetails: chartsWithFilters.map(c => ({
           title: c.title,
           filters: c.dataMapping.filters
         }))
@@ -1672,7 +1697,7 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
         columns: dataStructure.columns as ColumnSchema[],
         uploadedAt: new Date().toISOString()
       }
-      aiAnalysis.chartConfig = hydrateChartConfigs(aiAnalysis.chartConfig, schemaForHydration)
+      aiAnalysis.chartConfig = hydrateChartConfigs(aiAnalysis.chartConfig, schemaForHydration) as ChartRecommendation[]
       logger.debug('[HYDRATION] Chart configurations hydrated:', {
         chartCount: aiAnalysis.chartConfig.length
       })
@@ -1734,7 +1759,7 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
       // DEBUG: Log all chart configs before normalization
       logger.info('[DEBUG] Chart configs before normalization:', {
         chartCount: aiAnalysis.chartConfig.length,
-        charts: aiAnalysis.chartConfig.map((c: any) => ({
+        charts: aiAnalysis.chartConfig.map(c => ({
           title: c.title,
           type: c.type,
           dataMapping: c.dataMapping
@@ -2172,8 +2197,8 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
       })
 
       // Chart diversity validation
-      const scorecardCount = aiAnalysis.chartConfig.filter((c: any) => c.type === 'scorecard').length
-      const topBottomCount = aiAnalysis.chartConfig.filter((c: any) =>
+      const scorecardCount = aiAnalysis.chartConfig.filter(c => c.type === 'scorecard').length
+      const topBottomCount = aiAnalysis.chartConfig.filter(c =>
         c.type === 'bar' && c.dataMapping?.sortBy && c.dataMapping?.limit
       ).length
 
@@ -2264,26 +2289,27 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
       logger.debug('[API-ANALYZE] Starting recommendation scoring...')
 
       // Build data profile for scoring
+      const fallbackSchema = {
+        fileName: fileName || 'data.csv',
+        rowCount: dataStructure.rowCount,
+        columnCount: dataStructure.columnCount,
+        columns: dataStructure.columns.map((col: { name: string; type: string; uniqueValues?: number; sampleValues?: unknown[]; nullCount?: number; nullPercentage?: number }) => ({
+          name: col.name,
+          type: col.type,
+          confidence: 85,
+          detectionReason: 'Pattern match',
+          suggestedUsage: [] as string[],
+          uniqueValues: col.uniqueValues || 0,
+          sampleValues: col.sampleValues || [],
+          nullCount: col.nullCount || 0,
+          nullPercentage: col.nullPercentage || 0
+        })),
+        businessContext: 'General data analysis',
+        uploadedAt: new Date().toISOString()
+      }
       const dataProfile: DataProfile = {
-        schema: schema || {
-          fileName: fileName || 'data.csv',
-          rowCount: dataStructure.rowCount,
-          columnCount: dataStructure.columnCount,
-          columns: dataStructure.columns.map((col: any) => ({
-            name: col.name,
-            type: col.type as any,
-            confidence: 85,
-            detectionReason: 'Pattern match',
-            suggestedUsage: [],
-            uniqueValues: col.uniqueValues,
-            sampleValues: col.sampleValues || [],
-            nullCount: col.nullCount,
-            nullPercentage: col.nullPercentage
-          })),
-          businessContext: 'General data analysis',
-          uploadedAt: new Date().toISOString()
-        },
-        sampleData: data,
+        schema: (schema ? { ...(schema as object), uploadedAt: new Date().toISOString() } : fallbackSchema) as DataSchema,
+        sampleData: data as DataRow[],
         totalRows: dataStructure.rowCount
       }
 
@@ -2356,7 +2382,7 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
         insights: aiAnalysis.insights,
 
         // Map chart configs to include confidence, reasoning, quality scores, and dataMapping
-        chartConfig: aiAnalysis.chartConfig.map((config: any, index: number) => {
+        chartConfig: (aiAnalysis.chartConfig.map((config: any, index: number) => {
           const scoredRec = scoredRecommendations.find(sr => sr.id === `chart-${index}-${config.type}`)
 
           // Build backward-compatible dataKey from dataMapping
@@ -2462,7 +2488,7 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
           const scoreA = a.qualityScore ?? a.confidence
           const scoreB = b.qualityScore ?? b.confidence
           return scoreB - scoreA
-        }),
+        })) as any[],
 
         // Store enhanced recommendations separately for future use
         recommendations: aiAnalysis.chartConfig.map((config: any) => {
@@ -2573,7 +2599,9 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
             dataQuality: aiAnalysis.summary.dataQuality,
             keyFindings: aiAnalysis.summary.keyFindings,
             recommendations: aiAnalysis.summary.recommendations,
-            businessContext: aiAnalysis.summary.businessContext || aiAnalysis.dataContext
+            businessContext: typeof aiAnalysis.summary.businessContext === 'string'
+              ? aiAnalysis.summary.businessContext
+              : (typeof aiAnalysis.dataContext === 'string' ? aiAnalysis.dataContext : undefined)
           }),
           // Add user correction metadata
           ...(correctedColumnNames.length > 0 && {
@@ -2597,7 +2625,7 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
       // REBALANCING ENABLED: Ensure minimum charts with separate scorecard/visualization counting
       const currentChartCount = analysisResult.chartConfig.length
       // Count scorecards and non-scorecards separately
-      const currentScorecardCount = (analysisResult.chartConfig as any[]).filter((c: any) => c.type === 'scorecard').length
+      const currentScorecardCount = (analysisResult.chartConfig as any[]).filter(c => c.type === 'scorecard').length
       const currentNonScorecardCount = (analysisResult.chartConfig as any[]).length - currentScorecardCount
 
       logger.info('[API-ANALYZE] Rebalance check - Chart counts:', {
@@ -2628,7 +2656,7 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
 
         // Log rebalancing results
         const chartStats = getChartStats(analysisResult.chartConfig as any)
-        const finalScorecardCount = (analysisResult.chartConfig as any[]).filter((c: any) => c.type === 'scorecard').length
+        const finalScorecardCount = (analysisResult.chartConfig as any[]).filter(c => c.type === 'scorecard').length
         const finalNonScorecardCount = (analysisResult.chartConfig as any[]).length - finalScorecardCount
 
         logger.info('[API-ANALYZE] Charts rebalanced successfully:', {
@@ -2653,14 +2681,14 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
 
       // Log final chart count without rebalancing
       // Log final filter preservation
-      const finalChartsWithFilters = analysisResult.chartConfig.filter((c: any) =>
+      const finalChartsWithFilters = (analysisResult.chartConfig as any[]).filter(c =>
         c.dataMapping?.filters && c.dataMapping.filters.length > 0
       )
 
       // Calculate final chart breakdown with separate counts
-      const finalScorecardCount = (analysisResult.chartConfig as any[]).filter((c: any) => c.type === 'scorecard').length
-      const finalVisualizationCount = (analysisResult.chartConfig as any[]).filter((c: any) => !['scorecard', 'table'].includes(c.type)).length
-      const finalTableCount = (analysisResult.chartConfig as any[]).filter((c: any) => c.type === 'table').length
+      const finalScorecardCount = (analysisResult.chartConfig as any[]).filter(c => c.type === 'scorecard').length
+      const finalVisualizationCount = (analysisResult.chartConfig as any[]).filter(c => !['scorecard', 'table'].includes(c.type)).length
+      const finalTableCount = (analysisResult.chartConfig as any[]).filter(c => c.type === 'table').length
       const finalNonScorecardCount = finalVisualizationCount + finalTableCount
 
       logger.info('[API-ANALYZE] Final chart breakdown:', {
@@ -2690,7 +2718,7 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
       // If corrected schema was provided, include enhanced schema info
       if (correctedSchema && correctedSchema.length > 0) {
         const { analyzeDataSchema } = await import('@/lib/utils/schema-analyzer')
-        const enhancedSchema = analyzeDataSchema(data, fileName || 'data.csv')
+        const enhancedSchema = analyzeDataSchema(data as DataRow[], fileName || 'data.csv')
 
         // Merge user corrections with enhanced detection
         analysisResult.schema = {
@@ -2717,14 +2745,14 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
       const totalDuration = Date.now() - requestStartTime
       logger.info('[API-ANALYZE] Analysis completed:', {
         totalVisualizations: aiAnalysis.chartConfig?.length || 0,
-        scorecards: aiAnalysis.chartConfig?.filter((c: any) => c.type === 'scorecard').length || 0,
+        scorecards: aiAnalysis.chartConfig?.filter(c => c.type === 'scorecard').length || 0,
         userCorrections: correctedColumnNames.length,
         duration: totalDuration + 'ms'
       })
 
     logger.debug('[API-ANALYZE] Response structure:', {
       chartCount: analysisResult.chartConfig.length,
-      chartTypes: analysisResult.chartConfig.map((c: any) => c.type)
+      chartTypes: analysisResult.chartConfig.map(c => c.type)
     })
 
     // PERFORMANCE: Cache the result for future requests

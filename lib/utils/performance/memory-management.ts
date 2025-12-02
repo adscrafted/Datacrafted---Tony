@@ -77,9 +77,12 @@ export function useLRUCache<K, V>(maxSize: number = 100) {
   const cacheRef = useRef<LRUCache<K, V>>(new LRUCache(maxSize));
 
   useEffect(() => {
+    // Capture the cache instance in a local variable for cleanup
+    const cache = cacheRef.current;
+
     // Cleanup on unmount
     return () => {
-      cacheRef.current.clear();
+      cache.clear();
     };
   }, []);
 

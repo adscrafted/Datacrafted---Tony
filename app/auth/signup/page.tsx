@@ -1,6 +1,10 @@
 'use client'
 
+import type { Metadata } from 'next'
 import React, { useState } from 'react'
+
+// Note: Metadata export only works in Server Components
+// For this Client Component, SEO is handled via document head manipulation
 import { useRouter } from 'next/navigation'
 import { BarChart3, Loader2, Mail, Lock, User, Chrome } from 'lucide-react'
 import { Button } from '@/components/ui/button'

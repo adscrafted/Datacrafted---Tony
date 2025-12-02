@@ -5,6 +5,7 @@ import { saveUploadedFile, getUploadedFile } from '@/lib/file-storage'
 import type { AnalysisResult, DataRow } from '@/lib/store'
 import { withAuth } from '@/lib/middleware/auth'
 import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
+import { validateRequest, sessionDataPostSchema } from '@/lib/utils/api-validation'
 
 const getHandler = withAuth(async (request, authUser, context) => {
   try {
@@ -140,19 +141,25 @@ const postHandler = withAuth(async (request, authUser, context) => {
       )
     }
 
-    const body = await request.json()
-    const { type, data } = body
+    // Validate request body with Zod
+    const validation = await validateRequest(request, sessionDataPostSchema)
+    if (!validation.success) {
+      return validation.response
+    }
+
+    const { type, data } = validation.data
 
     switch (type) {
       case 'file':
         // Save uploaded file
-        const { file, parsedData } = data
-        const fileId = await saveUploadedFile(sessionId, file, parsedData)
+        const fileData = data as { file: Record<string, unknown>; parsedData: Record<string, unknown>[] }
+        const { file, parsedData } = fileData
+        const fileId = await saveUploadedFile(sessionId, file as any, parsedData as any)
         return NextResponse.json({ fileId })
 
       case 'analysis':
         // Save analysis results
-        const { analysis, fileId: analysisFileId } = data as {
+        const { analysis, fileId: analysisFileId } = data as unknown as {
           analysis: AnalysisResult
           fileId: string
         }

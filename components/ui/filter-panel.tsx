@@ -95,7 +95,7 @@ export function FilterPanel({
         type: filterType,
         column: newFilter.column,
         operator: newFilter.operator as any,
-        value: newFilter.value,
+        value: newFilter.value ?? null,
         isActive: true
       })
       
@@ -156,12 +156,12 @@ export function FilterPanel({
             <label key={String(value)} className="flex items-center space-x-2 text-xs">
               <input
                 type="checkbox"
-                checked={selectedValues.includes(value)}
+                checked={selectedValues.includes(value as string | number)}
                 onChange={(e) => {
                   const newSelected = e.target.checked
-                    ? [...selectedValues, value]
+                    ? [...selectedValues, value as string | number]
                     : selectedValues.filter(v => v !== value)
-                  onUpdateFilter(filter.id, { value: newSelected })
+                  onUpdateFilter(filter.id, { value: newSelected as (string | number)[] })
                 }}
                 className="w-3 h-3"
               />
@@ -175,7 +175,7 @@ export function FilterPanel({
     return (
       <input
         type={filter.type === 'numeric' ? 'number' : filter.type === 'date' ? 'date' : 'text'}
-        value={Array.isArray(filter.value) ? filter.value[0] : filter.value}
+        value={Array.isArray(filter.value) ? String(filter.value[0] ?? '') : String(filter.value ?? '')}
         onChange={(e) => onUpdateFilter(filter.id, { value: e.target.value })}
         className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
         placeholder="Filter value"
@@ -190,18 +190,21 @@ export function FilterPanel({
         size="sm"
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center space-x-2"
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
+        aria-label={`Filters${activeFiltersCount > 0 ? ` (${activeFiltersCount} active)` : ''}`}
       >
-        <Filter className="h-4 w-4" />
+        <Filter className="h-4 w-4" aria-hidden="true" />
         <span>Filters</span>
         {activeFiltersCount > 0 && (
-          <span className="bg-primary text-primary-foreground px-1.5 py-0.5 text-xs rounded-full">
+          <span className="bg-primary text-primary-foreground px-1.5 py-0.5 text-xs rounded-full" aria-hidden="true">
             {activeFiltersCount}
           </span>
         )}
       </Button>
       
       {isOpen && (
-        <Card className="absolute top-10 left-0 z-50 w-96 shadow-lg max-h-96 overflow-y-auto">
+        <Card className="absolute top-10 left-0 z-50 w-96 shadow-lg max-h-96 overflow-y-auto" role="dialog" aria-label="Data filters">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center justify-between">
               Data Filters
@@ -211,8 +214,9 @@ export function FilterPanel({
                   size="sm"
                   onClick={() => setIsAddingFilter(true)}
                   className="h-6 w-6 p-0"
+                  aria-label="Add new filter"
                 >
-                  <Plus className="h-3 w-3" />
+                  <Plus className="h-3 w-3" aria-hidden="true" />
                 </Button>
                 {filters.length > 0 && (
                   <Button
@@ -255,6 +259,10 @@ export function FilterPanel({
                           'w-8 h-4 rounded-full transition-colors relative',
                           filter.isActive ? 'bg-primary' : 'bg-gray-300'
                         )}
+                        role="switch"
+                        aria-checked={filter.isActive}
+                        aria-label={`${filter.isActive ? 'Disable' : 'Enable'} filter for ${filter.column}`}
+                        type="button"
                       >
                         <div
                           className={cn(
@@ -268,8 +276,9 @@ export function FilterPanel({
                         size="sm"
                         onClick={() => onRemoveFilter(filter.id)}
                         className="h-4 w-4 p-0"
+                        aria-label={`Remove filter for ${filter.column}`}
                       >
-                        <X className="h-3 w-3" />
+                        <X className="h-3 w-3" aria-hidden="true" />
                       </Button>
                     </div>
                   </div>
@@ -283,13 +292,15 @@ export function FilterPanel({
             
             {/* Add New Filter */}
             {isAddingFilter && (
-              <div className="p-3 rounded-lg border border-dashed border-gray-300 space-y-3">
+              <div className="p-3 rounded-lg border border-dashed border-gray-300 space-y-3" role="form" aria-label="Add new filter">
                 <div>
-                  <label className="text-xs font-medium mb-1 block">Column</label>
+                  <label htmlFor="filter-column" className="text-xs font-medium mb-1 block">Column</label>
                   <select
+                    id="filter-column"
                     value={newFilter.column || ''}
                     onChange={(e) => setNewFilter(prev => ({ ...prev, column: e.target.value }))}
                     className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
+                    aria-label="Select column to filter"
                   >
                     <option value="">Select column...</option>
                     {columns.map(column => (
@@ -303,11 +314,13 @@ export function FilterPanel({
                 {newFilter.column && (
                   <>
                     <div>
-                      <label className="text-xs font-medium mb-1 block">Condition</label>
+                      <label htmlFor="filter-condition" className="text-xs font-medium mb-1 block">Condition</label>
                       <select
+                        id="filter-condition"
                         value={newFilter.operator || 'equals'}
                         onChange={(e) => setNewFilter(prev => ({ ...prev, operator: e.target.value as any }))}
                         className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
+                        aria-label="Select filter condition"
                       >
                         {(() => {
                           const column = columns.find(c => c.name === newFilter.column)
@@ -320,13 +333,15 @@ export function FilterPanel({
                     </div>
                     
                     <div>
-                      <label className="text-xs font-medium mb-1 block">Value</label>
+                      <label htmlFor="filter-value" className="text-xs font-medium mb-1 block">Value</label>
                       <input
+                        id="filter-value"
                         type="text"
-                        value={newFilter.value || ''}
+                        value={String(newFilter.value ?? '')}
                         onChange={(e) => setNewFilter(prev => ({ ...prev, value: e.target.value }))}
                         className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
                         placeholder="Enter filter value"
+                        aria-label="Enter filter value"
                       />
                     </div>
                   </>

@@ -44,7 +44,7 @@ export interface ColumnSchema {
   uniqueValues: number
   nullCount: number
   nullPercentage: number
-  sampleValues: any[]
+  sampleValues: Array<string | number | boolean | Date | null>
   stats?: {
     min?: number
     max?: number
@@ -185,7 +185,7 @@ export interface DashboardFilter {
   type: 'date' | 'category' | 'numeric' | 'text'
   column: string
   operator: 'equals' | 'contains' | 'greater_than' | 'less_than' | 'between' | 'in'
-  value: any
+  value: string | number | boolean | Date | null | Array<string | number>
   isActive: boolean
 }
 
@@ -239,12 +239,16 @@ export interface AnalysisResult {
     yAxis?: string | string[]
     aggregation?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct' | 'median' | 'mode' | 'std' | 'variance' | 'percentile'
     // Customization settings
-    customization?: any
+    customization?: Partial<ChartCustomization>
     // Quality metrics
     confidence?: number
     reasoning?: string
     qualityScore?: number
-    qualityFactors?: any
+    qualityFactors?: {
+      dataCompleteness?: number
+      typeAppropriate?: number
+      businessValue?: number
+    }
   }>
   summary: {
     rowCount: number
@@ -340,15 +344,15 @@ interface DataStore {
     id: string
     action: string
     timestamp: string
-    data: any
-    previousState?: any
+    data: Record<string, unknown>
+    previousState?: Record<string, unknown>
   }>
   redoHistory: Array<{
     id: string
     action: string
     timestamp: string
-    data: any
-    previousState?: any
+    data: Record<string, unknown>
+    previousState?: Record<string, unknown>
   }>
   showFullScreen: string | null // chart ID for full-screen view
 
@@ -363,7 +367,7 @@ interface DataStore {
   gridSnapping: boolean
   showGridLines: boolean
   autoSaveLayouts: boolean
-  draftChart: { id: string; type: ChartType; title: string; description: string; dataKey?: any[]; dataMapping?: any } | null // Chart being configured before adding to dashboard
+  draftChart: { id: string; type: ChartType; title: string; description: string; dataKey?: string[]; dataMapping?: Record<string, unknown> } | null // Chart being configured before adding to dashboard
 
   // Upload status state
   uploadProgress: number
@@ -434,7 +438,7 @@ interface DataStore {
   setCurrentLayout: (layout: DashboardLayout) => void
   addCustomLayout: (layout: DashboardLayout) => void
   setIsCustomizing: (isCustomizing: boolean) => void
-  addToHistory: (action: string, data: any) => void
+  addToHistory: (action: string, data: Record<string, unknown>) => void
   undoLastAction: () => void
   redoLastAction: () => void
   setFullScreen: (chartId: string | null) => void
@@ -461,7 +465,7 @@ interface DataStore {
   resetToDefaultLayout: () => void
   exportLayoutConfig: () => Promise<void>
   importLayoutConfig: (configFile: File) => Promise<void>
-  setDraftChart: (chart: { id: string; type: ChartType; title: string; description: string; dataKey?: any[]; dataMapping?: any } | null) => void
+  setDraftChart: (chart: { id: string; type: ChartType; title: string; description: string; dataKey?: string[]; dataMapping?: Record<string, unknown> } | null) => void
   commitDraftChart: () => void
 
   // Upload status actions
@@ -701,7 +705,7 @@ const defaultLayout: DashboardLayout = {
 }
 
 // Helper function to get current state for undo operations
-const getCurrentStateForAction = (action: string, state: any) => {
+const getCurrentStateForAction = (action: string, state: DataStore): Record<string, unknown> | undefined => {
   switch (action) {
     case 'theme_change':
       return { theme: state.currentTheme }
@@ -715,7 +719,7 @@ const getCurrentStateForAction = (action: string, state: any) => {
     case 'layout_change':
       return { layout: state.currentLayout }
     default:
-      return null
+      return undefined
   }
 }
 
@@ -864,8 +868,8 @@ export const useDataStore = create<DataStore>()(
             rawData: file?.parsedData || [],
             analysis: analysis ? {
               insights: analysis.insights,
-              chartConfig: analysis.charts.map((chart: any) => ({
-                type: chart.type,
+              chartConfig: analysis.charts.map((chart: { type: string; title: string; dataKeys: string[]; description: string }) => ({
+                type: chart.type as ChartType,
                 title: chart.title,
                 dataKey: chart.dataKeys,
                 description: chart.description,
@@ -1298,13 +1302,13 @@ export const useDataStore = create<DataStore>()(
       addToHistory: (action, data) => {
         set(state => {
           // Capture previous state based on action type
-          let previousState: any = null
+          let previousState: Record<string, unknown> | undefined = undefined
           switch (action) {
             case 'theme_change':
               previousState = { theme: state.currentTheme }
               break
             case 'chart_customize':
-              previousState = { 
+              previousState = {
                 chartCustomizations: { ...state.chartCustomizations },
                 chartId: data.chartId
               }
@@ -1319,7 +1323,7 @@ export const useDataStore = create<DataStore>()(
               previousState = { layout: state.currentLayout }
               break
           }
-          
+
           return {
             customizationHistory: [
               ...state.customizationHistory,
@@ -1348,37 +1352,38 @@ export const useDataStore = create<DataStore>()(
         }
         
         // Apply undo based on action type
+        const prevState = lastAction.previousState!
         switch (lastAction.action) {
           case 'theme_change':
             set(state => ({
-              currentTheme: lastAction.previousState.theme,
+              currentTheme: prevState.theme as DashboardTheme,
               customizationHistory: state.customizationHistory.slice(0, -1),
               redoHistory: [...state.redoHistory, redoAction]
             }))
             break
-            
+
           case 'chart_customize':
             set(state => ({
-              chartCustomizations: lastAction.previousState.chartCustomizations,
+              chartCustomizations: prevState.chartCustomizations as Record<string, ChartCustomization>,
               customizationHistory: state.customizationHistory.slice(0, -1),
               redoHistory: [...state.redoHistory, redoAction]
             }))
             break
-            
+
           case 'filter_add':
           case 'filter_update':
           case 'filter_remove':
           case 'filters_clear':
             set(state => ({
-              dashboardFilters: lastAction.previousState.filters,
+              dashboardFilters: prevState.filters as DashboardFilter[],
               customizationHistory: state.customizationHistory.slice(0, -1),
               redoHistory: [...state.redoHistory, redoAction]
             }))
             break
-            
+
           case 'layout_change':
             set(state => ({
-              currentLayout: lastAction.previousState.layout,
+              currentLayout: prevState.layout as DashboardLayout,
               customizationHistory: state.customizationHistory.slice(0, -1),
               redoHistory: [...state.redoHistory, redoAction]
             }))
@@ -1398,38 +1403,40 @@ export const useDataStore = create<DataStore>()(
         }
         
         // Apply redo based on action type
+        const redoPrevState = lastRedoAction.previousState
         switch (lastRedoAction.action) {
           case 'theme_change':
             set(state => ({
-              currentTheme: lastRedoAction.data.theme || lastRedoAction.previousState.theme,
+              currentTheme: (lastRedoAction.data.theme || redoPrevState?.theme) as DashboardTheme,
               customizationHistory: [...state.customizationHistory, historyAction],
               redoHistory: state.redoHistory.slice(0, -1)
             }))
             break
-            
+
           case 'chart_customize':
-            const { chartId, customization } = lastRedoAction.data
+            const chartId = lastRedoAction.data.chartId as string
+            const customization = lastRedoAction.data.customization as Record<string, unknown>
             set(state => ({
               chartCustomizations: {
                 ...state.chartCustomizations,
-                [chartId]: { ...state.chartCustomizations[chartId], ...customization, id: chartId }
+                [chartId]: { ...state.chartCustomizations[chartId], ...customization, id: chartId } as ChartCustomization
               },
               customizationHistory: [...state.customizationHistory, historyAction],
               redoHistory: state.redoHistory.slice(0, -1)
             }))
             break
-            
+
           case 'filter_add':
             set(state => ({
-              dashboardFilters: [...state.dashboardFilters, lastRedoAction.data.filter],
+              dashboardFilters: [...state.dashboardFilters, lastRedoAction.data.filter as DashboardFilter],
               customizationHistory: [...state.customizationHistory, historyAction],
               redoHistory: state.redoHistory.slice(0, -1)
             }))
             break
-            
+
           case 'layout_change':
             set(state => ({
-              currentLayout: lastRedoAction.data.layout,
+              currentLayout: lastRedoAction.data.layout as DashboardLayout,
               customizationHistory: [...state.customizationHistory, historyAction],
               redoHistory: state.redoHistory.slice(0, -1)
             }))
@@ -1909,10 +1916,12 @@ export const useDataStore = create<DataStore>()(
                 case 'less_than':
                   return Number(columnValue) < Number(filter.value)
                 case 'between':
-                  const [min, max] = filter.value
+                  const rangeValue = filter.value as (string | number)[]
+                  const [min, max] = Array.isArray(rangeValue) ? rangeValue : ['', '']
                   return Number(columnValue) >= Number(min) && Number(columnValue) <= Number(max)
                 case 'in':
-                  return Array.isArray(filter.value) && filter.value.includes(columnValue)
+                  const inValues = filter.value as (string | number)[]
+                  return Array.isArray(inValues) && inValues.includes(columnValue as string | number)
                 default:
                   return true
               }
@@ -2063,8 +2072,8 @@ export const useDataStore = create<DataStore>()(
         set(state => ({
           analysis: state.analysis ? {
             ...state.analysis,
-            chartConfig: (state.analysis.chartConfig as any[]).filter((chart: any) =>
-              (chart.id || `chart-${(state.analysis!.chartConfig as any[]).indexOf(chart)}`) !== chartId
+            chartConfig: (state.analysis.chartConfig as ChartRecommendation[]).filter(chart =>
+              (chart.id || `chart-${(state.analysis!.chartConfig as ChartRecommendation[]).indexOf(chart)}`) !== chartId
             )
           } : null
         }))
@@ -2079,8 +2088,8 @@ export const useDataStore = create<DataStore>()(
         if (!state.analysis) return
 
         // Find the original chart
-        const originalChart = (state.analysis.chartConfig as any[]).find((chart: any) =>
-          (chart.id || `chart-${(state.analysis!.chartConfig as any[]).indexOf(chart)}`) === chartId
+        const originalChart = (state.analysis.chartConfig as ChartRecommendation[]).find(chart =>
+          (chart.id || `chart-${(state.analysis!.chartConfig as ChartRecommendation[]).indexOf(chart)}`) === chartId
         )
         if (!originalChart) return
 
@@ -2126,8 +2135,8 @@ export const useDataStore = create<DataStore>()(
         set(state => ({
           analysis: state.analysis ? {
             ...state.analysis,
-            chartConfig: (state.analysis.chartConfig as any[]).map((chart: any) => {
-              const id = chart.id || `chart-${(state.analysis!.chartConfig as any[]).indexOf(chart)}`
+            chartConfig: (state.analysis.chartConfig as ChartRecommendation[]).map(chart => {
+              const id = chart.id || `chart-${(state.analysis!.chartConfig as ChartRecommendation[]).indexOf(chart)}`
               return id === chartId ? { ...chart, type } : chart
             })
           } : null
@@ -2253,7 +2262,7 @@ export const useDataStore = create<DataStore>()(
         const customization = state.chartCustomizations[chartId]
 
         // Merge dataMapping
-        const effectiveDataMapping = customization?.dataMapping || state.draftChart.dataMapping || {}
+        const effectiveDataMapping = (customization?.dataMapping || state.draftChart.dataMapping || {}) as Record<string, any>
 
         // CRITICAL FIX: Generate dataKey from dataMapping based on chart type
         let dataKey: string[] = []
@@ -2268,7 +2277,7 @@ export const useDataStore = create<DataStore>()(
             })
             if (effectiveDataMapping.category) {
               dataKey = effectiveDataMapping.value
-                ? [effectiveDataMapping.category, effectiveDataMapping.value]
+                ? [effectiveDataMapping.category, effectiveDataMapping.value as string]
                 : [effectiveDataMapping.category]
             }
             console.log('🥧 [COMMIT_DRAFT_PIE] Generated dataKey:', dataKey)
@@ -2276,21 +2285,21 @@ export const useDataStore = create<DataStore>()(
           case 'scorecard':
             if (effectiveDataMapping.metric) {
               dataKey = [effectiveDataMapping.metric]
-            } else if (effectiveDataMapping.formulaAlias) {
-              dataKey = [effectiveDataMapping.formulaAlias]
+            } else if ((effectiveDataMapping as any).formulaAlias) {
+              dataKey = [(effectiveDataMapping as any).formulaAlias]
             }
             break
           case 'line':
           case 'bar':
           case 'area':
             if (effectiveDataMapping.xAxis || effectiveDataMapping.category) {
-              const xKey = effectiveDataMapping.xAxis || effectiveDataMapping.category
+              const xKey = (effectiveDataMapping.xAxis || effectiveDataMapping.category) as string
               const yKeys = effectiveDataMapping.yAxis || effectiveDataMapping.values || []
-              dataKey = [xKey, ...(Array.isArray(yKeys) ? yKeys : [yKeys])]
+              dataKey = [xKey, ...(Array.isArray(yKeys) ? yKeys.map(y => String(y)) : [String(yKeys)])]
             }
             break
           case 'table':
-            dataKey = effectiveDataMapping.columns || []
+            dataKey = (effectiveDataMapping.columns || []) as string[]
             break
           default:
             // For other chart types, try to infer from dataMapping

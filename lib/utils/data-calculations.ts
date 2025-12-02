@@ -677,6 +677,10 @@ export function calculateFormula(
 
   const tokens = parseResult.tokens
 
+  if (!tokens) {
+    throw new Error('Invalid formula: No tokens generated')
+  }
+
   // Extract aggregate functions
   const aggregations = extractAggregateFunctions(tokens)
   const hasAggregations = aggregations.length > 0
@@ -772,12 +776,12 @@ export function calculateFormula(
 
     return {
       ...row,
-      [alias]: value
+      [alias]: value ?? null  // Ensure undefined becomes null for DataRow compatibility
     }
   })
 
   return {
-    data: resultData,
+    data: resultData as DataRow[],
     metadata: {
       calculationType: 'formula',
       originalRowCount: data.length,

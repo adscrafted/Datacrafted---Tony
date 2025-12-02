@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/lib/middleware/auth'
 import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 import { db } from '@/lib/db'
+import { userNotFound, projectNotFound, forbidden, databaseError } from '@/lib/utils/api-errors'
 
 /**
  * DELETE /api/projects/[id]
@@ -20,10 +21,7 @@ const deleteHandler = withAuth(async (request, authUser, context) => {
 
     if (!dbUser) {
       console.log('[API PROJECT DELETE] User not found in database')
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      )
+      return userNotFound()
     }
 
     // Verify project ownership
@@ -33,18 +31,12 @@ const deleteHandler = withAuth(async (request, authUser, context) => {
 
     if (!project) {
       console.log('[API PROJECT DELETE] Project not found:', projectId)
-      return NextResponse.json(
-        { error: 'Project not found' },
-        { status: 404 }
-      )
+      return projectNotFound()
     }
 
     if (project.userId !== dbUser.id) {
       console.log('[API PROJECT DELETE] Authorization failed: User does not own project')
-      return NextResponse.json(
-        { error: 'Forbidden: You do not have access to this project' },
-        { status: 403 }
-      )
+      return forbidden('You do not have access to this project')
     }
 
     // Delete associated data first
@@ -68,13 +60,7 @@ const deleteHandler = withAuth(async (request, authUser, context) => {
     })
   } catch (error) {
     console.error('[API PROJECT DELETE] Error deleting project:', error)
-    return NextResponse.json(
-      {
-        error: 'Failed to delete project',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    )
+    return databaseError('delete project', error)
   }
 })
 

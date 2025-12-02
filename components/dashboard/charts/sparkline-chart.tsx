@@ -40,6 +40,7 @@ export default function SparklineChart({
   strokeWidth = 2,
   fillArea = false,
 }: SparklineChartProps) {
+  // All hooks must be called before any early returns
   const transformedData = useMemo((): TransformedDataPoint[] => {
     if (!data || data.length === 0) {
       return [];
@@ -57,16 +58,11 @@ export default function SparklineChart({
     });
   }, [data, dataMapping]);
 
-  if (transformedData.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-full w-full text-muted-foreground text-sm">
-        No data available
-      </div>
-    );
-  }
-
   // Calculate min/max/current for scaling - memoized to prevent recalculation
   const { minValue, maxValue, padding } = useMemo(() => {
+    if (transformedData.length === 0) {
+      return { minValue: 0, maxValue: 0, padding: 1 };
+    }
     const values = transformedData.map(d => d.y);
     const min = Math.min(...values);
     const max = Math.max(...values);
@@ -75,21 +71,32 @@ export default function SparklineChart({
   }, [transformedData]);
 
   const CustomTooltip = useMemo(() => {
-    return ({ active, payload }: any) => {
+    const TooltipComponent = ({ active, payload }: any) => {
       if (!active || !payload || !payload.length) return null;
 
-      const data = payload[0].payload;
+      const d = payload[0].payload;
 
       return (
         <div className="bg-white px-2 py-1 border border-gray-200 rounded shadow-sm text-xs">
-          <p className="font-medium">{data.xLabel}</p>
+          <p className="font-medium">{d.xLabel}</p>
           <p className="text-gray-600">
-            {data.y.toLocaleString()}
+            {d.y.toLocaleString()}
           </p>
         </div>
       );
     };
+    TooltipComponent.displayName = 'SparklineTooltip';
+    return TooltipComponent;
   }, []);
+
+  // Early return after all hooks are called
+  if (transformedData.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full w-full text-muted-foreground text-sm">
+        No data available
+      </div>
+    );
+  }
 
   // Follow the same pattern as other charts - just ResponsiveContainer with 100% dimensions
   return (

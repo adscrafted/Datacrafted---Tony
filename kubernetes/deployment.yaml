@@ -1,0 +1,213 @@
+# Kubernetes Deployment Configuration for Datacrafted
+# This provides a production-ready deployment with multiple replicas,
+# health checks, resource limits, and rolling update strategy
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: datacrafted
+  labels:
+    app: datacrafted
+    version: v1
+spec:
+  # Run 3 replicas for high availability
+  replicas: 3
+
+  # Rolling update strategy for zero-downtime deployments
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1        # Maximum number of pods above desired count
+      maxUnavailable: 0  # Keep all pods running during update
+
+  selector:
+    matchLabels:
+      app: datacrafted
+
+  template:
+    metadata:
+      labels:
+        app: datacrafted
+        version: v1
+
+    spec:
+      # Run as non-root user for security
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+
+      containers:
+      - name: app
+        image: datacrafted:latest
+        imagePullPolicy: Always
+
+        ports:
+        - containerPort: 3000
+          name: http
+          protocol: TCP
+
+        # Environment variables
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "3000"
+        - name: NEXT_TELEMETRY_DISABLED
+          value: "1"
+
+        # Load sensitive values from secrets
+        envFrom:
+        - secretRef:
+            name: datacrafted-secrets
+
+        # Resource limits and requests
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+
+        # Readiness probe - determines if pod can receive traffic
+        # Fails fast to prevent routing to unhealthy pods
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+
+        # Liveness probe - determines if pod should be restarted
+        # More lenient than readiness to avoid restart loops
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+
+        # Startup probe - for slow-starting applications
+        # Disables liveness/readiness checks until app is ready
+        startupProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 12  # 60 seconds total before giving up
+
+        # Security context for container
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1001
+          capabilities:
+            drop:
+            - ALL
+
+        # Volume mounts for tmp and cache
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /app/.next/cache
+
+      # Volumes
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+
+      # Pod disruption budget - ensures minimum availability during voluntary disruptions
+      # Define this in a separate file if using
+
+---
+# Kubernetes Service Configuration
+# Exposes the deployment to the cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: datacrafted
+  labels:
+    app: datacrafted
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 3000
+    protocol: TCP
+    name: http
+  selector:
+    app: datacrafted
+
+---
+# Horizontal Pod Autoscaler
+# Automatically scales pods based on CPU/memory usage
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: datacrafted
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: datacrafted
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300  # Wait 5 minutes before scaling down
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0  # Scale up immediately
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 30
+      - type: Pods
+        value: 2
+        periodSeconds: 30
+      selectPolicy: Max
+
+---
+# Pod Disruption Budget
+# Ensures minimum availability during voluntary disruptions (node drains, updates)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: datacrafted
+spec:
+  minAvailable: 2  # Always keep at least 2 pods running
+  selector:
+    matchLabels:
+      app: datacrafted

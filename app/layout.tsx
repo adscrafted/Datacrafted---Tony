@@ -16,8 +16,61 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'DataCrafted - AI-Powered Data Analytics Dashboard',
-  description: 'Transform your data into beautiful insights with AI-powered analytics',
+  title: {
+    default: 'DataCrafted - AI-Powered Data Analytics Dashboard',
+    template: '%s | DataCrafted'
+  },
+  description: 'Transform your data into beautiful insights with AI-powered analytics. Upload CSV, Excel files and get instant visualizations, charts, and data analysis powered by artificial intelligence.',
+  keywords: ['data analytics', 'business intelligence', 'data visualization', 'AI analytics', 'CSV analyzer', 'Excel dashboard', 'data insights'],
+  authors: [{ name: 'DataCrafted' }],
+  creator: 'DataCrafted',
+  publisher: 'DataCrafted',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://datacrafted.com'),
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: '/',
+    siteName: 'DataCrafted',
+    title: 'DataCrafted - AI-Powered Data Analytics Dashboard',
+    description: 'Transform your data into beautiful insights with AI-powered analytics. Upload CSV, Excel files and get instant visualizations.',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'DataCrafted - AI-Powered Data Analytics'
+      }
+    ]
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'DataCrafted - AI-Powered Data Analytics Dashboard',
+    description: 'Transform your data into beautiful insights with AI-powered analytics',
+    images: ['/og-image.png'],
+    creator: '@datacrafted'
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+  icons: {
+    icon: '/favicon.ico',
+    shortcut: '/favicon-16x16.png',
+    apple: '/apple-touch-icon.png',
+  },
+  manifest: '/site.webmanifest',
+  verification: {
+    // Add your verification codes when ready
+    // google: 'google-site-verification-code',
+    // yandex: 'yandex-verification-code',
+  },
 }
 
 export default function RootLayout({
@@ -67,6 +120,12 @@ export default function RootLayout({
         `}</style>
       </head>
       <body className={inter.className}>
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-4 focus:left-4 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        >
+          Skip to main content
+        </a>
         <AuthProvider>
           {children}
           <ToastContainer />

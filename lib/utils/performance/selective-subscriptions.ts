@@ -13,15 +13,14 @@ import { useMemo, useState, useEffect } from 'react';
  * This prevents re-renders when rawData changes if filters haven't changed
  */
 export function useFilteredData() {
-  const dateRange = useDataStore(state => state.dateRange);
-  const granularity = useDataStore(state => state.granularity);
-  const dashboardFilters = useDataStore(state => state.dashboardFilters);
   const getFilteredData = useDataStore(state => state.getFilteredData);
 
-  // Memoize filtered data based only on filter dependencies
+  // Memoize filtered data - getFilteredData already has access to all store state
+  // Note: We intentionally don't subscribe to dateRange, granularity, or dashboardFilters
+  // because getFilteredData reads them directly from the store
   return useMemo(() => {
     return getFilteredData();
-  }, [dateRange, granularity, dashboardFilters, getFilteredData]);
+  }, [getFilteredData]);
 }
 
 /**
@@ -197,7 +196,7 @@ export function usePerformanceComparison(label: string) {
   const insights = useAnalysisInsights();
   console.log(`${label} - Selective subscription (GOOD): Render #${Date.now()}`);
 
-  return { renderCount };
+  return { renderCount, insights };
 }
 
 /**

@@ -115,7 +115,7 @@ ${this.getResponseFormat()}
   private formatSchemaDescription(schema: DataSchema): string {
     const lines = schema.columns.map(col => {
       const parts = [`- ${col.name}: ${col.type}`]
-      if (col.confidence < 80) {
+      if (col.confidence !== undefined && col.confidence < 80) {
         parts.push(`(confidence: ${col.confidence}%)`)
       }
       if (col.description) {

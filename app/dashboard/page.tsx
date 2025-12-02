@@ -2,25 +2,21 @@
 
 import React, { useEffect, useState, Suspense, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Download, FileSpreadsheet, Loader2, Maximize2, X, BarChart3, Layout, Share2, PanelLeftClose, PanelLeft, Grid3x3, LogOut, Plus, RotateCcw } from 'lucide-react'
+import { ArrowLeft, Loader2, X, BarChart3, Share2, PanelLeftClose, PanelLeft, LogOut, Plus, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { useDataStore } from '@/lib/stores/data-store'
 import { useUIStore } from '@/lib/stores/ui-store'
 import { useChartStore, type ChartType } from '@/lib/stores/chart-store'
 import { useChatStore } from '@/lib/stores/chat-store'
 import { useSessionStore } from '@/lib/stores/session-store'
 import { getFilteredData } from '@/lib/stores/filtered-data'
-import { useShallow } from 'zustand/react/shallow'
 import { analyzeData } from '@/lib/services/ai-analysis'
 import { cn } from '@/lib/utils/cn'
 import dynamic from 'next/dynamic'
+import { logger } from '@/lib/utils/logger'
 
 // Dynamic imports for heavy components to improve initial load time
-const MinimalChartWrapper = dynamic(() => import('@/components/dashboard/minimal-chart-wrapper').then(mod => ({ default: mod.MinimalChartWrapper })), {
-  ssr: false,
-  loading: () => <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin" /></div>
-})
 const EnhancedChartWrapper = dynamic(() => import('@/components/dashboard/enhanced-chart-wrapper').then(mod => ({ default: mod.EnhancedChartWrapper })), {
   ssr: false,
   loading: () => <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin" /></div>
@@ -38,16 +34,13 @@ const EditableSchemaViewer = dynamic(() => import('@/components/dashboard/editab
 })
 
 // Keep lightweight components as regular imports
-import { AutoSaveIndicator } from '@/components/session/auto-save-indicator'
 import { ThemeProvider } from '@/components/dashboard/theme-provider'
 import { ShareDialog } from '@/components/dashboard/share-dialog'
 import { SaveDashboardButton } from '@/components/dashboard/save-dashboard-button'
 import { useProjectStore } from '@/lib/stores/project-store'
 import { useAuth } from '@/lib/contexts/auth-context'
-import { filterValidCharts } from '@/lib/utils/chart-validator'
 import { FullscreenDataTable } from '@/components/dashboard/fullscreen-data-table'
 import { ScorecardCalculationDetails } from '@/components/dashboard/scorecard-calculation-details'
-import { DataCalculator } from '@/lib/utils/data-calculations'
 import type { AggregationType } from '@/lib/utils/data-calculations'
 import { DateRangeSelector } from '@/components/dashboard/date-range-selector'
 
@@ -75,7 +68,6 @@ function DashboardContent() {
       }
     }
   }, [projectId, sessionId, directId, router])
-  const [showFullScreenChart, setShowFullScreenChart] = useState<string | null>(null)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [showShareDialog, setShowShareDialog] = useState(false)
   const [highlightedRow, setHighlightedRow] = useState<any>(null)
@@ -84,21 +76,8 @@ function DashboardContent() {
   const toggleSidebar = React.useCallback(() => {
     setIsSidebarCollapsed(prev => !prev)
   }, [])
-  const [isCustomizeMode, setIsCustomizeMode] = useState(false)
-  // Chart settings now managed by store
-  
   // View state - simplified to dashboard and schema toggle
   const [currentView, setCurrentView] = useState<'dashboard' | 'schema'>('dashboard')
-
-  // UI Store selectors
-  const setIsCustomizing = useUIStore(state => state.setIsCustomizing)
-  const selectedChartId = useUIStore(state => state.selectedChartId)
-  const setSelectedChartId = useUIStore(state => state.setSelectedChartId)
-  const showChartSettings = useUIStore(state => state.showChartSettings)
-  const setShowChartSettings = useUIStore(state => state.setShowChartSettings)
-
-  // Chart Store selectors
-  const updateChartCustomization = useChartStore(state => state.updateChartCustomization)
 
   // Track if analysis has been initiated to prevent multiple calls
   const analysisInitiatedRef = React.useRef(false)
@@ -121,23 +100,14 @@ function DashboardContent() {
   const rawData = useDataStore(state => state.rawData)
   const dataId = useDataStore(state => state.dataId)
   const analysis = useDataStore(state => state.analysis)
-  const setAnalysis = useDataStore(state => state.setAnalysis)
   const isAnalyzing = useDataStore(state => state.isAnalyzing)
-  const setIsAnalyzing = useDataStore(state => state.setIsAnalyzing)
   const analysisProgress = useDataStore(state => state.analysisProgress)
-  const setAnalysisProgress = useDataStore(state => state.setAnalysisProgress)
   const usingAI = useDataStore(state => state.usingAI)
-  const setUsingAI = useDataStore(state => state.setUsingAI)
   const error = useDataStore(state => state.error)
-  const setError = useDataStore(state => state.setError)
-  const setFileName = useDataStore(state => state.setFileName)
-  const setRawData = useDataStore(state => state.setRawData)
-  const setDataSchema = useDataStore(state => state.setDataSchema)
 
   // Session Store selectors
   const currentSession = useSessionStore(state => state.currentSession)
   const loadSession = useSessionStore(state => state.loadSession)
-  const exportSession = useSessionStore(state => state.exportSession)
 
   // UI Store selectors for fullscreen
   const showFullScreen = useUIStore(state => state.showFullScreen)
@@ -146,8 +116,6 @@ function DashboardContent() {
 
   // Chart Store selectors
   const currentTheme = useChartStore(state => state.currentTheme)
-  const batchUpdateChartCustomizations = useChartStore(state => state.batchUpdateChartCustomizations)
-  const chartCustomizations = useChartStore(state => state.chartCustomizations)
 
   // Reset function - combines resets from multiple stores
   const reset = React.useCallback(() => {
@@ -159,15 +127,18 @@ function DashboardContent() {
 
 
   const { user, logout } = useAuth()
-  const { getProjectData, loadProjectDataAsync, loadProject, setCurrentProject, saveProjectData } = useProjectStore()
+  const { getProjectData, loadProjectDataAsync, setCurrentProject, saveProjectData } = useProjectStore()
 
   const performAnalysis = React.useCallback(async (skipDuplicateCheck = false) => {
     if (!rawData || rawData.length === 0) {
       return
     }
 
+    // Get isAnalyzing from store to avoid stale closure
+    const currentIsAnalyzing = useDataStore.getState().isAnalyzing
+
     // Prevent multiple simultaneous analysis calls (unless we're in recovery mode)
-    if (isAnalyzing && !skipDuplicateCheck) {
+    if (currentIsAnalyzing && !skipDuplicateCheck) {
       return
     }
 
@@ -180,7 +151,7 @@ function DashboardContent() {
 
     try {
       // CRITICAL FIX: analyzeData returns { promise, cancel }, not a Promise directly
-      const { promise, cancel } = analyzeData(rawData, (progress, usingAI) => {
+      const { promise } = analyzeData(rawData, (progress, usingAI) => {
         setAnalysisProgress(progress)
         setUsingAI(usingAI)
       })
@@ -192,7 +163,7 @@ function DashboardContent() {
 
       // CRITICAL FIX: Initialize chart positions immediately after AI analysis
       // This prevents charts from appearing as 1x1 stacked layout
-      console.log('🎯 [DASHBOARD] Initializing chart positions for AI analysis')
+      logger.debug('[DASHBOARD] Initializing chart positions for AI analysis')
 
       // Calculate positions for all charts using the same logic as reset layout
       const chartPositions: Record<string, { position: { x: number, y: number, w: number, h: number } }> = {}
@@ -283,20 +254,22 @@ function DashboardContent() {
       })
 
       // Apply the calculated positions to the chart store
-      console.log('📐 [DASHBOARD] Applying initial positions to chart store:', {
+      logger.debug('[DASHBOARD] Applying initial positions to chart store', {
         totalCharts: result.chartConfig.length,
         scorecards: scorecards.length,
         tables: tables.length,
         otherCharts: otherCharts.length
       })
 
-      batchUpdateChartCustomizations(chartPositions)
+      // Get batchUpdateChartCustomizations from store to avoid dependency issues
+      const { batchUpdateChartCustomizations: batchUpdate } = useChartStore.getState()
+      batchUpdate(chartPositions)
 
       // Auto-save the INITIAL AI-generated analysis to database
       // This only happens for new analysis, not for user customizations
       const currentProjectId = directId || projectId
       if (currentProjectId) {
-        console.log('💾 [DASHBOARD] Auto-saving initial AI analysis to database:', {
+        logger.info('[DASHBOARD] Auto-saving initial AI analysis to database', {
           projectId: currentProjectId,
           chartCount: result.chartConfig?.length || 0
         })
@@ -308,9 +281,9 @@ function DashboardContent() {
             result,
             dataSchema || undefined
           )
-          console.log('✅ [DASHBOARD] Initial analysis saved to database')
+          logger.info('[DASHBOARD] Initial analysis saved to database')
         } catch (error) {
-          console.error('❌ [DASHBOARD] Failed to save initial analysis:', error)
+          logger.error('[DASHBOARD] Failed to save initial analysis', error)
           // Don't throw - this shouldn't block the UI
         }
       }
@@ -319,14 +292,14 @@ function DashboardContent() {
       analysisInitiatedRef.current = false
 
     } catch (error) {
-      console.error('❌ [DASHBOARD] Analysis error:', error)
+      logger.error('[DASHBOARD] Analysis error', error)
       // Clear any stale analysis state on error
       setAnalysis(null)
       setError(error instanceof Error ? error.message : 'Analysis failed')
     } finally {
       setIsAnalyzing(false)
     }
-  }, [rawData, analysis, directId, projectId, saveProjectData])
+  }, [rawData, directId, projectId, saveProjectData])
 
   // Single consolidated effect for loading and analysis
   useEffect(() => {
@@ -345,7 +318,7 @@ function DashboardContent() {
     const hasDataInStore = (storeState.rawData && storeState.rawData.length > 0) ||
                            (!!storeState.dataId && hasValidAnalysis)
 
-    console.log('🔍 [DASHBOARD] Effect running:', {
+    logger.debug('[DASHBOARD] Effect running', {
       directId,
       hasDataInStore,
       hasRawData: !!(storeState.rawData && storeState.rawData.length > 0),
@@ -357,8 +330,8 @@ function DashboardContent() {
     // If we have a directId but NO data in store, load from API
     // This handles the case where user refreshes the page or comes from a saved project
     if (directId && !hasDataInStore && loadedProjectIdRef.current !== directId) {
-      console.log('🔵 [DASHBOARD] No data in store, loading from API:', directId)
-      console.log('🔵 [DASHBOARD] Setting current project:', directId)
+      logger.info('[DASHBOARD] No data in store, loading from API', { directId })
+      logger.debug('[DASHBOARD] Setting current project', { directId })
       setCurrentProject(directId)
       loadedProjectIdRef.current = directId
       setIsLoadingFromAPI(true)
@@ -389,7 +362,7 @@ function DashboardContent() {
           }
 
           const projectData = await response.json()
-          console.log('✅ [DASHBOARD] Project data loaded from API')
+          logger.info('[DASHBOARD] Project data loaded from API')
 
           if (projectData.data && projectData.data.length > 0) {
             const { setFileName, setRawData, setAnalysis, setDataSchema } = useDataStore.getState()
@@ -398,14 +371,14 @@ function DashboardContent() {
 
             // CRITICAL: Check for saved dashboard config BEFORE setting rawData
             // This prevents the analysis effect from triggering prematurely
-            console.log('🔍 [DASHBOARD] Checking for saved dashboard config...')
+            logger.debug('[DASHBOARD] Checking for saved dashboard config')
             const { loadDashboardConfig } = useProjectStore.getState()
             const savedConfig = await loadDashboardConfig(directId)
 
             // Set this flag early to prevent AI analysis from triggering
             if (savedConfig && savedConfig.chartCustomizations && Object.keys(savedConfig.chartCustomizations).length > 0) {
               analysisInitiatedRef.current = true
-              console.log('✅ [DASHBOARD] Found saved config, marking to skip AI analysis')
+              logger.info('[DASHBOARD] Found saved config, marking to skip AI analysis')
             }
 
             // Now safe to set rawData
@@ -416,12 +389,12 @@ function DashboardContent() {
             }
 
             if (savedConfig && savedConfig.chartCustomizations && Object.keys(savedConfig.chartCustomizations).length > 0) {
-              console.log('✅ [DASHBOARD] Found saved dashboard config, applying customizations')
+              logger.info('[DASHBOARD] Found saved dashboard config, applying customizations')
 
               // CRITICAL FIX: Apply saved customizations to the chart store
               const { batchUpdateChartCustomizations } = useChartStore.getState()
               batchUpdateChartCustomizations(savedConfig.chartCustomizations)
-              console.log('✅ [DASHBOARD] Applied saved customizations to chart store')
+              logger.debug('[DASHBOARD] Applied saved customizations to chart store')
 
               // Apply saved config to the analysis
               if (projectData.analysis) {
@@ -447,17 +420,17 @@ function DashboardContent() {
 
                 // Mark that we don't need to run AI analysis again
                 analysisInitiatedRef.current = true
-                console.log('✅ [DASHBOARD] Loaded saved dashboard, skipping AI analysis')
+                logger.info('[DASHBOARD] Loaded saved dashboard, skipping AI analysis')
               }
 
               // Restore chat messages if they exist in saved config
               if (savedConfig.chatMessages && savedConfig.chatMessages.length > 0) {
                 const { setChatMessages } = useChatStore.getState()
                 setChatMessages(savedConfig.chatMessages)
-                console.log('✅ [DASHBOARD] Restored', savedConfig.chatMessages.length, 'chat messages from database')
+                logger.info('[DASHBOARD] Restored chat messages from database', { count: savedConfig.chatMessages.length })
               }
             } else {
-              console.log('ℹ️ [DASHBOARD] No saved config found, will use default analysis')
+              logger.info('[DASHBOARD] No saved config found, will use default analysis')
 
               // Use default analysis from project data
               if (projectData.analysis) {
@@ -472,7 +445,7 @@ function DashboardContent() {
             setIsLoadingConfig(false)
           }
         } catch (error) {
-          console.error('❌ [DASHBOARD] Failed to load from API:', error)
+          logger.error('[DASHBOARD] Failed to load from API', error)
           const { setError } = useDataStore.getState()
           setError('Failed to load project data')
           setIsLoadingConfig(false)
@@ -487,21 +460,21 @@ function DashboardContent() {
 
     // If we have data in store (from fresh upload), mark that we've handled this directId
     if (directId && hasDataInStore && loadedProjectIdRef.current !== directId) {
-      console.log('✅ [DASHBOARD] Data already in store from upload, skipping API call')
-      console.log('🔵 [DASHBOARD] Setting current project:', directId)
+      logger.info('[DASHBOARD] Data already in store from upload, skipping API call')
+      logger.debug('[DASHBOARD] Setting current project', { directId })
       setCurrentProject(directId)
       loadedProjectIdRef.current = directId
 
       // CRITICAL: If we have dataId but no rawData, we're waiting for IndexedDB load
       if (storeState.dataId && (!storeState.rawData || storeState.rawData.length === 0)) {
-        console.log('⏳ [DASHBOARD] Waiting for IndexedDB to load data...')
+        logger.debug('[DASHBOARD] Waiting for IndexedDB to load data')
         setIsWaitingForIndexedDB(true)
 
         // Set a timeout to clear the loading state if IndexedDB doesn't respond
         setTimeout(() => {
           const currentState = useDataStore.getState()
           if (currentState.dataId && (!currentState.rawData || currentState.rawData.length === 0)) {
-            console.error('❌ [DASHBOARD] IndexedDB load timed out')
+            logger.error('[DASHBOARD] IndexedDB load timed out')
             setIsWaitingForIndexedDB(false)
           }
         }, 5000)
@@ -512,7 +485,7 @@ function DashboardContent() {
 
     // If we have a project ID, load project data
     else if (projectId) {
-      console.log('🔵 [DASHBOARD] Setting current project:', projectId)
+      logger.debug('[DASHBOARD] Setting current project', { projectId })
       setCurrentProject(projectId)
 
       // CRITICAL: Set loading state SYNCHRONOUSLY before async operations
@@ -533,28 +506,28 @@ function DashboardContent() {
             const { setFileName, setRawData, setAnalysis, setDataSchema } = useDataStore.getState()
             setFileName(projectData.dataSchema?.fileName || 'Project Data')
 
-            console.log('🔍 [DASHBOARD] Loading project data:', {
+            logger.debug('[DASHBOARD] Loading project data', {
               hasAnalysis: !!projectData.analysis,
               chartCount: projectData.analysis?.chartConfig?.length || 0,
               projectId
             })
 
             // CRITICAL: Check for saved dashboard config BEFORE setting rawData
-            console.log('🔍 [DASHBOARD] Checking for saved dashboard config...')
+            logger.debug('[DASHBOARD] Checking for saved dashboard config')
             const { loadDashboardConfig } = useProjectStore.getState()
             const savedConfig = await loadDashboardConfig(projectId)
 
             // Set this flag early to prevent AI analysis from triggering
             if (savedConfig && savedConfig.chartCustomizations && Object.keys(savedConfig.chartCustomizations).length > 0) {
               analysisInitiatedRef.current = true
-              console.log('✅ [DASHBOARD] Found saved config, marking to skip AI analysis')
+              logger.info('[DASHBOARD] Found saved config, marking to skip AI analysis')
             }
 
             // Now safe to set rawData
             await setRawData(projectData.rawData)
 
             if (savedConfig && savedConfig.chartCustomizations && Object.keys(savedConfig.chartCustomizations).length > 0) {
-              console.log('✅ [DASHBOARD] Found saved dashboard config, applying customizations')
+              logger.info('[DASHBOARD] Found saved dashboard config, applying customizations')
 
               // Apply saved config to the analysis
               if (projectData.analysis) {
@@ -578,17 +551,17 @@ function DashboardContent() {
 
                 setAnalysis(updatedAnalysis)
                 analysisInitiatedRef.current = true
-                console.log('✅ [DASHBOARD] Loaded saved dashboard, skipping AI analysis')
+                logger.info('[DASHBOARD] Loaded saved dashboard, skipping AI analysis')
               }
 
               // Restore chat messages if they exist in saved config
               if (savedConfig.chatMessages && savedConfig.chatMessages.length > 0) {
                 const { setChatMessages } = useChatStore.getState()
                 setChatMessages(savedConfig.chatMessages)
-                console.log('✅ [DASHBOARD] Restored', savedConfig.chatMessages.length, 'chat messages from database')
+                logger.info('[DASHBOARD] Restored chat messages from database', { count: savedConfig.chatMessages.length })
               }
             } else {
-              console.log('ℹ️ [DASHBOARD] No saved config found, will use default analysis')
+              logger.info('[DASHBOARD] No saved config found, will use default analysis')
 
               // Use default analysis from project data
               if (projectData.analysis) {
@@ -607,7 +580,7 @@ function DashboardContent() {
             setIsLoadingConfig(false)
           }
         } catch (error) {
-          console.error('Failed to load project data:', error)
+          logger.error('Failed to load project data', error)
           const { setError } = useDataStore.getState()
           setError('Failed to load project data')
           setIsLoadingConfig(false)
@@ -634,7 +607,7 @@ function DashboardContent() {
 
     // Only log analysis once when it first loads (not on every render)
     // Removed excessive logging to reduce console noise
-  }, [rawData, analysis, sessionId, currentSession, projectId, directId, isLoadingConfig])
+  }, [rawData, analysis, sessionId, currentSession, projectId, directId, isLoadingConfig, isAnalyzing, performAnalysis, loadSession, setCurrentProject, getProjectData, loadProjectDataAsync])
 
   // Auto-open chat interface when on dashboard
   useEffect(() => {
@@ -711,13 +684,13 @@ function DashboardContent() {
   // Get filtered data for fullscreen display (must be before any conditional returns)
   const filteredData = useMemo(() => {
     const data = getFilteredData()
-    console.log('📊 [Dashboard] Filtered data for fullscreen:', {
+    logger.debug('[Dashboard] Filtered data for fullscreen', {
       dataLength: data?.length || 0,
       hasData: !!data && data.length > 0,
       sampleRow: data?.[0]
     })
     return data
-  }, [rawData, chartCustomizations]) // Dependencies: rawData and filters
+  }, []) // getFilteredData reads from stores internally, no external dependencies needed
 
   // Update message only when progress increases by 10% or more
   useEffect(() => {
@@ -736,7 +709,7 @@ function DashboardContent() {
   // Clear IndexedDB waiting state when rawData loads
   useEffect(() => {
     if (rawData && rawData.length > 0 && isWaitingForIndexedDB) {
-      console.log('✅ [DASHBOARD] IndexedDB data loaded, clearing wait state')
+      logger.info('[DASHBOARD] IndexedDB data loaded, clearing wait state')
       setIsWaitingForIndexedDB(false)
     }
   }, [rawData, isWaitingForIndexedDB])
@@ -744,7 +717,7 @@ function DashboardContent() {
   // Debug loading conditions
   // Debug: Log isAnalyzing changes
   React.useEffect(() => {
-    console.log('🔍 [DASHBOARD] isAnalyzing changed to:', isAnalyzing)
+    logger.debug('[DASHBOARD] isAnalyzing changed', { isAnalyzing })
   }, [isAnalyzing])
 
   const shouldShowLoading = isAnalyzing || // Always show loading during analysis, regardless of existing data
@@ -757,7 +730,7 @@ function DashboardContent() {
 
   // Debug: Log all loading state changes
   React.useEffect(() => {
-    console.log('🔍 [DASHBOARD] Loading state changed:', {
+    logger.debug('[DASHBOARD] Loading state changed', {
       isAnalyzing,
       shouldShowLoading,
       isLoadingFromAPI,
@@ -881,8 +854,9 @@ function DashboardContent() {
                 size="sm"
                 onClick={() => setFullScreen(null)}
                 className="h-10 w-10 p-0 hover:bg-gray-100 rounded-full"
+                aria-label="Close fullscreen view"
               >
-                <X className="h-5 w-5" />
+                <X className="h-5 w-5" aria-hidden="true" />
               </Button>
             </div>
 
@@ -903,8 +877,8 @@ function DashboardContent() {
                     isDragging={false}
                     isSelected={false}
                     onDataPointClick={(dataPoint) => {
-                      console.log('🔵 [DASHBOARD] Data point clicked:', dataPoint)
-                      console.log('🔵 [DASHBOARD] Chart type:', fullScreenChart.type)
+                      logger.debug('[DASHBOARD] Data point clicked', { dataPoint })
+                      logger.debug('[DASHBOARD] Chart type', { type: fullScreenChart.type })
 
                       // For aggregated charts, we need to pass the category/x-axis key
                       // so the table can scroll to the first matching row
@@ -914,8 +888,8 @@ function DashboardContent() {
                       }
                       const xKey = effectiveMapping?.xAxis || effectiveMapping?.category
 
-                      console.log('🔵 [DASHBOARD] Category key:', xKey)
-                      console.log('🔵 [DASHBOARD] Setting highlightedRow:', { ...dataPoint, __categoryKey: xKey })
+                      logger.debug('[DASHBOARD] Category key', { xKey })
+                      logger.debug('[DASHBOARD] Setting highlightedRow', { row: { ...dataPoint, __categoryKey: xKey } })
 
                       setHighlightedRow({ ...dataPoint, __categoryKey: xKey })
                     }}
@@ -944,14 +918,14 @@ function DashboardContent() {
                     const { processChartData } = require('@/lib/utils/chart-data-processor')
                     const processed = processChartData(filteredData, 'scorecard', effectiveMapping)
                     processedData = processed.data
-                    console.log(`📊 [FULLSCREEN_FORMULA_DEBUG] ${fullScreenChart.title}:`, {
+                    logger.debug(`[FULLSCREEN_FORMULA_DEBUG] ${fullScreenChart.title}`, {
                       formula: effectiveMapping.formula,
                       formulaAlias: effectiveMapping.formulaAlias,
                       result: processedData[0],
                       metadata: processed.metadata
                     })
                   } catch (error) {
-                    console.error(`❌ [FULLSCREEN_FORMULA_ERROR] ${fullScreenChart.title}:`, error)
+                    logger.error(`[FULLSCREEN_FORMULA_ERROR] ${fullScreenChart.title}`, error)
                   }
                 }
 
@@ -975,7 +949,7 @@ function DashboardContent() {
                   result = calculateScorecardValue(processedData, metric, aggregationType) || 0
 
                   // DEBUG: Log calculation details to compare with card calculation
-                  console.log(`🔍 [FULLSCREEN_CALC_DEBUG] ${fullScreenChart.title}:`, {
+                  logger.debug(`[FULLSCREEN_CALC_DEBUG] ${fullScreenChart.title}`, {
                     processedDataLength: processedData.length,
                     metric,
                     aggregationType,
@@ -1043,16 +1017,16 @@ function DashboardContent() {
       <div className="h-screen flex flex-col transition-colors duration-200 overflow-hidden" style={{ backgroundColor: currentTheme.colors.background, color: currentTheme.colors.text }}>
 
         {/* Simplified Header */}
-        <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-40">
+        <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-40" role="banner">
           <div className="w-full px-8 py-4 flex items-center justify-between">
             <div className="flex items-center space-x-6">
               <div className="flex items-center space-x-3">
-                <BarChart3 className="h-5 w-5 text-primary" />
+                <BarChart3 className="h-5 w-5 text-primary" aria-hidden="true" />
                 <span className="text-base font-semibold text-gray-900">{fileName}</span>
               </div>
 
               {/* Minimal navigation */}
-              <div className="flex items-center space-x-4">
+              <nav className="flex items-center space-x-4" role="navigation" aria-label="Main navigation">
                 <button
                   onClick={() => setCurrentView('dashboard')}
                   className={cn(
@@ -1061,6 +1035,8 @@ function DashboardContent() {
                       ? "text-gray-900"
                       : "text-gray-500 hover:text-gray-700"
                   )}
+                  aria-current={currentView === 'dashboard' ? 'page' : undefined}
+                  type="button"
                 >
                   Dashboard
                 </button>
@@ -1072,10 +1048,12 @@ function DashboardContent() {
                       ? "text-gray-900"
                       : "text-gray-500 hover:text-gray-700"
                   )}
+                  aria-current={currentView === 'schema' ? 'page' : undefined}
+                  type="button"
                 >
                   Data
                 </button>
-              </div>
+              </nav>
             </div>
 
             <div className="flex items-center space-x-2">
@@ -1088,8 +1066,9 @@ function DashboardContent() {
                 size="sm"
                 variant="outline"
                 className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                aria-label="Add new chart to dashboard"
               >
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
                 Add Chart
               </Button>
 
@@ -1099,8 +1078,9 @@ function DashboardContent() {
                 size="sm"
                 variant="outline"
                 className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                aria-label="Reset dashboard layout to default"
               >
-                <RotateCcw className="h-4 w-4 mr-2" />
+                <RotateCcw className="h-4 w-4 mr-2" aria-hidden="true" />
                 Reset Layout
               </Button>
 
@@ -1124,16 +1104,18 @@ function DashboardContent() {
                 size="sm"
                 onClick={handleNewUpload}
                 className="text-gray-500 hover:text-gray-700"
+                aria-label="Go back to projects"
               >
-                <ArrowLeft className="h-4 w-4" />
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowShareDialog(true)}
                 className="text-gray-500 hover:text-gray-700"
+                aria-label="Share dashboard"
               >
-                <Share2 className="h-4 w-4" />
+                <Share2 className="h-4 w-4" aria-hidden="true" />
               </Button>
 
               {/* Logout Button */}
@@ -1143,9 +1125,9 @@ function DashboardContent() {
                   variant="ghost"
                   size="sm"
                   className="text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-                  title="Sign out"
+                  aria-label="Sign out"
                 >
-                  <LogOut className="h-4 w-4" />
+                  <LogOut className="h-4 w-4" aria-hidden="true" />
                 </Button>
               )}
             </div>
@@ -1153,7 +1135,7 @@ function DashboardContent() {
         </header>
 
         {/* Main Content Layout */}
-        <div className="flex flex-1 overflow-hidden h-full" data-dashboard-container>
+        <div className="flex flex-1 overflow-hidden h-full" data-dashboard-container id="main-content">
           {/* Minimal Collapsible Sidebar */}
           {isSidebarCollapsed ? (
             <div className="border-r border-gray-200/60 flex flex-col h-full bg-white/50 w-14 transition-all duration-300">
@@ -1163,9 +1145,9 @@ function DashboardContent() {
                   size="sm"
                   onClick={toggleSidebar}
                   className="h-8 w-8 p-0 hover:bg-gray-100 text-gray-500 hover:text-gray-700"
-                  title="Expand insights"
+                  aria-label="Expand insights sidebar"
                 >
-                  <PanelLeft className="h-4 w-4" />
+                  <PanelLeft className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </div>
             </div>
@@ -1179,9 +1161,9 @@ function DashboardContent() {
                   size="sm"
                   onClick={toggleSidebar}
                   className="h-8 w-8 p-0 hover:bg-gray-100 text-gray-500 hover:text-gray-700"
-                  title="Collapse insights"
+                  aria-label="Collapse insights sidebar"
                 >
-                  <PanelLeftClose className="h-4 w-4" />
+                  <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </div>
 
@@ -1194,7 +1176,7 @@ function DashboardContent() {
 
           {/* Right Content - Clean Dashboard */}
           <div className="flex-1 flex flex-col h-full overflow-hidden bg-gray-50/30">
-            <main className="flex-1 overflow-y-auto h-full">
+            <main className="flex-1 overflow-y-auto h-full" role="main" aria-label="Dashboard content">
               {currentView === 'schema' ? (
                 <div className="p-8">
                   <EditableSchemaViewer onAIUpdateComplete={() => setCurrentView('dashboard')} />
@@ -1204,7 +1186,7 @@ function DashboardContent() {
                   {/* Enhanced Flexible Dashboard Layout */}
                   {(() => {
                     if (!analysis) {
-                      console.warn('⚠️ [DASHBOARD_PAGE] Analysis is falsy - showing empty state instead of dashboard')
+                      logger.warn('[DASHBOARD_PAGE] Analysis is falsy - showing empty state instead of dashboard')
                       return (
                         <div className="flex items-center justify-center py-32">
                           <div className="text-center space-y-4">

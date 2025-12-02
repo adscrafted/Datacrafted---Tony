@@ -44,6 +44,14 @@ import { withAuth } from '@/lib/middleware/auth'
 import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 import { db } from '@/lib/db'
 import { compressData, decompressData, formatBytes } from '@/lib/utils/compression'
+import { validateRequest, uploadProjectDataSchema } from '@/lib/utils/api-validation'
+import {
+  validateFile,
+  sanitizeFileName,
+  FILE_SIZE_LIMITS,
+  ALL_ALLOWED_MIME_TYPES,
+  type FileValidationResult,
+} from '@/lib/utils/file-validation'
 // Data validation utils were removed - using inline implementations
 // import {
 //   validateData,
@@ -354,47 +362,64 @@ const postHandler = withAuth(async (request, authUser, context) => {
     })
 
     // ========================================================================
-    // Step 1: Parse and validate request body
+    // Step 1: Parse and validate request body with Zod
     // ========================================================================
 
-    let body: ProjectDataUploadRequest
-    try {
-      body = await request.json()
-    } catch (error) {
-      console.error('[API PROJECT DATA] Invalid JSON in request body')
-      return NextResponse.json(
-        { error: 'Invalid JSON in request body' },
-        { status: 400 }
-      )
+    const validation = await validateRequest(request, uploadProjectDataSchema)
+    if (!validation.success) {
+      return validation.response
     }
 
-    const { data, analysis, chartCustomizations, metadata, version } = body
-
-    // Validate required fields
-    if (!data || !Array.isArray(data)) {
-      return NextResponse.json(
-        { error: 'Invalid data: must be an array of objects' },
-        { status: 400 }
-      )
-    }
-
-    // Validate analysis if provided
-    if (analysis && typeof analysis !== 'object') {
-      return NextResponse.json(
-        { error: 'Invalid analysis: must be an object' },
-        { status: 400 }
-      )
-    }
-
-    if (!metadata || !metadata.fileName) {
-      return NextResponse.json(
-        { error: 'Invalid metadata: fileName is required' },
-        { status: 400 }
-      )
-    }
+    const { data, analysis, chartCustomizations, metadata, version } = validation.data
 
     // ========================================================================
-    // Step 2: Authorization - Verify user owns this project
+    // Step 2: Validate file metadata for security
+    // ========================================================================
+
+    console.log('[API PROJECT DATA] Validating file metadata...')
+
+    // Calculate actual data size
+    const jsonSize = JSON.stringify(data).length
+
+    // Validate file metadata
+    const fileValidationResult: FileValidationResult = validateFile(
+      {
+        name: metadata.fileName,
+        size: metadata.fileSize || jsonSize,
+        type: metadata.mimeType || 'application/json',
+        // Note: We don't have the raw file buffer here since data is already parsed
+        // but we still validate filename, size, extension, and MIME type
+      },
+      {
+        maxSize: FILE_SIZE_LIMITS.DATA_FILE,
+        allowedMimeTypes: ALL_ALLOWED_MIME_TYPES,
+        validateMagicBytes: false, // Skip magic bytes since we only have parsed data
+        checkDoubleExtensions: true,
+      }
+    )
+
+    if (!fileValidationResult.valid) {
+      console.error('[API PROJECT DATA] File validation failed:', fileValidationResult.error)
+      return NextResponse.json(
+        {
+          error: fileValidationResult.error,
+          code: fileValidationResult.errorCode,
+        },
+        { status: fileValidationResult.httpStatus || 400 }
+      )
+    }
+
+    // Use sanitized filename
+    const sanitizedFileName = fileValidationResult.sanitizedName!
+    console.log('[API PROJECT DATA] File metadata validated:', {
+      originalFileName: metadata.fileName,
+      sanitizedFileName,
+      size: formatBytes(metadata.fileSize || jsonSize),
+      mimeType: metadata.mimeType,
+    })
+
+    // ========================================================================
+    // Step 3: Authorization - Verify user owns this project
     // ========================================================================
 
     // Get database user
@@ -432,7 +457,7 @@ const postHandler = withAuth(async (request, authUser, context) => {
     }
 
     // ========================================================================
-    // Step 3: Validate data
+    // Step 4: Validate data
     // ========================================================================
 
     console.log('[API PROJECT DATA] Validating data...')
@@ -458,8 +483,7 @@ const postHandler = withAuth(async (request, authUser, context) => {
 
     const metrics = validationResult.metrics
 
-    // Check data size
-    const jsonSize = JSON.stringify(data).length
+    // Check data size (already calculated above)
     if (jsonSize > MAX_DATA_SIZE) {
       return NextResponse.json(
         {
@@ -478,8 +502,9 @@ const postHandler = withAuth(async (request, authUser, context) => {
     })
 
     // Log warnings if any
-    if (validationResult.warnings && validationResult.warnings.length > 0) {
-      console.warn('[API PROJECT DATA] Validation warnings:', validationResult.warnings)
+    const warnings = (validationResult as { warnings?: string[] }).warnings
+    if (warnings && warnings.length > 0) {
+      console.warn('[API PROJECT DATA] Validation warnings:', warnings)
     }
 
     // ========================================================================
@@ -540,7 +565,7 @@ const postHandler = withAuth(async (request, authUser, context) => {
       data: {
         projectId,
         version: versionNumber,
-        originalFileName: metadata.fileName,
+        originalFileName: sanitizedFileName, // Use sanitized filename for security
         originalFileSize: metadata.fileSize || jsonSize,
         mimeType: metadata.mimeType || 'application/json',
         fileHash: dataHash,

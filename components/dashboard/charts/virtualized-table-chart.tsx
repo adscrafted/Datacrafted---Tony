@@ -206,7 +206,7 @@ export function VirtualizedTableChart({
   // Calculate total width for horizontal scrolling
   const totalWidth = useMemo(() => {
     return Array.from(columnWidths.current.values()).reduce((sum, width) => sum + width, 0)
-  }, [dataKey])
+  }, []) // columnWidths is a ref, doesn't need dependencies
 
   if (!data || data.length === 0) {
     return (

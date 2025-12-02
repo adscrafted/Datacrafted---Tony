@@ -9,6 +9,7 @@ import type {
 } from '@/lib/types/recommendation'
 import { analyzeDataSchema } from '@/lib/utils/schema-analyzer'
 import { parseJSONFromString } from '@/lib/utils/json-extractor'
+import { validateRequest, recommendationsRefreshRequestSchema } from '@/lib/utils/api-validation'
 
 // Rate limiting (shared with analyze endpoint)
 const requestCounts = new Map<string, { count: number; resetTime: number }>()
@@ -414,7 +415,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Parse request body
+    // Validate request body with Zod
+    const validation = await validateRequest(request, recommendationsRefreshRequestSchema)
+    if (!validation.success) {
+      return validation.response
+    }
+
     const {
       dataId,
       data,
@@ -425,7 +431,7 @@ export async function POST(request: NextRequest) {
       focus = 'all',
       limit = 10,
       activeFilters
-    }: RefreshRequest = await request.json()
+    } = validation.data
 
     console.log('🔍 [API-REFRESH] Request parsed:', {
       hasDataId: !!dataId,
@@ -440,25 +446,9 @@ export async function POST(request: NextRequest) {
       limit
     })
 
-    // Validate data
-    if (!data || !Array.isArray(data) || data.length === 0) {
-      return NextResponse.json(
-        { error: 'Invalid or missing data. Please provide a valid data array.' },
-        { status: 400 }
-      )
-    }
-
-    // Validate focus
-    if (!['trends', 'comparisons', 'distributions', 'kpis', 'all'].includes(focus)) {
-      return NextResponse.json(
-        { error: 'Invalid focus area. Must be one of: trends, comparisons, distributions, kpis, all' },
-        { status: 400 }
-      )
-    }
-
     // Analyze data structure
     console.log('🔵 [API-REFRESH] Analyzing data structure...')
-    const dataStructure = analyzeDataStructure(data)
+    const dataStructure = analyzeDataStructure((data || []) as DataRow[])
 
     // Build focused prompt
     console.log('🔍 [API-REFRESH] Building focused prompt:', {
@@ -472,11 +462,11 @@ export async function POST(request: NextRequest) {
     const prompt = buildFocusedPrompt(
       dataStructure,
       focus,
-      schema,
-      correctedSchema,
+      schema as DataSchema | undefined,
+      correctedSchema as CorrectedColumn[] | undefined,
       excludedTypes,
       limit,
-      activeFilters
+      activeFilters as ActiveFilter[] | undefined
     )
 
     // Call OpenAI API
@@ -550,7 +540,7 @@ export async function POST(request: NextRequest) {
     const correctedColumnNames = correctedSchema?.map(c => c.name) || []
     recommendations = recommendations.map((rec: ChartRecommendation) => ({
       ...rec,
-      qualityScore: calculateQualityScore(rec, schema, correctedColumnNames),
+      qualityScore: calculateQualityScore(rec, schema as DataSchema | undefined, correctedColumnNames),
       metadata: {
         usesUserCorrections: correctedColumnNames.length > 0,
         correctedColumns: correctedColumnNames,

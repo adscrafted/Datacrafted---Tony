@@ -298,7 +298,7 @@ export const useDataStore = create<DataStore>()(
         // Otherwise, load from IndexedDB
         if (state.dataId) {
           try {
-            logger.log('📥 [DATA_STORE] Loading data from IndexedDB:', state.dataId)
+            logger.log('📥 [DATA_STORE] Loading data from IndexedDB', { dataId: state.dataId })
             const data = await dataStorage.loadData(state.dataId)
             if (data) {
               set({ rawData: data })
@@ -359,7 +359,7 @@ export const useDataStore = create<DataStore>()(
           if (rehydratedState) {
             // Load data from IndexedDB after store hydration
             if (rehydratedState.dataId && !rehydratedState.rawData?.length) {
-              logger.log('📥 [DATA_STORE] Rehydrating data from IndexedDB:', rehydratedState.dataId)
+              logger.log('📥 [DATA_STORE] Rehydrating data from IndexedDB', { dataId: rehydratedState.dataId })
               dataStorage.loadData(rehydratedState.dataId).then(data => {
                 if (data) {
                   useDataStore.setState({ rawData: data })

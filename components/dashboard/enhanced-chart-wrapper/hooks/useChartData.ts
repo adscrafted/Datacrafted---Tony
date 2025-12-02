@@ -452,5 +452,5 @@ export function useChartData({
     }
 
     return processedData
-  }, [data, type, title, effectiveMapping, customization?.filters, schema])
+  }, [data, type, title, effectiveMapping, customization?.filters, schema, configDataMapping, customization?.dataMapping])
 }

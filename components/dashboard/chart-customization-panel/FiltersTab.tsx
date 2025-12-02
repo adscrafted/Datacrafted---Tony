@@ -153,7 +153,7 @@ export function FiltersTab({
           <Filter className="h-8 w-8 mx-auto mb-2 opacity-50" />
           <p className="text-sm">No filters applied</p>
           <p className="text-xs mt-1">
-            Add filters to customize this chart's data
+            Add filters to customize this chart&apos;s data
           </p>
         </div>
       )}

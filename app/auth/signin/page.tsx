@@ -1,6 +1,10 @@
 'use client'
 
+import type { Metadata } from 'next'
 import React, { useState } from 'react'
+
+// Note: Metadata export only works in Server Components
+// For this Client Component, SEO is handled via document head manipulation
 import { useRouter } from 'next/navigation'
 import { BarChart3, Loader2, Mail, Lock, Chrome } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -64,7 +68,7 @@ export default function SignInPage() {
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" aria-hidden="true" />
                 <Input
                   id="email"
                   type="email"
@@ -74,13 +78,15 @@ export default function SignInPage() {
                   className="pl-10"
                   required
                   disabled={isLoading}
+                  aria-invalid={!!error}
+                  aria-describedby={error ? 'signin-error' : undefined}
                 />
               </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" aria-hidden="true" />
                 <Input
                   id="password"
                   type="password"
@@ -90,12 +96,14 @@ export default function SignInPage() {
                   className="pl-10"
                   required
                   disabled={isLoading}
+                  aria-invalid={!!error}
+                  aria-describedby={error ? 'signin-error' : undefined}
                 />
               </div>
             </div>
-            
+
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-md p-3">
+              <div id="signin-error" role="alert" className="bg-red-50 border border-red-200 rounded-md p-3">
                 <p className="text-sm text-red-600">{error}</p>
               </div>
             )}
@@ -130,8 +138,9 @@ export default function SignInPage() {
             className="w-full"
             onClick={handleGoogleSignIn}
             disabled={isLoading}
+            aria-label="Sign in with Google"
           >
-            <Chrome className="mr-2 h-4 w-4" />
+            <Chrome className="mr-2 h-4 w-4" aria-hidden="true" />
             Sign in with Google
           </Button>
 

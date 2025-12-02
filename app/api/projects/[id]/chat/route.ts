@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { withAuth } from '@/lib/middleware/auth'
 import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
+import { validateRequest, projectChatMessageSchema } from '@/lib/utils/api-validation'
 
 // GET /api/projects/[id]/chat
 // Loads all chat messages for the project's auto-conversation
@@ -131,23 +132,13 @@ const postHandler = withAuth(async (request, authUser, context) => {
       )
     }
 
-    // Parse request body
-    const body = await request.json()
-    const { role, content, metadata } = body
-
-    if (!role || !content) {
-      return NextResponse.json(
-        { error: 'Missing required fields: role and content' },
-        { status: 400 }
-      )
+    // Validate request body with Zod
+    const validation = await validateRequest(request, projectChatMessageSchema)
+    if (!validation.success) {
+      return validation.response
     }
 
-    if (!['user', 'assistant'].includes(role)) {
-      return NextResponse.json(
-        { error: 'Invalid role. Must be "user" or "assistant"' },
-        { status: 400 }
-      )
-    }
+    const { role, content, metadata } = validation.data
 
     // Find or create the auto-conversation for this project
     let conversation = await db.chatConversation.findFirst({

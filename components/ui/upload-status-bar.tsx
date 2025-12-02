@@ -86,6 +86,9 @@ export function UploadStatusBar() {
 
   return (
     <div
+      role="region"
+      aria-live="polite"
+      aria-label="Upload progress"
       className={cn(
         "fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50",
         "transition-transform duration-300 ease-out",
@@ -115,16 +118,24 @@ export function UploadStatusBar() {
             <button
               onClick={handleDismiss}
               className="p-1 hover:bg-gray-100 rounded-md transition-colors"
-              aria-label="Dismiss"
+              aria-label="Dismiss upload notification"
+              type="button"
             >
-              <X className="h-4 w-4 text-gray-500" />
+              <X className="h-4 w-4 text-gray-500" aria-hidden="true" />
             </button>
           )}
         </div>
 
         {/* Progress Bar */}
         <div className="mb-3">
-          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div
+            className="h-2 bg-gray-100 rounded-full overflow-hidden"
+            role="progressbar"
+            aria-valuenow={Math.round(uploadProgress)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Upload progress"
+          >
             <div
               className={cn(
                 "h-full transition-all duration-500 ease-out",
@@ -133,7 +144,7 @@ export function UploadStatusBar() {
               style={{ width: `${uploadProgress}%` }}
             />
           </div>
-          <p className="text-xs text-gray-500 mt-1 text-right">
+          <p className="text-xs text-gray-500 mt-1 text-right" aria-live="polite">
             {Math.round(uploadProgress)}%
           </p>
         </div>

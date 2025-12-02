@@ -5,6 +5,7 @@ import type { EnhancedAnalysisResult } from '@/lib/types/recommendation'
 import { projectDataStorage } from '@/lib/project-data-storage'
 import { auth } from '@/lib/config/firebase'
 import { retryWithBackoff } from '@/lib/utils/retry'
+import { logger } from '@/lib/utils/logger'
 
 export interface Project {
   id: string
@@ -109,21 +110,21 @@ export const useProjectStore = create<ProjectStore>()(
       lastSavedAt: null,
 
       createProject: async (projectData) => {
-        console.log('🔵 [PROJECT_STORE] createProject called with:', projectData)
-        console.log('🔍 [PROJECT_STORE] Current projects count:', get().projects.length)
+        logger.debug('[PROJECT_STORE] createProject called', { projectData })
+        logger.debug('[PROJECT_STORE] Current projects count', { count: get().projects.length })
 
         // Import and check auth state FIRST
         const { auth: firebaseAuth } = await import('@/lib/config/firebase')
         const isAuthenticated = !!firebaseAuth.currentUser
 
-        console.log('🔍 [PROJECT_STORE] Auth check:', {
+        logger.debug('[PROJECT_STORE] Auth check', {
           isAuthenticated,
           userId: firebaseAuth.currentUser?.uid
         })
 
         // If NOT authenticated, skip API call and create locally
         if (!isAuthenticated) {
-          console.warn('⚠️ [PROJECT_STORE] User not authenticated, creating project locally')
+          logger.warn('[PROJECT_STORE] User not authenticated, creating project locally')
 
           const newProject: Project = {
             ...projectData,
@@ -134,23 +135,23 @@ export const useProjectStore = create<ProjectStore>()(
             status: 'active'
           }
 
-          console.log('🆕 [PROJECT_STORE] Generated local project:', { id: newProject.id, name: newProject.name })
+          logger.info('[PROJECT_STORE] Generated local project', { id: newProject.id, name: newProject.name })
 
           set((state) => ({
             projects: [...state.projects, newProject]
           }))
 
-          console.log('🏁 [PROJECT_STORE] Local project created successfully:', newProject.id)
+          logger.info('[PROJECT_STORE] Local project created successfully', { projectId: newProject.id })
           return newProject
         }
 
         // User IS authenticated - try API creation
         try {
-          console.log('🌐 [PROJECT_STORE] User authenticated, creating project via API...')
+          logger.info('[PROJECT_STORE] User authenticated, creating project via API')
 
           const token = await firebaseAuth.currentUser?.getIdToken()
 
-          console.log('🔍 [PROJECT_STORE] Token retrieved:', {
+          logger.debug('[PROJECT_STORE] Token retrieved', {
             hasToken: !!token,
             tokenLength: token?.length || 0
           })
@@ -164,7 +165,7 @@ export const useProjectStore = create<ProjectStore>()(
             body: JSON.stringify(projectData)
           })
 
-          console.log('🔍 [PROJECT_STORE] API response:', {
+          logger.debug('[PROJECT_STORE] API response', {
             status: response.status,
             ok: response.ok
           })
@@ -172,7 +173,7 @@ export const useProjectStore = create<ProjectStore>()(
           if (response.ok) {
             const data = await response.json()
 
-            console.log('🔍 [PROJECT_STORE] API response data:', {
+            logger.debug('[PROJECT_STORE] API response data', {
               hasProject: !!data.project,
               projectId: data.project?.id,
               fullData: data
@@ -185,7 +186,7 @@ export const useProjectStore = create<ProjectStore>()(
                 status: 'active'
               }
 
-              console.log('✅ [PROJECT_STORE] Project created via API:', newProject.id)
+              logger.info('[PROJECT_STORE] Project created via API', { projectId: newProject.id })
 
               // Add to local state
               set((state) => ({
@@ -194,16 +195,16 @@ export const useProjectStore = create<ProjectStore>()(
 
               return newProject
             } else {
-              console.warn('⚠️ [PROJECT_STORE] API returned success but no project data, falling back to local')
+              logger.warn('[PROJECT_STORE] API returned success but no project data, falling back to local')
               throw new Error('No project data in API response')
             }
           } else {
-            console.warn('⚠️ [PROJECT_STORE] API project creation failed, falling back to local')
+            logger.warn('[PROJECT_STORE] API project creation failed, falling back to local')
             throw new Error('API creation failed')
           }
         } catch (error) {
           // Fallback to local creation if API fails
-          console.warn('⚠️ [PROJECT_STORE] API failed, creating project locally:', error)
+          logger.warn('[PROJECT_STORE] API failed, creating project locally', { error })
 
           const newProject: Project = {
             ...projectData,
@@ -214,13 +215,13 @@ export const useProjectStore = create<ProjectStore>()(
             status: 'active'
           }
 
-          console.log('🆕 [PROJECT_STORE] Generated local project:', { id: newProject.id, name: newProject.name })
+          logger.info('[PROJECT_STORE] Generated local project', { id: newProject.id, name: newProject.name })
 
           set((state) => ({
             projects: [...state.projects, newProject]
           }))
 
-          console.log('🏁 [PROJECT_STORE] createProject completed (local fallback), returning:', newProject.id)
+          logger.info('[PROJECT_STORE] createProject completed (local fallback)', { projectId: newProject.id })
           return newProject
         }
       },
@@ -256,11 +257,11 @@ export const useProjectStore = create<ProjectStore>()(
       },
 
       loadProjects: async (userId) => {
-        console.log('🔵 [PROJECT_STORE] loadProjects called for userId:', userId)
+        logger.debug('[PROJECT_STORE] loadProjects called', { userId })
         set({ isLoading: true, error: null })
         try {
           // Fetch projects from the backend API
-          console.log('🌐 [PROJECT_STORE] Fetching projects from API...')
+          logger.info('[PROJECT_STORE] Fetching projects from API')
           const response = await fetch('/api/projects', {
             headers: {
               'Authorization': `Bearer ${await import('@/lib/config/firebase').then(m => m.auth.currentUser?.getIdToken())}`
@@ -273,11 +274,11 @@ export const useProjectStore = create<ProjectStore>()(
 
           const data = await response.json()
           const fetchedProjects = data.projects || []
-          console.log('📦 [PROJECT_STORE] Fetched', fetchedProjects.length, 'projects from API')
+          logger.info('[PROJECT_STORE] Fetched projects from API', { count: fetchedProjects.length })
 
           // Merge with local projects (keep local-only projects for offline support)
           const localProjects = get().projects
-          console.log('💾 [PROJECT_STORE] Local projects count:', localProjects.length)
+          logger.debug('[PROJECT_STORE] Local projects count', { count: localProjects.length })
 
           // Create a map of fetched projects by ID for quick lookup
           const fetchedProjectsMap = new Map(fetchedProjects.map((p: Project) => [p.id, p]))
@@ -304,18 +305,18 @@ export const useProjectStore = create<ProjectStore>()(
             ...localProjects.filter(p => !fetchedProjectsMap.has(p.id) && p.userId === userId)
           ]
 
-          console.log('✅ [PROJECT_STORE] Merged projects count:', mergedProjects.length)
+          logger.info('[PROJECT_STORE] Merged projects', { count: mergedProjects.length })
 
           // Update the store with merged projects
           set({ projects: mergedProjects, isLoading: false })
         } catch (error) {
-          console.error('❌ [PROJECT_STORE] Error in loadProjects:', error)
+          logger.error('[PROJECT_STORE] Error in loadProjects', error)
 
           // Fallback to local projects if API fails
-          console.warn('⚠️ [PROJECT_STORE] Falling back to local projects')
+          logger.warn('[PROJECT_STORE] Falling back to local projects')
           const allProjects = get().projects
           const userProjects = allProjects.filter(p => p.userId === userId && p.status !== 'deleted')
-          console.log('💾 [PROJECT_STORE] Using', userProjects.length, 'local projects as fallback')
+          logger.info('[PROJECT_STORE] Using local projects as fallback', { count: userProjects.length })
 
           set({
             error: error instanceof Error ? error.message : 'Failed to load projects',
@@ -338,7 +339,7 @@ export const useProjectStore = create<ProjectStore>()(
       },
 
       saveProjectData: async (projectId, data, analysis, schema) => {
-        console.log('🔵 [PROJECT_STORE] saveProjectData called:', {
+        logger.debug('[PROJECT_STORE] saveProjectData called', {
           projectId,
           dataRows: data.length,
           hasAnalysis: !!analysis,
@@ -360,7 +361,7 @@ export const useProjectStore = create<ProjectStore>()(
         // Step 1: Try to save to database API first (with retry)
         try {
           // Debug auth state
-          console.log('🔍 [PROJECT_STORE] Auth check:', {
+          logger.debug('[PROJECT_STORE] Auth check', {
             hasAuth: !!auth,
             hasCurrentUser: !!auth.currentUser,
             userId: auth.currentUser?.uid
@@ -368,17 +369,17 @@ export const useProjectStore = create<ProjectStore>()(
 
           const token = await auth.currentUser?.getIdToken()
 
-          console.log('🔍 [PROJECT_STORE] Token for data save:', {
+          logger.debug('[PROJECT_STORE] Token for data save', {
             hasToken: !!token,
             tokenLength: token?.length || 0
           })
 
           if (!token) {
-            console.warn('⚠️ [PROJECT_STORE] No auth token available, skipping database save')
+            logger.warn('[PROJECT_STORE] No auth token available, skipping database save')
             throw new Error('No authentication token available')
           }
 
-          console.log('🌐 [PROJECT_STORE] Attempting to save data via API with retry...')
+          logger.info('[PROJECT_STORE] Attempting to save data via API with retry')
 
           // Save to database API with retry logic
           await retryWithBackoff(
@@ -408,7 +409,7 @@ export const useProjectStore = create<ProjectStore>()(
               }
 
               const result = await response.json()
-              console.log('✅ [PROJECT_STORE] Data saved to database successfully:', {
+              logger.info('[PROJECT_STORE] Data saved to database successfully', {
                 id: result.id,
                 version: result.version,
                 rowCount: result.metadata.rowCount
@@ -420,7 +421,7 @@ export const useProjectStore = create<ProjectStore>()(
               maxRetries: 3,
               initialDelay: 1000,
               onRetry: (attempt, error) => {
-                console.log(`🔄 [PROJECT_STORE] API save retry ${attempt}/3:`, error.message)
+                logger.debug('[PROJECT_STORE] API save retry', { attempt, maxRetries: 3, error: error.message })
               }
             }
           )
@@ -430,18 +431,18 @@ export const useProjectStore = create<ProjectStore>()(
           apiError = error instanceof Error ? error : new Error(String(error))
           // Silently handle database connection issues
           if (apiError.message.includes('database') || apiError.message.includes('Prisma') || apiError.message.includes('5432')) {
-            console.warn('⚠️ [PROJECT_STORE] Database unavailable, continuing with local storage only')
+            logger.warn('[PROJECT_STORE] Database unavailable, continuing with local storage only')
           } else {
-            console.error('❌ [PROJECT_STORE] API save failed after retries:', apiError.message)
+            logger.error('[PROJECT_STORE] API save failed after retries', apiError)
           }
           // Don't throw yet - try IndexedDB first
         }
 
         // Step 2: Save to IndexedDB as backup/fallback (for offline support)
         try {
-          console.log('💾 [PROJECT_STORE] Saving to IndexedDB as backup...')
+          logger.info('[PROJECT_STORE] Saving to IndexedDB as backup')
           const dataStorageId = await projectDataStorage.saveProjectData(projectId, data, analysis, schema)
-          console.log('✅ [PROJECT_STORE] Data saved to IndexedDB:', dataStorageId)
+          logger.info('[PROJECT_STORE] Data saved to IndexedDB', { dataStorageId })
           savedToIndexedDB = true
 
           // Step 3: Update project metadata in store
@@ -465,7 +466,7 @@ export const useProjectStore = create<ProjectStore>()(
             )
           }))
         } catch (indexedDBError) {
-          console.error('❌ [PROJECT_STORE] Failed to save to IndexedDB:', indexedDBError)
+          logger.error('[PROJECT_STORE] Failed to save to IndexedDB', indexedDBError)
 
           // If both API and IndexedDB failed, this is critical
           if (!savedToDatabase) {
@@ -478,7 +479,7 @@ export const useProjectStore = create<ProjectStore>()(
         }
 
         // Summary and result
-        console.log('🏁 [PROJECT_STORE] saveProjectData completed:', {
+        logger.info('[PROJECT_STORE] saveProjectData completed', {
           savedToDatabase,
           savedToIndexedDB
         })
@@ -487,14 +488,14 @@ export const useProjectStore = create<ProjectStore>()(
         // Just log a warning if it's not a database connection issue
         if (!savedToDatabase && savedToIndexedDB) {
           if (apiError && !apiError.message.includes('database') && !apiError.message.includes('Prisma') && !apiError.message.includes('5432')) {
-            console.warn('⚠️ [PROJECT_STORE] Data saved locally only. Database sync may be needed later.')
+            logger.warn('[PROJECT_STORE] Data saved locally only. Database sync may be needed later')
           }
           // Don't throw error - continue normally
         }
 
         // If database saved but IndexedDB failed, log warning but don't throw
         if (savedToDatabase && !savedToIndexedDB) {
-          console.warn('⚠️ [PROJECT_STORE] Data saved to database but IndexedDB backup failed')
+          logger.warn('[PROJECT_STORE] Data saved to database but IndexedDB backup failed')
         }
 
         // Both succeeded or database succeeded - return success
@@ -513,24 +514,24 @@ export const useProjectStore = create<ProjectStore>()(
       },
 
       loadProjectDataAsync: async (projectId) => {
-        console.log('🔵 [PROJECT_STORE] loadProjectDataAsync called:', projectId)
+        logger.debug('[PROJECT_STORE] loadProjectDataAsync called', { projectId })
 
         // Check if already loading - return the existing promise
         const existingPromise = get().loadingPromises.get(projectId)
         if (existingPromise) {
-          console.log('🔄 [PROJECT_STORE] Reusing existing load promise for:', projectId)
+          logger.debug('[PROJECT_STORE] Reusing existing load promise', { projectId })
           return existingPromise
         }
 
         const project = get().projects.find(p => p.id === projectId)
         if (!project) {
-          console.warn('⚠️ [PROJECT_STORE] Project not found:', projectId)
+          logger.warn('[PROJECT_STORE] Project not found', { projectId })
           return null
         }
 
         // If data is in localStorage, return it immediately (fastest)
         if (project.debugData) {
-          console.log('✅ [PROJECT_STORE] Returning data from localStorage (debugData)')
+          logger.debug('[PROJECT_STORE] Returning data from localStorage (debugData)')
           return {
             rawData: project.debugData.rawData,
             analysis: project.debugData.analysis,
@@ -548,7 +549,7 @@ export const useProjectStore = create<ProjectStore>()(
           try {
             // Step 1: Try to load from database API first (primary source)
             try {
-              console.log('🌐 [PROJECT_STORE] Attempting to load data from API...')
+              logger.info('[PROJECT_STORE] Attempting to load data from API')
               const token = await auth.currentUser?.getIdToken()
 
               if (token) {
@@ -561,7 +562,7 @@ export const useProjectStore = create<ProjectStore>()(
 
                 if (response.ok) {
                   const result = await response.json()
-                  console.log('✅ [PROJECT_STORE] Data loaded from database:', {
+                  logger.info('[PROJECT_STORE] Data loaded from database', {
                     version: result.version,
                     rowCount: result.metadata.rowCount,
                     isSample: result.isSample
@@ -582,22 +583,22 @@ export const useProjectStore = create<ProjectStore>()(
                   }
                 } else {
                   const errorText = await response.text()
-                  console.warn('⚠️ [PROJECT_STORE] API load failed:', response.status, errorText)
+                  logger.warn('[PROJECT_STORE] API load failed', { status: response.status, errorText })
                 }
               } else {
-                console.warn('⚠️ [PROJECT_STORE] No auth token available, skipping API load')
+                logger.warn('[PROJECT_STORE] No auth token available, skipping API load')
               }
             } catch (apiError) {
-              console.warn('⚠️ [PROJECT_STORE] API load error:', apiError)
+              logger.warn('[PROJECT_STORE] API load error', { error: apiError })
             }
 
             // Step 2: Fallback to IndexedDB if API fails
             if (project.dataStorageId) {
               try {
-                console.log('💾 [PROJECT_STORE] Loading from IndexedDB as fallback...')
+                logger.info('[PROJECT_STORE] Loading from IndexedDB as fallback')
                 const data = await projectDataStorage.loadProjectData(projectId)
                 if (data) {
-                  console.log('✅ [PROJECT_STORE] Data loaded from IndexedDB:', {
+                  logger.info('[PROJECT_STORE] Data loaded from IndexedDB', {
                     rowCount: data.rawData.length,
                     hasAnalysis: !!data.analysis,
                     hasSchema: !!data.dataSchema
@@ -605,11 +606,11 @@ export const useProjectStore = create<ProjectStore>()(
                   return data
                 }
               } catch (error) {
-                console.error('❌ [PROJECT_STORE] Failed to load project data from IndexedDB:', error)
+                logger.error('[PROJECT_STORE] Failed to load project data from IndexedDB', error)
               }
             }
 
-            console.warn('⚠️ [PROJECT_STORE] No data found in any storage location')
+            logger.warn('[PROJECT_STORE] No data found in any storage location')
             return null
           } finally {
             // Clean up loading state and promise
@@ -638,7 +639,7 @@ export const useProjectStore = create<ProjectStore>()(
 
         // Step 1: Save to database API first
         try {
-          console.log('🌐 [PROJECT_STORE] Saving dashboard config to database...')
+          logger.info('[PROJECT_STORE] Saving dashboard config to database')
           const token = await auth.currentUser?.getIdToken()
 
           if (token) {
@@ -661,16 +662,16 @@ export const useProjectStore = create<ProjectStore>()(
 
             if (response.ok) {
               const result = await response.json()
-              console.log('✅ [PROJECT_STORE] Dashboard config saved to database:', result.configId)
+              logger.info('[PROJECT_STORE] Dashboard config saved to database', { configId: result.configId })
             } else {
               const errorText = await response.text()
-              console.warn('⚠️ [PROJECT_STORE] Failed to save dashboard config to database:', errorText)
+              logger.warn('[PROJECT_STORE] Failed to save dashboard config to database', { errorText })
             }
           } else {
-            console.warn('⚠️ [PROJECT_STORE] No auth token, skipping database save')
+            logger.warn('[PROJECT_STORE] No auth token, skipping database save')
           }
         } catch (error) {
-          console.error('❌ [PROJECT_STORE] Error saving dashboard config to database:', error)
+          logger.error('[PROJECT_STORE] Error saving dashboard config to database', error)
           // Don't throw - continue with localStorage save
         }
 
@@ -692,13 +693,13 @@ export const useProjectStore = create<ProjectStore>()(
           lastSavedAt: now
         }))
 
-        console.log('✅ [PROJECT_STORE] Dashboard config saved to localStorage')
+        logger.info('[PROJECT_STORE] Dashboard config saved to localStorage')
       },
 
       loadDashboardConfig: async (projectId) => {
         // Step 1: Try to load from database API first
         try {
-          console.log('🌐 [PROJECT_STORE] Loading dashboard config from database...')
+          logger.info('[PROJECT_STORE] Loading dashboard config from database')
           const token = await auth.currentUser?.getIdToken()
 
           if (token) {
@@ -711,7 +712,7 @@ export const useProjectStore = create<ProjectStore>()(
 
             if (response.ok) {
               const result = await response.json()
-              console.log('✅ [PROJECT_STORE] Dashboard config loaded from database')
+              logger.info('[PROJECT_STORE] Dashboard config loaded from database')
 
               // Save to localStorage for quick access
               const now = new Date().toISOString()
@@ -747,25 +748,29 @@ export const useProjectStore = create<ProjectStore>()(
             } else {
               // Log specific error status for debugging
               const errorText = await response.text().catch(() => 'Unable to read error')
-              console.warn(`⚠️ [PROJECT_STORE] Failed to load dashboard config from database: ${response.status} ${response.statusText}`, errorText)
+              logger.warn('[PROJECT_STORE] Failed to load dashboard config from database', {
+                status: response.status,
+                statusText: response.statusText,
+                errorText
+              })
 
               // IMPORTANT: Don't retry on permanent errors
               // 403 = Authorization failed (user doesn't own project)
               // 404 = Project not found
               // These are not transient errors and should not trigger retries
               if (response.status === 403 || response.status === 404) {
-                console.log('ℹ️ [PROJECT_STORE] Permanent error detected, falling back to localStorage without retry')
+                logger.info('[PROJECT_STORE] Permanent error detected, falling back to localStorage without retry')
               }
             }
           } else {
-            console.warn('⚠️ [PROJECT_STORE] No auth token, skipping database load')
+            logger.warn('[PROJECT_STORE] No auth token, skipping database load')
           }
         } catch (error) {
-          console.error('❌ [PROJECT_STORE] Error loading dashboard config from database:', error)
+          logger.error('[PROJECT_STORE] Error loading dashboard config from database', error)
         }
 
         // Step 2: Fallback to localStorage
-        console.log('💾 [PROJECT_STORE] Loading dashboard config from localStorage')
+        logger.info('[PROJECT_STORE] Loading dashboard config from localStorage')
         const project = get().projects.find(p => p.id === projectId)
         if (project?.dashboardConfig) {
           const { lastModified, ...config } = project.dashboardConfig
@@ -774,7 +779,7 @@ export const useProjectStore = create<ProjectStore>()(
           return config
         }
 
-        console.log('⚠️ [PROJECT_STORE] No dashboard config found')
+        logger.warn('[PROJECT_STORE] No dashboard config found')
         return null
       },
 

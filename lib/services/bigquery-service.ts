@@ -1,5 +1,4 @@
 import type { DataRow, AnalysisResult } from '@/lib/store'
-import { DEBUG_MODE } from '@/lib/config/firebase'
 
 // BigQuery table schemas
 export interface BigQueryDataset {
@@ -18,7 +17,7 @@ export interface BigQueryConfig {
 
 class BigQueryService {
   private config: BigQueryConfig | null = null
-  private debugMode: boolean = DEBUG_MODE
+  private debugMode: boolean = process.env.NODE_ENV === 'development'
 
   constructor() {
     // In production, initialize with actual BigQuery config
@@ -179,7 +178,7 @@ class BigQueryService {
 // Singleton instance
 export const bigQueryService = new BigQueryService()
 
-// Helper function to check if we're in debug mode
-export function isDebugMode(): boolean {
-  return DEBUG_MODE
+// Helper function to check if we're in development mode (for mocking)
+export function isDevelopmentMode(): boolean {
+  return process.env.NODE_ENV === 'development'
 }

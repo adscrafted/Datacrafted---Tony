@@ -14,6 +14,7 @@ import { parseFileOptimized, cleanupFileParser, type ParseProgress } from '@/lib
 import { startTiming, endTiming, recordMetric, measureAsyncFunction } from '@/lib/utils/performance-monitor'
 import { transitions, prefersReducedMotion } from '@/lib/utils/animations'
 import { prefetchDashboardResources, shouldPrefetch } from '@/lib/utils/preloader'
+import { logger } from '@/lib/utils/logger'
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 
@@ -133,18 +134,18 @@ export function FileUploadCore({
 
   // Function to handle the actual file processing
   const handleFileProcessing = useCallback(async (file: File) => {
-    console.log('🔵 [FILE-UPLOAD] Starting upload process for:', file.name)
+    logger.info('[FILE-UPLOAD] Starting upload process', { fileName: file.name })
 
     // CRITICAL: Clear all previous data before uploading new file
     // This prevents old schema descriptions from persisting
-    console.log('🧹 [FILE-UPLOAD] Clearing previous data from store and localStorage')
+    logger.debug('[FILE-UPLOAD] Clearing previous data from store and localStorage')
     clearData()
 
     // Start upload process
     setIsAnalyzing(true)
     startTimeRef.current = performance.now()
     abortControllerRef.current = new AbortController()
-    console.log('🔵 [FILE-UPLOAD] Upload state initialized, isAnalyzing set to true')
+    logger.debug('[FILE-UPLOAD] Upload state initialized, isAnalyzing set to true')
 
     // Start performance monitoring
     startTiming('file_upload_total', {
@@ -167,51 +168,51 @@ export function FileUploadCore({
       setUploadStage('uploading')
 
       // Store file info
-      console.log('🔵 [FILE-UPLOAD] Storing file name:', file.name)
+      logger.debug('[FILE-UPLOAD] Storing file name', { fileName: file.name })
       setFileName(file.name)
 
       // Parse file stage
-      console.log('🔵 [FILE-UPLOAD] Starting file parsing stage')
+      logger.info('[FILE-UPLOAD] Starting file parsing stage')
       setProgressStage('Parsing file...')
 
-      console.log('🔵 [FILE-UPLOAD] Calling parseFileOptimized')
+      logger.debug('[FILE-UPLOAD] Calling parseFileOptimized')
       const result = await parseFileOptimized(file, {
         onProgress: handleProgress,
         signal: abortControllerRef.current.signal
       })
 
-      console.log('🔵 [FILE-UPLOAD] File parsing completed:', {
+      logger.info('[FILE-UPLOAD] File parsing completed', {
         rowCount: result.data.length,
         columns: result.data[0] ? Object.keys(result.data[0]) : [],
         sampleData: result.data.slice(0, 2)
       })
 
       if (result.data.length === 0) {
-        console.log('❌ [FILE-UPLOAD] No data found in parsed file')
+        logger.warn('[FILE-UPLOAD] No data found in parsed file')
         throw new Error('No data found in file')
       }
 
-      console.log('✅ [FILE-UPLOAD] File parsing stage completed successfully')
+      logger.info('[FILE-UPLOAD] File parsing stage completed successfully')
 
       // CRITICAL FIX: Clear chart customizations for new uploads
       // This prevents old positions from previous projects interfering with new data
       const { clearCharts } = useChartStore.getState()
       clearCharts()
-      console.log('🔵 [FILE-UPLOAD] Cleared previous chart customizations for fresh start')
+      logger.debug('[FILE-UPLOAD] Cleared previous chart customizations for fresh start')
 
       // Store the data
-      console.log('🔵 [FILE-UPLOAD] Storing raw data in store:', {
+      logger.debug('[FILE-UPLOAD] Storing raw data in store', {
         dataLength: result.data.length,
         firstRowKeys: result.data[0] ? Object.keys(result.data[0]) : [],
         sampleData: result.data.slice(0, 2),
         timestamp: new Date().toISOString()
       })
       await setRawData(result.data)
-      console.log('✅ [FILE-UPLOAD] Raw data stored successfully, verifying store state...')
+      logger.info('[FILE-UPLOAD] Raw data stored successfully, verifying store state')
 
       // Verify data was stored correctly
       const storeState = useDataStore.getState()
-      console.log('🔍 [FILE-UPLOAD] Store state after setRawData:', {
+      logger.debug('[FILE-UPLOAD] Store state after setRawData', {
         hasRawData: !!storeState.rawData,
         rawDataLength: storeState.rawData?.length,
         fileName: storeState.fileName,
@@ -220,33 +221,33 @@ export function FileUploadCore({
       })
 
       // Analyze schema stage
-      console.log('🔵 [FILE-UPLOAD] Starting schema analysis')
+      logger.info('[FILE-UPLOAD] Starting schema analysis')
       setUploadStage('analyzing')
       setProgressStage('Analyzing data structure...')
 
       const schema = await analyzeDataSchema(result.data, file.name, file)
-      console.log('🔵 [FILE-UPLOAD] Schema analysis completed:', {
+      logger.info('[FILE-UPLOAD] Schema analysis completed', {
         fileName: schema.fileName,
         rowCount: schema.rowCount,
         columnCount: schema.columnCount,
         columns: schema.columns.map(c => ({ name: c.name, type: c.type, description: c.description }))
       })
-      console.log('🔍 [FILE-UPLOAD] Sample column details:', schema.columns.slice(0, 3))
+      logger.debug('[FILE-UPLOAD] Sample column details', { sampleColumns: schema.columns.slice(0, 3) })
       setDataSchema(schema)
-      console.log('✅ [FILE-UPLOAD] Schema stored successfully')
+      logger.info('[FILE-UPLOAD] Schema stored successfully')
 
       // Verify schema in store
       const schemaStoreState = useDataStore.getState()
-      console.log('🔍 [FILE-UPLOAD] Store schema after setting:', schemaStoreState.dataSchema?.columns?.slice(0, 3))
+      logger.debug('[FILE-UPLOAD] Store schema after setting', { sampleColumns: schemaStoreState.dataSchema?.columns?.slice(0, 3) })
 
       // Complete stage
-      console.log('🔵 [FILE-UPLOAD] Completing upload process')
+      logger.info('[FILE-UPLOAD] Completing upload process')
       setUploadStage('saving')
       setProgressStage('Complete')
 
       // Record completion metrics
       const totalTime = performance.now() - startTimeRef.current
-      console.log('🔵 [FILE-UPLOAD] Upload completed in:', totalTime + 'ms')
+      logger.info('[FILE-UPLOAD] Upload completed', { totalTimeMs: totalTime })
       recordMetric('upload_completed', {
         fileName: file.name,
         fileSize: file.size,
@@ -255,11 +256,11 @@ export function FileUploadCore({
         success: true
       }, ['upload', 'success'])
 
-      console.log('🔵 [FILE-UPLOAD] Upload processing complete, will call onUploadComplete after data validation')
+      logger.debug('[FILE-UPLOAD] Upload processing complete, will call onUploadComplete after data validation')
 
       // Prefetch dashboard resources
       if (shouldPrefetch()) {
-        console.log('🔵 [FILE-UPLOAD] Prefetching dashboard resources')
+        logger.debug('[FILE-UPLOAD] Prefetching dashboard resources')
         prefetchDashboardResources()
       }
 
@@ -267,8 +268,8 @@ export function FileUploadCore({
       setIsAnalyzing(false)
 
       // Small delay to show completion before navigation
-      console.log('🔵 [FILE-UPLOAD] Preparing navigation to dashboard in 500ms')
-      console.log('🔍 [FILE-UPLOAD] Final store state before navigation:', {
+      logger.debug('[FILE-UPLOAD] Preparing navigation to dashboard in 500ms')
+      logger.debug('[FILE-UPLOAD] Final store state before navigation', {
         fileName: useDataStore.getState().fileName,
         rawDataLength: useDataStore.getState().rawData?.length,
         hasDataSchema: !!useDataStore.getState().dataSchema,
@@ -278,7 +279,7 @@ export function FileUploadCore({
 
       setTimeout(() => {
         const finalState = useDataStore.getState()
-        console.log('🔍 [FILE-UPLOAD] Store state at completion time:', {
+        logger.debug('[FILE-UPLOAD] Store state at completion time', {
           fileName: finalState.fileName,
           rawDataLength: finalState.rawData?.length,
           hasDataSchema: !!finalState.dataSchema,
@@ -288,40 +289,37 @@ export function FileUploadCore({
 
         // Verify we have the minimum required data before navigating
         if (!finalState.rawData || finalState.rawData.length === 0) {
-          console.error('❌ [FILE-UPLOAD] Cannot complete - no raw data in store')
+          logger.error('[FILE-UPLOAD] Cannot complete - no raw data in store')
           setError('Upload failed - no data available')
           return
         }
 
         if (!finalState.fileName) {
-          console.error('❌ [FILE-UPLOAD] Cannot complete - no filename in store')
+          logger.error('[FILE-UPLOAD] Cannot complete - no filename in store')
           setError('Upload failed - filename not set')
           return
         }
 
-        console.log('✅ [FILE-UPLOAD] All data checks passed, calling onUploadComplete...')
+        logger.info('[FILE-UPLOAD] All data checks passed, calling onUploadComplete')
         // Reset analyzing state before navigation
         setIsAnalyzing(false)
         // Let the parent component handle navigation - don't navigate here
         if (onUploadComplete) {
-          console.log('🔄 [FILE-UPLOAD] Calling onUploadComplete callback')
+          logger.debug('[FILE-UPLOAD] Calling onUploadComplete callback')
           onUploadComplete(finalState.rawData)
           // Do NOT navigate here - let the parent component handle it
         } else {
           // No callback provided - just log completion
-          console.log('✅ [FILE-UPLOAD] Upload complete, no callback provided')
+          logger.info('[FILE-UPLOAD] Upload complete, no callback provided')
         }
       }, 500)
 
     } catch (error) {
-      console.error('❌ [FILE-UPLOAD] Error processing file:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Failed to process file'
-      console.log('❌ [FILE-UPLOAD] Error details:', {
-        errorMessage,
+      logger.error('[FILE-UPLOAD] Error processing file', error, {
         fileName: file.name,
-        fileSize: file.size,
-        stack: error instanceof Error ? error.stack : 'No stack trace'
+        fileSize: file.size
       })
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process file'
 
       // Record error metrics
       endTiming('file_upload_total', {
@@ -335,7 +333,7 @@ export function FileUploadCore({
         error: errorMessage
       }, ['upload', 'error'])
 
-      console.log('❌ [FILE-UPLOAD] Setting error state and cleaning up')
+      logger.debug('[FILE-UPLOAD] Setting error state and cleaning up')
       setError(errorMessage)
       setUploadErrors([errorMessage])
       setIsAnalyzing(false)
@@ -345,11 +343,11 @@ export function FileUploadCore({
     } finally {
       setAutoProcessing(false)
     }
-  }, [clearData, setFileName, setRawData, setDataSchema, setError, setIsAnalyzing, router, handleProgress, onUploadStart, onUploadComplete, onUploadError, setUploadStage])
+  }, [clearData, setFileName, setRawData, setDataSchema, setError, setIsAnalyzing, handleProgress, onUploadStart, onUploadComplete, onUploadError, setUploadStage, setUploadProgress])
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0]
-    console.log('🔵 [FILE-UPLOAD] onDrop triggered with files:', {
+    logger.debug('[FILE-UPLOAD] onDrop triggered', {
       fileCount: acceptedFiles.length,
       fileName: file?.name,
       fileSize: file?.size,
@@ -358,12 +356,12 @@ export function FileUploadCore({
     })
 
     if (!file) {
-      console.log('❌ [FILE-UPLOAD] No file selected in onDrop')
+      logger.warn('[FILE-UPLOAD] No file selected in onDrop')
       return
     }
 
     // Reset state
-    console.log('🔵 [FILE-UPLOAD] Resetting upload state')
+    logger.debug('[FILE-UPLOAD] Resetting upload state')
     setUploadErrors([])
     setUploadProgress(0)
     setProgressStage('')
@@ -375,30 +373,30 @@ export function FileUploadCore({
     schemaCache.clear()
 
     // Validate file
-    console.log('🔵 [FILE-UPLOAD] Starting file validation')
+    logger.debug('[FILE-UPLOAD] Starting file validation')
     const validationErrors = validateFile(file)
     if (validationErrors.length > 0) {
-      console.log('❌ [FILE-UPLOAD] File validation failed:', validationErrors)
+      logger.warn('[FILE-UPLOAD] File validation failed', { validationErrors })
       setUploadErrors(validationErrors)
       setError(validationErrors[0])
       onUploadError?.(validationErrors[0])
       return
     }
-    console.log('✅ [FILE-UPLOAD] File validation passed')
+    logger.info('[FILE-UPLOAD] File validation passed')
 
     // Set the selected file for UI display
     setSelectedFile(file)
     setAutoProcessing(true)
 
     // Immediately start processing
-    console.log('🔵 [FILE-UPLOAD] Auto-processing file after validation')
+    logger.debug('[FILE-UPLOAD] Auto-processing file after validation')
     await handleFileProcessing(file)
-  }, [validateFile, setError, onUploadError, setAnalysis, handleFileProcessing])
+  }, [validateFile, setError, onUploadError, setAnalysis, handleFileProcessing, setUploadProgress])
 
   // New handleUploadFile function that uses the selectedFile state
   const handleUploadFile = useCallback(async () => {
     if (!selectedFile) {
-      console.log('❌ [FILE-UPLOAD] No file selected for upload')
+      logger.warn('[FILE-UPLOAD] No file selected for upload')
       return
     }
     await handleFileProcessing(selectedFile)

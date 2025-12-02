@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { getSession } from '@/lib/session'
 import { withAuth } from '@/lib/middleware/auth'
 import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
+import { validateRequest, chatMessageSchema } from '@/lib/utils/api-validation'
 
 const getHandler = withAuth(async (request, authUser, context) => {
   try {
@@ -75,15 +76,13 @@ const postHandler = withAuth(async (request, authUser, context) => {
       )
     }
 
-    const body = await request.json()
-    const { role, content, metadata } = body
-
-    if (!role || !content) {
-      return NextResponse.json(
-        { error: 'Role and content are required' },
-        { status: 400 }
-      )
+    // Validate request body with Zod
+    const validation = await validateRequest(request, chatMessageSchema)
+    if (!validation.success) {
+      return validation.response
     }
+
+    const { role, content, metadata } = validation.data
 
     const chatMessage = await db.chatMessage.create({
       data: {

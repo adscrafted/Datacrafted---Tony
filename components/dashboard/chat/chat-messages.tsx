@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import DOMPurify from 'dompurify'
 import { User, Bot } from 'lucide-react'
 import type { ChatMessage } from '@/lib/store'
 import { stripChartSuggestions } from '@/lib/services/chat-service'
@@ -30,28 +31,42 @@ export function ChatMessages({ messages, streamingMessage, isStreaming }: ChatMe
       // Handle bold text (markdown-style)
       const boldRegex = /\*\*(.*?)\*\*/g
       const formattedLine = line.replace(boldRegex, '<strong>$1</strong>')
-      
+
+      // Sanitize HTML to prevent XSS attacks - only allow safe tags
+      const sanitizedHtml = DOMPurify.sanitize(formattedLine, {
+        ALLOWED_TAGS: ['strong', 'em', 'code', 'b', 'i'],
+        ALLOWED_ATTR: []
+      })
+
       // Handle bullet points
       if (line.trim().startsWith('- ') || line.trim().startsWith('• ')) {
+        const sanitizedContent = DOMPurify.sanitize(formattedLine.replace(/^[\-•]\s/, ''), {
+          ALLOWED_TAGS: ['strong', 'em', 'code', 'b', 'i'],
+          ALLOWED_ATTR: []
+        })
         return (
-          <li key={index} className="ml-4 list-disc break-words" dangerouslySetInnerHTML={{ __html: formattedLine.replace(/^[\-•]\s/, '') }} />
+          <li key={index} className="ml-4 list-disc break-words" dangerouslySetInnerHTML={{ __html: sanitizedContent }} />
         )
       }
 
       // Handle numbered lists
       if (/^\d+\.\s/.test(line.trim())) {
+        const sanitizedContent = DOMPurify.sanitize(formattedLine.replace(/^\d+\.\s/, ''), {
+          ALLOWED_TAGS: ['strong', 'em', 'code', 'b', 'i'],
+          ALLOWED_ATTR: []
+        })
         return (
-          <li key={index} className="ml-4 list-decimal break-words" dangerouslySetInnerHTML={{ __html: formattedLine.replace(/^\d+\.\s/, '') }} />
+          <li key={index} className="ml-4 list-decimal break-words" dangerouslySetInnerHTML={{ __html: sanitizedContent }} />
         )
       }
 
       // Regular paragraphs
       if (line.trim()) {
         return (
-          <p key={index} className="mb-2 last:mb-0 break-words" dangerouslySetInnerHTML={{ __html: formattedLine }} />
+          <p key={index} className="mb-2 last:mb-0 break-words" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
         )
       }
-      
+
       return <br key={index} />
     })
   }

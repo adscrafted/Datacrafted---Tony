@@ -1,5 +1,5 @@
-import * as XLSX from 'xlsx'
 import type { DataRow } from '@/lib/store'
+import { parseExcelAllSheetsSecurely } from './secure-xlsx-parser'
 
 export interface SheetData {
   name: string
@@ -17,55 +17,30 @@ export interface MultiSheetParseResult {
   }
 }
 
-export const parseExcelAllSheets = (file: File): Promise<MultiSheetParseResult> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    
-    reader.onload = (e) => {
-      try {
-        const data = e.target?.result
-        const workbook = XLSX.read(data, { type: 'binary' })
-        
-        const sheets: SheetData[] = []
-        
-        // Process each sheet
-        workbook.SheetNames.forEach((sheetName) => {
-          const worksheet = workbook.Sheets[sheetName]
-          
-          // Convert to JSON
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
-            raw: false,
-            dateNF: 'yyyy-mm-dd'
-          }) as DataRow[]
-          
-          // Only include sheets with data
-          if (jsonData.length > 0) {
-            sheets.push({
-              name: sheetName,
-              data: jsonData,
-              rowCount: jsonData.length,
-              columnCount: Object.keys(jsonData[0] || {}).length
-            })
-          }
-        })
-        
-        resolve({
-          sheets,
-          fileInfo: {
-            fileName: file.name,
-            fileSize: file.size,
-            totalSheets: sheets.length
-          }
-        })
-      } catch (error) {
-        reject(error)
+export const parseExcelAllSheets = async (file: File): Promise<MultiSheetParseResult> => {
+  try {
+    const sheetsData = await parseExcelAllSheetsSecurely<DataRow>(file, {
+      dateFormat: 'yyyy-mm-dd',
+      raw: false,
+      includeEmptySheets: false
+    })
+
+    const sheets: SheetData[] = sheetsData.map(sheet => ({
+      name: sheet.name,
+      data: sheet.data,
+      rowCount: sheet.data.length,
+      columnCount: Object.keys(sheet.data[0] || {}).length
+    }))
+
+    return {
+      sheets,
+      fileInfo: {
+        fileName: file.name,
+        fileSize: file.size,
+        totalSheets: sheets.length
       }
     }
-    
-    reader.onerror = (error) => {
-      reject(error)
-    }
-    
-    reader.readAsBinaryString(file)
-  })
+  } catch (error) {
+    throw error
+  }
 }

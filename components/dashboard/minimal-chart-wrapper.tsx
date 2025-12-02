@@ -210,7 +210,7 @@ export const MinimalChartWrapper = React.memo<MinimalChartWrapperProps>(function
     }
 
     return processedData
-  }, [getFilteredData, type, dataMapping])
+  }, [type, dataMapping]) // getFilteredData is imported function, doesn't need to be a dependency
 
   // Safe dataKey handling
   const safeDataKey = useMemo(() => {

@@ -1,25 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { parseJSONFromString } from '@/lib/utils/json-extractor'
-
-interface GenerateTitleRequest {
-  chartType: string
-  dataMapping?: {
-    xAxis?: string
-    yAxis?: string | string[]
-    category?: string
-    value?: string
-    metric?: string
-    values?: string[]
-    aggregation?: string
-    [key: string]: any
-  }
-  sampleData?: Array<Record<string, any>>
-  dataSchema?: Array<{
-    name: string
-    type: string
-  }>
-}
+import { validateRequest, generateChartTitleRequestSchema } from '@/lib/utils/api-validation'
 
 interface GenerateTitleResponse {
   title: string
@@ -28,16 +10,13 @@ interface GenerateTitleResponse {
 
 export async function POST(request: NextRequest) {
   try {
-    const body: GenerateTitleRequest = await request.json()
-    const { chartType, dataMapping, sampleData, dataSchema } = body
-
-    // Validate required fields
-    if (!chartType) {
-      return NextResponse.json(
-        { error: 'Chart type is required' },
-        { status: 400 }
-      )
+    // Validate request body with Zod
+    const validation = await validateRequest(request, generateChartTitleRequestSchema)
+    if (!validation.success) {
+      return validation.response
     }
+
+    const { chartType, dataMapping, sampleData, dataSchema } = validation.data
 
     // Check if OpenAI API key is configured
     const apiKey = process.env.OPENAI_API_KEY
@@ -118,7 +97,16 @@ Rules:
 
 function buildPromptContext(
   chartType: string,
-  dataMapping?: GenerateTitleRequest['dataMapping'],
+  dataMapping?: {
+    xAxis?: string
+    yAxis?: string | string[]
+    category?: string
+    value?: string
+    metric?: string
+    values?: string[]
+    aggregation?: string
+    [key: string]: any
+  },
   sampleData?: Array<Record<string, any>>,
   dataSchema?: Array<{ name: string; type: string }>
 ): string {

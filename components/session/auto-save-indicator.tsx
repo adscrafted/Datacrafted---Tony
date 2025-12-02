@@ -35,7 +35,7 @@ export function AutoSaveIndicator({ className }: AutoSaveIndicatorProps) {
   const lastSaveDataRef = useRef<string>('')
 
   // Create a hash of the data that needs to be saved
-  const getSaveDataHash = () => {
+  const getSaveDataHash = React.useCallback(() => {
     return JSON.stringify({
       analysis,
       chartCustomizations,
@@ -43,10 +43,10 @@ export function AutoSaveIndicator({ className }: AutoSaveIndicatorProps) {
       currentLayout: currentLayout.name,
       dashboardFilters,
     })
-  }
+  }, [analysis, chartCustomizations, currentTheme.name, currentLayout.name, dashboardFilters])
 
   // Auto-save function with debouncing
-  const performAutoSave = async () => {
+  const performAutoSave = React.useCallback(async () => {
     if (!analysis) return
 
     setSaveStatus('saving')
@@ -65,7 +65,7 @@ export function AutoSaveIndicator({ className }: AutoSaveIndicatorProps) {
       console.error('Auto-save failed:', error)
       setSaveStatus('error')
     }
-  }
+  }, [analysis, currentSession, createNewSession, saveCurrentSession])
 
   // Watch for changes and trigger auto-save with debounce
   useEffect(() => {
@@ -91,7 +91,7 @@ export function AutoSaveIndicator({ className }: AutoSaveIndicatorProps) {
         clearTimeout(saveTimeoutRef.current)
       }
     }
-  }, [analysis, chartCustomizations, currentTheme, currentLayout, dashboardFilters])
+  }, [analysis, chartCustomizations, currentTheme, currentLayout, dashboardFilters, getSaveDataHash, performAutoSave])
 
   // Update status based on isSaving state
   useEffect(() => {

@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useDataStore } from '@/lib/stores/data-store'
 import { cn } from '@/lib/utils/cn'
-import { auth, DEBUG_MODE } from '@/lib/config/firebase'
+import { auth } from '@/lib/config/firebase'
 
 interface SchemaField {
   name: string
@@ -187,7 +187,7 @@ export function EditableSchemaViewer({ onAIUpdateComplete }: EditableSchemaViewe
       const correctedSchema = schema.map(field => ({
         name: field.name,
         type: field.type,
-        description: field.description,
+        description: field.description || '',
         userCorrected: true
       }))
 
@@ -200,18 +200,16 @@ export function EditableSchemaViewer({ onAIUpdateComplete }: EditableSchemaViewe
 
       // Get Firebase auth token for API authentication
       const currentUser = auth.currentUser
-      if (!currentUser && !DEBUG_MODE) {
+      if (!currentUser) {
         throw new Error('Authentication required. Please sign in to continue.')
       }
 
       let authToken: string | undefined
-      if (currentUser) {
-        try {
-          authToken = await currentUser.getIdToken()
-          console.log('✅ [PUSH-TO-AI] Got Firebase auth token for API request')
-        } catch (authError) {
-          throw new Error('Failed to get authentication token. Please try again.')
-        }
+      try {
+        authToken = await currentUser.getIdToken()
+        console.log('✅ [PUSH-TO-AI] Got Firebase auth token for API request')
+      } catch (authError) {
+        throw new Error('Failed to get authentication token. Please try again.')
       }
 
       // Build headers with optional auth token

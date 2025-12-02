@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession, updateSession, deleteSession } from '@/lib/session'
 import { withAuth } from '@/lib/middleware/auth'
 import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
+import { validateRequest, updateSessionSchema } from '@/lib/utils/api-validation'
 
 const getHandler = withAuth(async (request, authUser, context) => {
   try {
@@ -63,8 +64,13 @@ const patchHandler = withAuth(async (request, authUser, context) => {
       )
     }
 
-    const body = await request.json()
-    const { name, description } = body
+    // Validate request body with Zod
+    const validation = await validateRequest(request, updateSessionSchema)
+    if (!validation.success) {
+      return validation.response
+    }
+
+    const { name, description } = validation.data
 
     const session = await updateSession(id, { name, description })
 

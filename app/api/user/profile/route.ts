@@ -13,6 +13,7 @@
 import { NextRequest } from 'next/server'
 import { withAuth } from '@/lib/middleware/auth'
 import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
+import { validateRequest, updateUserProfileSchema } from '@/lib/utils/api-validation'
 
 /**
  * GET /api/user/profile
@@ -54,16 +55,13 @@ export const GET = withRateLimit(RATE_LIMITS.AUTH, getHandler)
  */
 const patchHandler = withAuth(async (request, user) => {
   try {
-    const body = await request.json()
-    const { displayName, photoURL } = body
-
-    // Validate input
-    if (!displayName || typeof displayName !== 'string') {
-      return Response.json(
-        { error: 'Display name is required and must be a string' },
-        { status: 400 }
-      )
+    // Validate request body with Zod
+    const validation = await validateRequest(request, updateUserProfileSchema)
+    if (!validation.success) {
+      return validation.response
     }
+
+    const { displayName, photoURL } = validation.data
 
     // TODO: Update user profile in your database
     // For now, just return the updated data

@@ -165,7 +165,7 @@ export class ChartSuggestionEngine {
           const key = transform.alias || transform.name
           newRow[key] = value
         } catch (error) {
-          logger.warn(`[ChartSuggestion] Transform failed for ${transform.name}:`, error)
+          logger.warn(`[ChartSuggestion] Transform failed for ${transform.name}`, { error })
           newRow[transform.alias || transform.name] = null
         }
       })

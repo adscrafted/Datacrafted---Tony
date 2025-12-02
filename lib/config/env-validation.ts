@@ -37,8 +37,8 @@ const envSchema = z.object({
     .min(20, 'OpenAI API key appears to be invalid'),
 
   // ===== Application Configuration =====
-  NEXT_PUBLIC_DEBUG_MODE: z.enum(['true', 'false']).optional(),
   NODE_ENV: z.enum(['development', 'production', 'test']),
+  DEBUG_MODE: z.enum(['true', 'false']).optional(),
 
   // ===== Optional: Redis/Cache Configuration =====
   UPSTASH_REDIS_URL: z.string().url().optional(),
@@ -120,12 +120,13 @@ export function validateEnvironment(): ValidatedEnv {
         )
       }
 
-      // Warn if debug mode environment variable exists but is set to false
+      // Warn if deprecated NEXT_PUBLIC_DEBUG_MODE exists
       if (process.env.NEXT_PUBLIC_DEBUG_MODE !== undefined) {
         console.warn(
-          '⚠️ WARNING: DEBUG_MODE environment variable exists in production\n' +
-          '   Even though it is set to false, it should be removed entirely\n' +
-          '   Remove NEXT_PUBLIC_DEBUG_MODE from production environment variables'
+          '⚠️ WARNING: NEXT_PUBLIC_DEBUG_MODE is deprecated and should be removed\n' +
+          '   This environment variable exposes debug configuration to the client bundle\n' +
+          '   Use DEBUG_MODE (without NEXT_PUBLIC_) for server-only debug configuration\n' +
+          '   Remove NEXT_PUBLIC_DEBUG_MODE from ALL environment files'
         )
       }
 
@@ -237,15 +238,18 @@ export function isProduction(): boolean {
 }
 
 /**
- * Check if debug mode is enabled
+ * Check if debug mode is enabled (server-side only)
  *
  * SECURITY: Debug mode is automatically disabled in production
- * regardless of environment variable setting
+ * regardless of environment variable setting.
+ *
+ * NOTE: This function uses server-only DEBUG_MODE environment variable.
+ * NEXT_PUBLIC_DEBUG_MODE is deprecated and should not be used.
  */
 export function isDebugMode(): boolean {
   if (isProduction()) {
     return false
   }
 
-  return process.env.NEXT_PUBLIC_DEBUG_MODE === 'true'
+  return process.env.DEBUG_MODE === 'true'
 }

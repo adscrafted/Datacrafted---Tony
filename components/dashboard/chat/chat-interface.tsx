@@ -332,7 +332,7 @@ export const ChatInterface = React.memo(function ChatInterface() {
     } finally {
       setIsChatLoading(false)
     }
-  }, [message, isChatLoading, rawData, fileName, chatMessages, selectedChartType, selectedChartId, analysis, addChatMessage, setIsChatLoading, setChatError, setStreamingMessage, setIsStreaming, setChartSuggestions, currentProjectId, saveProjectChatMessage, replaceChatMessage])
+  }, [message, isChatLoading, rawData, fileName, chatMessages, selectedChartType, selectedChartId, analysis, addChatMessage, setIsChatLoading, setChatError, setStreamingMessage, setIsStreaming, setChartSuggestions, currentProjectId, saveProjectChatMessage, replaceChatMessage, dataSchema])
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {

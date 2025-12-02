@@ -9,17 +9,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAdminAuth, DEBUG_MODE, DEBUG_USER } from '@/lib/config/firebase-admin'
 import { cookies } from 'next/headers'
+import { validateRequest, createAuthSessionSchema } from '@/lib/utils/api-validation'
+import { serverError, invalidToken } from '@/lib/utils/api-errors'
 
 export async function POST(request: NextRequest) {
   try {
-    const { idToken } = await request.json()
-
-    if (!idToken) {
-      return NextResponse.json(
-        { error: 'ID token is required' },
-        { status: 400 }
-      )
+    // Validate request body with Zod
+    const validation = await validateRequest(request, createAuthSessionSchema)
+    if (!validation.success) {
+      return validation.response
     }
+
+    const { idToken } = validation.data
 
     // In debug mode, accept any token and create debug session
     if (DEBUG_MODE) {
@@ -72,10 +73,10 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('[SESSION-API] Error creating session:', error)
-    return NextResponse.json(
-      { error: 'Failed to create session', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    )
+    if (error instanceof Error && error.message.includes('token')) {
+      return invalidToken()
+    }
+    return serverError('Failed to create session', error as Error)
   }
 }
 
@@ -90,9 +91,6 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('[SESSION-API] Error clearing session:', error)
-    return NextResponse.json(
-      { error: 'Failed to clear session' },
-      { status: 500 }
-    )
+    return serverError('Failed to clear session', error as Error)
   }
 }

@@ -50,7 +50,7 @@ export class SchemaService {
     const columnCount = columns.length
 
     // Analyze schema using existing utility
-    const schema = analyzeDataSchema(data)
+    const schema = analyzeDataSchema(data, 'analysis')
 
     // Extract column types
     const numericalColumns: string[] = []

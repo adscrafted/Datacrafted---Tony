@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import type { DataRow, DataSchema } from '@/lib/store'
 import { withAuth } from '@/lib/middleware/auth'
+import { validateRequest, chatRequestSchema } from '@/lib/utils/api-validation'
 
 // Initialize OpenAI client
 function getOpenAIClient() {
@@ -169,18 +170,16 @@ export const POST = withAuth(async (request, authUser) => {
       )
     }
 
-    // Parse request body
-    const { message, data, dataSchema, fileName, conversationHistory, preferredChartType, selectedChart, granularity, dashboardFilters } = await request.json()
-
-    if (!message || typeof message !== 'string') {
-      return NextResponse.json(
-        { error: 'Message is required' },
-        { status: 400 }
-      )
+    // Validate request body with Zod
+    const validation = await validateRequest(request, chatRequestSchema)
+    if (!validation.success) {
+      return validation.response
     }
 
+    const { message, data, dataSchema, fileName, conversationHistory, preferredChartType, selectedChart, granularity, dashboardFilters } = validation.data
+
     // Generate data context with schema if available
-    const dataContext = generateDataContext(data, dataSchema, fileName)
+    const dataContext = generateDataContext((data || []) as DataRow[], (dataSchema ?? null) as DataSchema | null, fileName ?? null)
 
     // Prepare conversation messages
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
@@ -203,7 +202,7 @@ ${preferredChartType && preferredChartType !== 'auto' ? `\nThe user wants to cre
 ${dashboardFilters && dashboardFilters.length > 0 ? `
 ACTIVE DASHBOARD FILTERS:
 The following filters are currently applied to the dashboard:
-${dashboardFilters.map(f => `- ${f.column} ${f.operator} ${JSON.stringify(f.value)}`).join('\n')}
+${dashboardFilters.map((f) => `- ${f.column} ${f.operator} ${JSON.stringify(f.value ?? '')}`).join('\n')}
 
 IMPORTANT FILTERING CONTEXT:
 - The data you're analyzing may be filtered. Consider the filtered context in your analysis.

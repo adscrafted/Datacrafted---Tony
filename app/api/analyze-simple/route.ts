@@ -1,21 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { parseJSONFromString } from '@/lib/utils/json-extractor'
+import { validateRequest, analyzeSimpleRequestSchema } from '@/lib/utils/api-validation'
+import { serverError, externalServiceError } from '@/lib/utils/api-errors'
 
 export async function POST(request: NextRequest) {
   try {
     if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json({ error: 'OpenAI API key not configured' }, { status: 500 })
+      return serverError('OpenAI API key not configured')
     }
 
-    const { data } = await request.json()
-    
-    if (!data || !Array.isArray(data) || data.length === 0) {
-      return NextResponse.json({ error: 'Invalid data provided' }, { status: 400 })
+    // Validate request body with Zod
+    const validation = await validateRequest(request, analyzeSimpleRequestSchema)
+    if (!validation.success) {
+      return validation.response
     }
+
+    const { data } = validation.data
 
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-    
+
     console.log('Making simple OpenAI call for analysis...')
     const startTime = Date.now()
 
@@ -44,7 +48,7 @@ Respond with JSON:
         temperature: 0.3,
         max_tokens: 1000,
       }),
-      new Promise((_, reject) => 
+      new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Timeout after 15s')), 15000)
       )
     ]) as any
@@ -62,9 +66,9 @@ Respond with JSON:
 
   } catch (error) {
     console.error('Simple analyze error:', error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Analysis failed' },
-      { status: 500 }
-    )
+    if (error instanceof Error && error.message.includes('OpenAI')) {
+      return externalServiceError('OpenAI', error)
+    }
+    return serverError('Analysis failed', error as Error)
   }
 }

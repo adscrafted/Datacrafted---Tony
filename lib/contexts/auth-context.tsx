@@ -12,7 +12,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup
 } from 'firebase/auth'
-import { auth, DEBUG_MODE, DEBUG_USER, isProductionEnvironment } from '@/lib/config/firebase'
+import { auth, isProductionEnvironment } from '@/lib/config/firebase'
 import { useRouter } from 'next/navigation'
 import { useProjectStore } from '@/lib/stores/project-store'
 import { syncUserToDatabase } from '@/lib/utils/api-client'
@@ -24,13 +24,13 @@ interface AuthContextType {
   isSyncing: boolean
   error: string | null
   syncError: string | null
+  isDebugMode: boolean // For UI indicators only - does NOT bypass security
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string, displayName: string) => Promise<void>
   logout: () => Promise<void>
   signInWithGoogle: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
   updateUserProfile: (displayName: string, photoURL?: string) => Promise<void>
-  isDebugMode: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -168,33 +168,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
 
   useEffect(() => {
-    // SECURITY: Client-side production guard for debug mode
-    if (DEBUG_MODE) {
-      // Additional safety check - never allow debug mode in production
-      if (isProductionEnvironment()) {
-        console.error(
-          '🚨 [SECURITY] CRITICAL: DEBUG_MODE is enabled but production environment detected.\n' +
-          'Authentication will fail. Please check your environment configuration.'
-        )
-        setUser(null)
-        setLoading(false)
-        setError('Configuration error. Please contact support.')
-        return
-      }
-
-      console.warn(
-        '⚠️  [AUTH-CLIENT] Debug mode active - auto-authenticating debug user\n' +
-        '   This should ONLY happen in local development\n' +
-        '   Debug user will NOT be synced to database (not a real user)'
-      )
-      setUser(DEBUG_USER as any)
-      setLoading(false)
-      // DON'T sync debug user to database - it's not a real Firebase user
-      // and lacks authentication methods like getIdToken()
-      return
-    }
-
-    // Normal authentication flow
+    // Authentication flow - listen to Firebase auth state changes
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user)
 
@@ -214,13 +188,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = useCallback(async (email: string, password: string) => {
     try {
       setError(null)
-      // In debug mode, accept any credentials
-      if (DEBUG_MODE) {
-        setUser(DEBUG_USER as any)
-        router.push('/projects')
-        return
-      }
-
       setIsSyncing(true)
       const result = await signInWithEmailAndPassword(auth, email, password)
 
@@ -244,13 +211,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = useCallback(async (email: string, password: string, displayName: string) => {
     try {
       setError(null)
-      // In debug mode, accept any credentials
-      if (DEBUG_MODE) {
-        setUser({ ...DEBUG_USER, email, displayName } as any)
-        router.push('/projects')
-        return
-      }
-
       setIsSyncing(true)
       const { user } = await createUserWithEmailAndPassword(auth, email, password)
       await updateProfile(user, { displayName })
@@ -273,13 +233,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithGoogle = useCallback(async () => {
     try {
       setError(null)
-      // In debug mode, skip Google auth
-      if (DEBUG_MODE) {
-        setUser(DEBUG_USER as any)
-        router.push('/projects')
-        return
-      }
-
       setIsSyncing(true)
       const provider = new GoogleAuthProvider()
       const result = await signInWithPopup(auth, provider)
@@ -302,11 +255,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     try {
       setError(null)
-      if (DEBUG_MODE) {
-        setUser(null)
-        router.push('/')
-        return
-      }
 
       // Clear session cookie
       await fetch('/api/auth/session', { method: 'DELETE' })
@@ -323,11 +271,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const resetPassword = useCallback(async (email: string) => {
     try {
       setError(null)
-      if (DEBUG_MODE) {
-        console.log('Debug mode: Password reset email would be sent to', email)
-        return
-      }
-
       await sendPasswordResetEmail(auth, email)
     } catch (err: any) {
       setError(err.message || 'Failed to send password reset email')
@@ -339,11 +282,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const updateUserProfile = useCallback(async (displayName: string, photoURL?: string) => {
     try {
       setError(null)
-      if (DEBUG_MODE) {
-        setUser({ ...user, displayName, photoURL } as any)
-        return
-      }
-
       if (auth.currentUser) {
         await updateProfile(auth.currentUser, { displayName, photoURL })
       }
@@ -351,24 +289,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setError(err.message || 'Failed to update profile')
       throw err
     }
-  }, [user])
+  }, [])
 
   // MEMOIZATION: Wrap context value with useMemo to prevent unnecessary re-renders of consumers
   // Only recreate when primitive values or memoized callbacks change
+  const isDebugMode = !isProductionEnvironment
   const value = useMemo(() => ({
     user,
     loading,
     isSyncing,
     error,
     syncError,
+    isDebugMode,
     signIn,
     signUp,
     logout,
     signInWithGoogle,
     resetPassword,
-    updateUserProfile,
-    isDebugMode: DEBUG_MODE
-  }), [user, loading, isSyncing, error, syncError, signIn, signUp, logout, signInWithGoogle, resetPassword, updateUserProfile])
+    updateUserProfile
+  }), [user, loading, isSyncing, error, syncError, isDebugMode, signIn, signUp, logout, signInWithGoogle, resetPassword, updateUserProfile])
 
   return (
     <AuthContext.Provider value={value}>

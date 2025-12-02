@@ -29,20 +29,46 @@ function basicValidateFormula(formula: string): { valid: boolean; error?: string
   return { valid: true }
 }
 
-function tokenizeFormula(formula: string): any[] {
-  return []
+interface TokenizeResult {
+  success: boolean
+  tokens?: any[]
+  error?: string
+}
+
+function tokenizeFormula(formula: string): TokenizeResult {
+  // Stub implementation - returns success with empty tokens
+  return { success: true, tokens: [] }
 }
 
 function findMatchingColumn(name: string, columns: string[]): string | null {
   return columns.find(c => c === name) || null
 }
 
-function extractAggregateFunctions(tokens: any[]): string[] {
+interface AggregateFunction {
+  column: string
+  function: 'SUM' | 'AVG' | 'COUNT' | 'MIN' | 'MAX'
+  alias: string
+}
+
+function extractAggregateFunctions(tokens: any[]): AggregateFunction[] {
+  // Stub implementation - returns empty array
   return []
 }
 
-function calculateFormulaForRow(formula: string, row: any, allData: any[]): number {
-  return 0
+interface FormulaResult {
+  success: boolean
+  value?: number | null
+  error?: string
+}
+
+function calculateFormulaForRow(
+  formula: string,
+  row: any,
+  availableColumns: string[],
+  aggregatedData?: Map<string, number>
+): FormulaResult {
+  // Stub implementation - returns success with 0 value
+  return { success: true, value: 0 }
 }
 import { parseNumericValue, DataCalculator } from './data-calculations'
 
@@ -112,9 +138,9 @@ export function validateFormulaComprehensive(
   const availableColumns = Object.keys(data[0])
 
   // 3. Validate column references
-  const columnValidation = basicValidateFormula(formula, availableColumns)
-  if (!columnValidation.valid) {
-    errors.push(...columnValidation.errors)
+  const columnValidation = basicValidateFormula(formula)
+  if (!columnValidation.valid && columnValidation.error) {
+    errors.push(columnValidation.error)
   }
 
   // 4. Extract metadata
@@ -122,7 +148,7 @@ export function validateFormulaComprehensive(
   const aggregationFunctions: string[] = []
   let hasAggregations = false
 
-  tokens.forEach(token => {
+  tokens.forEach((token: any) => {
     if (token.type === 'column') {
       const matchingColumn = findMatchingColumn(token.value, availableColumns)
       if (matchingColumn) {
@@ -389,7 +415,7 @@ export function validateFormulaOutputType(
 
   for (let i = 0; i < Math.min(100, data.length); i++) {
     const result = calculateFormulaForRow(formula, data[i], availableColumns)
-    if (result.success && result.value !== undefined && isFinite(result.value)) {
+    if (result.success && result.value !== undefined && result.value !== null && isFinite(result.value)) {
       sampleResults.push(result.value)
     }
   }
@@ -443,7 +469,7 @@ export function suggestFormulaImprovements(formula: string, data: DataRow[]): st
 
   // Check for common patterns
   const hasPercentageMultiplication = tokens.some(
-    (token, i) =>
+    (token: any, i: number) =>
       token.type === 'operator' &&
       token.value === '*' &&
       i + 1 < tokens.length &&
@@ -456,9 +482,9 @@ export function suggestFormulaImprovements(formula: string, data: DataRow[]): st
   }
 
   // Check for division without aggregation
-  const hasDivision = tokens.some(t => t.type === 'operator' && (t.value === '/' || t.value === '%'))
+  const hasDivision = tokens.some((t: any) => t.type === 'operator' && (t.value === '/' || t.value === '%'))
   const hasAggregation = tokens.some(
-    t => t.type === 'function' && ['SUM', 'AVG', 'COUNT', 'MIN', 'MAX'].includes(t.value)
+    (t: any) => t.type === 'function' && ['SUM', 'AVG', 'COUNT', 'MIN', 'MAX'].includes(t.value)
   )
 
   if (hasDivision && !hasAggregation && data.length > 1) {
@@ -470,7 +496,7 @@ export function suggestFormulaImprovements(formula: string, data: DataRow[]): st
   // Check for complex nested expressions
   let parenDepth = 0
   let maxDepth = 0
-  tokens.forEach(token => {
+  tokens.forEach((token: any) => {
     if (token.type === 'paren') {
       if (token.value === '(') {
         parenDepth++

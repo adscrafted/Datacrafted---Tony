@@ -99,8 +99,8 @@ const ChartSkeleton = () => (
   </div>
 )
 
-// Error Boundary Component
-class ChartErrorBoundary extends Component<
+// Local fallback error boundary (not used - imported ChartErrorBoundary is preferred)
+class LocalChartErrorBoundary extends Component<
   { children: ReactNode; fallback?: ReactNode },
   { hasError: boolean; error?: Error }
 > {
@@ -113,7 +113,7 @@ class ChartErrorBoundary extends Component<
     return { hasError: true, error }
   }
 
-  componentDidCatch(error: Error, errorInfo: any) {
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('Chart rendering error:', error, errorInfo)
   }
 
@@ -185,7 +185,7 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
     const result = getFilteredData()
     console.log('🔄 [ChartWrapper] Filtered data for', title, ':', result.length, 'rows')
     return result
-  }, [getFilteredData, dateRange, granularity, selectedDateColumn, dashboardFilters, rawData, title])
+  }, [title]) // getFilteredData reads from stores internally
 
   // PERFORMANCE OPTIMIZATION: Memoize chart data processing with stable reference
   // Create a stable string key for data comparison to prevent unnecessary recalculations
@@ -311,7 +311,7 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
       console.error('Error processing chart data:', error)
       return []
     }
-  }, [dataKeyForCache, chartType, customization?.dataMapping]) // Add dependencies for bar chart sorting
+  }, [chartType, customization?.dataMapping, data, filteredData])
   
   // Safety check for dataKey with intelligent fallback
   const safeDataKey = useMemo(() => {
@@ -467,7 +467,6 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
     // Get customization options
     const showGridLocal = customization?.showGrid ?? true
     const showLegendLocal = customization?.showLegend ?? true
-    const axisLabels = customization?.axisLabels || {}
 
     // Handle different chart types
     switch (chartType) {
@@ -605,7 +604,7 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
                 fill="#8884d8"
                 dataKey="value"
               >
-                {pieData.map((entry, index) => (
+                {pieData.map((_entry, index) => (
                   <Cell key={`cell-${index}`} fill={DEFAULT_COLORS[index % DEFAULT_COLORS.length]} />
                 ))}
               </Pie>
@@ -996,9 +995,13 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
     chartData,
     safeDataKey,
     customization,
-    JSON.stringify(customization?.dataMapping), // Force re-render when dataMapping changes
     pieData,
-    renderSimpleChart
+    renderSimpleChart,
+    calculateMargins,
+    displayTitle,
+    displayDescription,
+    showGrid,
+    showLegend
   ])
 
   // Handle delete confirmation

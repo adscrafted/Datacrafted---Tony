@@ -94,7 +94,7 @@ export function DateRangeSelector({ className }: DateRangeSelectorProps) {
         }
       }
     }
-  }, [rawData, selectedDateColumn, granularity])
+  }, [rawData, selectedDateColumn, granularity, setGranularity, setSelectedDateColumn])
 
   if (!hasDateColumn || !rawData || rawData.length === 0) {
     return null

@@ -1,6 +1,10 @@
 'use client'
 
+import type { Metadata } from 'next'
 import React, { useEffect, useState, Suspense } from 'react'
+
+// Note: Metadata export only works in Server Components
+// For this Client Component, metadata should be set via layout or page wrapper
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Clock, ChevronRight, Plus, FileText, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -77,16 +81,20 @@ function ProjectsContent() {
 
     try {
       const currentSchema = useDataStore.getState().dataSchema
+      const currentFileName = useDataStore.getState().fileName
+
+      // Use the actual file name if available, otherwise fall back to date-based name
+      const projectName = currentFileName || currentSchema?.fileName || `Project ${new Date().toLocaleDateString()}`
 
       const project = await createProject({
         userId: user?.uid || 'anonymous',
-        name: `Project ${new Date().toLocaleDateString()}`,
+        name: projectName,
         description: 'Dataset uploaded to DataCrafted'
       })
 
       await saveProjectData(project.id, data, undefined, currentSchema || undefined)
       setCurrentProject(project.id)
-      setFileName(project.name)
+      setFileName(projectName)
       setRawData(data)
 
       // Hide upload after successful creation

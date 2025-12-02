@@ -1,20 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-interface MonitoringData {
-  type: 'error' | 'performance' | 'event'
-  data: any
-}
+import { validateRequest, monitoringDataSchema } from '@/lib/utils/api-validation'
+import { badRequest, rateLimitExceeded, serverError } from '@/lib/utils/api-errors'
 
 export async function POST(request: NextRequest) {
   try {
-    const body: MonitoringData = await request.json()
-    
     // Rate limiting check
     const clientIP = request.headers.get('x-forwarded-for') || 'unknown'
     if (await isRateLimited(clientIP)) {
-      return new NextResponse('Rate limited', { status: 429 })
+      return rateLimitExceeded(60)
     }
-    
+
+    // Validate request body with Zod
+    const validation = await validateRequest(request, monitoringDataSchema)
+    if (!validation.success) {
+      return validation.response
+    }
+
+    const body = validation.data
+
     // Process different types of monitoring data
     switch (body.type) {
       case 'error':
@@ -27,13 +30,13 @@ export async function POST(request: NextRequest) {
         await processEventData(body.data)
         break
       default:
-        return new NextResponse('Invalid monitoring type', { status: 400 })
+        return badRequest('Invalid monitoring type')
     }
-    
+
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Monitoring endpoint error:', error)
-    return new NextResponse('Internal server error', { status: 500 })
+    return serverError('Failed to process monitoring data', error as Error)
   }
 }
 

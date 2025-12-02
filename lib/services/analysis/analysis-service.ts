@@ -121,24 +121,27 @@ export class AnalysisService {
       // Step 8: Hydrate with data
       const hydratedCharts = chartRecommendationService.hydrateCharts(
         rebalancedCharts,
-        request.data
+        { columns: finalSchema.columns.map(c => c.name) }
       )
 
       // Build final result
       const result: AnalysisResult = {
         insights: aiResponse.insights || [],
         chartConfig: hydratedCharts,
-        schema: {
-          ...finalSchema,
+        summary: {
+          rowCount: finalSchema.rowCount,
+          columnCount: finalSchema.columnCount,
+          columns: finalSchema.columns.map(col => ({
+            name: col.name,
+            type: col.type,
+            uniqueValues: col.uniqueValues,
+            nullCount: col.nullCount
+          })),
+          dataQuality: aiResponse.summary?.dataQuality,
+          keyFindings: aiResponse.summary?.keyFindings,
+          recommendations: aiResponse.summary?.recommendations,
           businessContext: aiResponse.summary?.businessContext
-        },
-        summary: aiResponse.summary,
-        recommendations: scoredRecommendations.slice(0, 5).map(r => ({
-          type: r.type,
-          title: r.title,
-          score: r.totalScore,
-          reasoning: r.scores
-        }))
+        }
       }
 
       // Cache result if enabled

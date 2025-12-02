@@ -2,6 +2,56 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Accessibility Utilities */
+@layer utilities {
+  /* Screen reader only - hide visually but keep accessible to screen readers */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  /* Show on focus - for skip links */
+  .focus\:not-sr-only:focus {
+    position: static;
+    width: auto;
+    height: auto;
+    padding: initial;
+    margin: initial;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+  }
+}
+
+/* Enhanced Focus Visible Styles for Accessibility */
+@layer base {
+  /* Global focus styles with high contrast for keyboard navigation */
+  *:focus-visible {
+    outline: 2px solid hsl(var(--primary, 217 91% 60%));
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* Respect user's preference for reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
 /* React Grid Layout Enhanced Styles */
 .dashboard-container {
   min-height: 100vh;

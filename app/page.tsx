@@ -1,7 +1,7 @@
 'use client'
 
 import { DynamicFileUpload } from '@/components/upload/dynamic-file-upload'
-import { useEffect, useCallback, useState } from 'react'
+import { useEffect, useCallback, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { preloadUploadResources, shouldPrefetch } from '@/lib/utils/preloader'
 import { LandingHeader } from '@/components/ui/landing-header'
@@ -21,7 +21,8 @@ export default function Home() {
   const setUploadComplete = useUIStore((state) => state.setUploadComplete)
   const setUploadProjectId = useUIStore((state) => state.setUploadProjectId)
   const setUploadProgress = useUIStore((state) => state.setUploadProgress)
-  const setUploadStage = useUIStore((state) => state.setUploadStage) ?? (() => {})
+  const setUploadStageFromStore = useUIStore((state) => state.setUploadStage)
+  const setUploadStage = useMemo(() => setUploadStageFromStore ?? (() => {}), [setUploadStageFromStore])
 
   // Auth modal state
   const [showAuthModal, setShowAuthModal] = useState(false)
@@ -95,7 +96,8 @@ export default function Home() {
         await saveProjectData(
           project.id,
           currentState.rawData,
-          currentState.analysis || undefined,
+          // Type assertion needed due to different AnalysisResult definitions in stores
+          currentState.analysis as Parameters<typeof saveProjectData>[2],
           currentState.dataSchema || undefined
         )
         console.log('✅ [PAGE] Project data saved')
@@ -113,7 +115,7 @@ export default function Home() {
       console.error('❌ [PAGE] Failed to create project:', error)
       // Log error but don't navigate away - let user retry
     }
-  }, [router, user?.uid, createProject, saveProjectData, setUploadComplete, setUploadProjectId, setUploadProgress, setUploadStage])
+  }, [user?.uid, createProject, saveProjectData, setUploadComplete, setUploadProjectId, setUploadProgress, setUploadStage])
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f8fafd]">

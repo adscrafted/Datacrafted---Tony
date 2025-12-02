@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { withAuth } from '@/lib/middleware/auth'
 import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
+import { validateRequest, updateDashboardConfigSchema } from '@/lib/utils/api-validation'
 
 /**
  * GET /api/projects/[id]/config
@@ -139,8 +140,12 @@ const putHandler = withAuth(async (request, authUser, context) => {
       )
     }
 
-    // Parse request body
-    const body = await request.json()
+    // Validate request body with Zod
+    const validation = await validateRequest(request, updateDashboardConfigSchema)
+    if (!validation.success) {
+      return validation.response
+    }
+
     const {
       chartCustomizations = {},
       currentTheme = null,
@@ -149,7 +154,7 @@ const putHandler = withAuth(async (request, authUser, context) => {
       dateRange = null,
       granularity = null,
       chatMessages = null,
-    } = body
+    } = validation.data
 
     // Use database user ID (CUID) not Firebase UID
     const databaseUserId = project.users.id

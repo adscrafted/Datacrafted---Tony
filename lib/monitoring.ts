@@ -201,6 +201,71 @@ class AppMonitoring {
   }
 
   /**
+   * Monitor database query performance
+   */
+  public monitorDatabaseQuery(
+    operation: string,
+    model: string,
+    durationMs: number,
+    recordCount?: number
+  ) {
+    // Log slow queries
+    if (durationMs > 1000) {
+      console.warn(`[Slow DB Query] ${operation} on ${model} took ${durationMs}ms`)
+    }
+
+    this.logPerformance({
+      name: 'database_query_time',
+      value: durationMs,
+      unit: 'ms',
+      context: {
+        operation,
+        model,
+        recordCount,
+        efficiency: recordCount ? recordCount / durationMs : undefined
+      }
+    })
+  }
+
+  /**
+   * Monitor database connection pool metrics
+   */
+  public monitorConnectionPool(metrics: {
+    activeConnections: number
+    idleConnections: number
+    waitingRequests: number
+    maxConnections: number
+  }) {
+    this.logPerformance({
+      name: 'db_connection_pool',
+      value: metrics.activeConnections,
+      unit: 'count',
+      context: {
+        idle: metrics.idleConnections,
+        waiting: metrics.waitingRequests,
+        max: metrics.maxConnections,
+        utilization: (metrics.activeConnections / metrics.maxConnections) * 100
+      }
+    })
+
+    // Warn if connection pool is nearly exhausted
+    const utilization = (metrics.activeConnections / metrics.maxConnections) * 100
+    if (utilization > 80) {
+      console.warn(
+        `[DB Pool Warning] Connection pool at ${utilization.toFixed(1)}% utilization ` +
+        `(${metrics.activeConnections}/${metrics.maxConnections})`
+      )
+    }
+
+    // Warn if requests are waiting
+    if (metrics.waitingRequests > 0) {
+      console.warn(
+        `[DB Pool Warning] ${metrics.waitingRequests} requests waiting for connections`
+      )
+    }
+  }
+
+  /**
    * Track feature usage
    */
   public trackFeatureUsage(feature: string, properties?: Record<string, any>) {

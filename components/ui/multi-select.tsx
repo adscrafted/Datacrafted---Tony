@@ -115,13 +115,16 @@ export function MultiSelect({
           !value.length && 'text-muted-foreground',
           isOpen && 'ring-2 ring-ring ring-offset-2'
         )}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-label={selectedOptions.length > 0 ? `${selectedOptions.length} options selected` : placeholder}
       >
         <span className="truncate">{displayText()}</span>
-        <ChevronDown className={cn('ml-2 h-4 w-4 shrink-0 transition-transform', isOpen && 'rotate-180')} />
+        <ChevronDown className={cn('ml-2 h-4 w-4 shrink-0 transition-transform', isOpen && 'rotate-180')} aria-hidden="true" />
       </Button>
       
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-hidden">
+        <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-hidden" role="listbox" aria-label="Options list">
           {/* Search input */}
           <div className="p-2 border-b">
             <input
@@ -131,6 +134,7 @@ export function MultiSelect({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              aria-label="Search options"
             />
           </div>
           
@@ -157,7 +161,7 @@ export function MultiSelect({
           {/* Options list */}
           <div className="max-h-40 overflow-y-auto">
             {filteredOptions.length === 0 ? (
-              <div className="p-2 text-sm text-gray-500 text-center">
+              <div className="p-2 text-sm text-gray-500 text-center" role="status">
                 No options found
               </div>
             ) : (
@@ -170,11 +174,17 @@ export function MultiSelect({
                     option.disabled && 'opacity-50 cursor-not-allowed',
                     value.includes(option.value) && 'bg-primary/10'
                   )}
+                  role="option"
+                  aria-selected={value.includes(option.value)}
+                  aria-disabled={option.disabled}
                 >
-                  <div className={cn(
-                    'w-4 h-4 border rounded flex items-center justify-center',
-                    value.includes(option.value) ? 'bg-primary border-primary' : 'border-gray-300'
-                  )}>
+                  <div
+                    className={cn(
+                      'w-4 h-4 border rounded flex items-center justify-center',
+                      value.includes(option.value) ? 'bg-primary border-primary' : 'border-gray-300'
+                    )}
+                    aria-hidden="true"
+                  >
                     {value.includes(option.value) && (
                       <Check className="w-3 h-3 text-white" />
                     )}
@@ -189,19 +199,22 @@ export function MultiSelect({
       
       {/* Selected items display */}
       {selectedOptions.length > 0 && (
-        <div className="flex flex-wrap gap-1 mt-2">
+        <div className="flex flex-wrap gap-1 mt-2" role="list" aria-label="Selected options">
           {selectedOptions.slice(0, maxDisplay).map((option) => (
             <div
               key={option.value}
               className="inline-flex items-center space-x-1 bg-primary/10 text-primary px-2 py-1 rounded-full text-xs"
+              role="listitem"
             >
               <span>{option.label}</span>
               <button
                 onClick={(e) => handleRemoveOption(option.value, e)}
                 className="hover:bg-primary/20 rounded-full p-0.5"
                 disabled={disabled}
+                aria-label={`Remove ${option.label}`}
+                type="button"
               >
-                <X className="w-3 h-3" />
+                <X className="w-3 h-3" aria-hidden="true" />
               </button>
             </div>
           ))}

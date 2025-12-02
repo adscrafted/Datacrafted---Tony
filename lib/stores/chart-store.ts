@@ -461,7 +461,7 @@ export const useChartStore = create<ChartStore>()(
 
       // Chart customization actions
       updateChartCustomization: (chartId, customization) => {
-        logger.log('🎨 [CHART_STORE] Updating chart customization:', chartId)
+        logger.log('🎨 [CHART_STORE] Updating chart customization', { chartId })
         set(state => ({
           chartCustomizations: {
             ...state.chartCustomizations,
@@ -476,7 +476,7 @@ export const useChartStore = create<ChartStore>()(
       },
 
       batchUpdateChartCustomizations: (updates) => {
-        logger.log('🎨 [CHART_STORE] Batch updating chart customizations:', Object.keys(updates).length)
+        logger.log('🎨 [CHART_STORE] Batch updating chart customizations', { count: Object.keys(updates).length })
         set(state => {
           const newCustomizations = { ...state.chartCustomizations }
           Object.entries(updates).forEach(([chartId, customization]) => {
@@ -501,7 +501,7 @@ export const useChartStore = create<ChartStore>()(
       },
 
       removeChartCustomization: (chartId) => {
-        logger.log('🗑️ [CHART_STORE] Removing chart customization:', chartId)
+        logger.log('🗑️ [CHART_STORE] Removing chart customization', { chartId })
         set(state => {
           const { [chartId]: removed, ...rest } = state.chartCustomizations
           return { chartCustomizations: rest }
@@ -511,7 +511,7 @@ export const useChartStore = create<ChartStore>()(
 
       // Draft chart actions
       setDraftChart: (chart) => {
-        logger.log('📝 [CHART_STORE] Setting draft chart:', chart?.id)
+        logger.log('📝 [CHART_STORE] Setting draft chart', { chartId: chart?.id })
         set({ draftChart: chart })
       },
 
@@ -522,7 +522,7 @@ export const useChartStore = create<ChartStore>()(
           return
         }
 
-        logger.log('✅ [CHART_STORE] Committing draft chart:', state.draftChart.id)
+        logger.log('✅ [CHART_STORE] Committing draft chart', { chartId: state.draftChart.id })
         // Note: This would typically update the data-store's analysis.chartConfig
         // For now, we just clear the draft
         set({ draftChart: null })
@@ -531,13 +531,13 @@ export const useChartStore = create<ChartStore>()(
 
       // Theme actions
       setCurrentTheme: (theme) => {
-        logger.log('🎨 [CHART_STORE] Setting theme:', theme.name)
+        logger.log('🎨 [CHART_STORE] Setting theme', { name: theme.name })
         set({ currentTheme: theme })
         get().addToHistory('theme_change', { theme: theme.name })
       },
 
       addCustomTheme: (theme) => {
-        logger.log('➕ [CHART_STORE] Adding custom theme:', theme.name)
+        logger.log('➕ [CHART_STORE] Adding custom theme', { name: theme.name })
         set(state => ({
           availableThemes: [...state.availableThemes, theme],
           currentTheme: theme
@@ -547,13 +547,13 @@ export const useChartStore = create<ChartStore>()(
 
       // Layout actions
       setCurrentLayout: (layout) => {
-        logger.log('📐 [CHART_STORE] Setting layout:', layout.name)
+        logger.log('📐 [CHART_STORE] Setting layout', { name: layout.name })
         set({ currentLayout: layout })
         get().addToHistory('layout_change', { layout: layout.name })
       },
 
       addCustomLayout: (layout) => {
-        logger.log('➕ [CHART_STORE] Adding custom layout:', layout.name)
+        logger.log('➕ [CHART_STORE] Adding custom layout', { name: layout.name })
         set(state => ({
           availableLayouts: [...state.availableLayouts, layout],
           currentLayout: layout
@@ -563,7 +563,7 @@ export const useChartStore = create<ChartStore>()(
 
       saveLayout: (name) => {
         const state = get()
-        logger.log('💾 [CHART_STORE] Saving layout:', name)
+        logger.log('💾 [CHART_STORE] Saving layout', { name })
         const newLayout: DashboardLayout = {
           id: `layout-${Date.now()}`,
           name,
@@ -580,7 +580,7 @@ export const useChartStore = create<ChartStore>()(
         const state = get()
         const layout = state.availableLayouts.find(l => l.id === layoutId)
         if (layout) {
-          logger.log('📥 [CHART_STORE] Loading layout:', layout.name)
+          logger.log('📥 [CHART_STORE] Loading layout', { name: layout.name })
           get().setCurrentLayout(layout)
         }
       },
@@ -653,13 +653,13 @@ export const useChartStore = create<ChartStore>()(
       },
 
       setAutoSaveLayouts: (enabled) => {
-        logger.log('💾 [CHART_STORE] Setting auto-save layouts:', enabled)
+        logger.log('💾 [CHART_STORE] Setting auto-save layouts', { enabled })
         set({ autoSaveLayouts: enabled })
       },
 
       // Filter actions
       addDashboardFilter: (filter) => {
-        logger.log('🔍 [CHART_STORE] Adding dashboard filter:', filter.column)
+        logger.log('🔍 [CHART_STORE] Adding dashboard filter', { column: filter.column })
         set(state => ({
           dashboardFilters: [...state.dashboardFilters, filter]
         }))
@@ -667,7 +667,7 @@ export const useChartStore = create<ChartStore>()(
       },
 
       updateDashboardFilter: (filterId, updates) => {
-        logger.log('🔍 [CHART_STORE] Updating dashboard filter:', filterId)
+        logger.log('🔍 [CHART_STORE] Updating dashboard filter', { filterId })
         set(state => ({
           dashboardFilters: state.dashboardFilters.map(filter =>
             filter.id === filterId ? { ...filter, ...updates } : filter
@@ -677,7 +677,7 @@ export const useChartStore = create<ChartStore>()(
       },
 
       removeDashboardFilter: (filterId) => {
-        logger.log('🗑️ [CHART_STORE] Removing dashboard filter:', filterId)
+        logger.log('🗑️ [CHART_STORE] Removing dashboard filter', { filterId })
         set(state => ({
           dashboardFilters: state.dashboardFilters.filter(filter => filter.id !== filterId)
         }))
@@ -692,12 +692,12 @@ export const useChartStore = create<ChartStore>()(
       },
 
       setDateRange: (range) => {
-        logger.log('📅 [CHART_STORE] Setting date range:', range)
+        logger.log('📅 [CHART_STORE] Setting date range', { range })
         set({ dateRange: range })
       },
 
       setGranularity: (granularity) => {
-        logger.log('📊 [CHART_STORE] Setting granularity:', granularity)
+        logger.log('📊 [CHART_STORE] Setting granularity', { granularity })
         set({ granularity })
       },
 
@@ -722,7 +722,7 @@ export const useChartStore = create<ChartStore>()(
         const lastAction = state.customizationHistory[state.customizationHistory.length - 1]
         if (!lastAction) return
 
-        logger.log('↩️ [CHART_STORE] Undoing action:', lastAction.action)
+        logger.log('↩️ [CHART_STORE] Undoing action', { action: lastAction.action })
         // Implementation would depend on action type
         set(state => ({
           customizationHistory: state.customizationHistory.slice(0, -1),
@@ -735,7 +735,7 @@ export const useChartStore = create<ChartStore>()(
         const lastRedoAction = state.redoHistory[state.redoHistory.length - 1]
         if (!lastRedoAction) return
 
-        logger.log('↪️ [CHART_STORE] Redoing action:', lastRedoAction.action)
+        logger.log('↪️ [CHART_STORE] Redoing action', { action: lastRedoAction.action })
         // Implementation would depend on action type
         set(state => ({
           customizationHistory: [...state.customizationHistory, lastRedoAction],
@@ -762,7 +762,7 @@ export const useChartStore = create<ChartStore>()(
           chartType: template.type,
         }
 
-        logger.log('📐 [CHART_STORE] Chart position set to:', customization.position)
+        logger.log('📐 [CHART_STORE] Chart position set to', { position: customization.position })
         get().updateChartCustomization(chartId, customization)
 
         // CRITICAL: Also add the chart to data-store's analysis.chartConfig
@@ -791,20 +791,20 @@ export const useChartStore = create<ChartStore>()(
           }
 
           dataState.setAnalysis(updatedAnalysis)
-          logger.log('✅ [CHART_STORE] Added chart to analysis.chartConfig:', chartId)
+          logger.log('✅ [CHART_STORE] Added chart to analysis.chartConfig', { chartId })
         }
 
         return chartId
       },
 
       removeChart: (chartId) => {
-        logger.log('🗑️ [CHART_STORE] Removing chart:', chartId)
+        logger.log('🗑️ [CHART_STORE] Removing chart', { chartId })
         get().removeChartCustomization(chartId)
         get().addToHistory('chart_remove', { chartId })
       },
 
       duplicateChart: (chartId) => {
-        logger.log('📋 [CHART_STORE] Duplicating chart:', chartId)
+        logger.log('📋 [CHART_STORE] Duplicating chart', { chartId })
         const state = get()
         const originalCustomization = state.chartCustomizations[chartId]
         if (!originalCustomization) return
@@ -836,7 +836,7 @@ export const useChartStore = create<ChartStore>()(
       },
 
       exportDashboard: async (format) => {
-        logger.log('📤 [CHART_STORE] Exporting dashboard:', format)
+        logger.log('📤 [CHART_STORE] Exporting dashboard', { format })
         // Implementation would use html2canvas, jsPDF, or similar
       },
 

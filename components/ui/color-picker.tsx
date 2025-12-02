@@ -46,17 +46,20 @@ export function ColorPicker({
         onClick={() => setIsOpen(!isOpen)}
         className="w-20 h-8 p-1 border-2"
         style={{ backgroundColor: value }}
+        aria-label={`Select color, current color is ${value}`}
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
       >
-        <div className="w-full h-full rounded-sm border border-gray-300" />
+        <div className="w-full h-full rounded-sm border border-gray-300" aria-hidden="true" />
       </Button>
       
       {isOpen && (
-        <Card className="absolute top-10 left-0 z-50 w-64 shadow-lg">
+        <Card className="absolute top-10 left-0 z-50 w-64 shadow-lg" role="dialog" aria-label="Color picker">
           <CardContent className="p-4 space-y-4">
             {/* Preset Colors */}
             <div>
               <h4 className="text-sm font-medium mb-2">Preset Colors</h4>
-              <div className="grid grid-cols-6 gap-2">
+              <div className="grid grid-cols-6 gap-2" role="group" aria-label="Preset colors">
                 {presetColors.map((color) => (
                   <button
                     key={color}
@@ -66,6 +69,9 @@ export function ColorPicker({
                       value === color ? 'border-gray-800' : 'border-gray-300'
                     )}
                     style={{ backgroundColor: color }}
+                    aria-label={`Select color ${color}`}
+                    aria-pressed={value === color}
+                    type="button"
                   />
                 ))}
               </div>
@@ -75,13 +81,18 @@ export function ColorPicker({
             <div>
               <h4 className="text-sm font-medium mb-2">Custom Color</h4>
               <div className="flex items-center space-x-2">
+                <label htmlFor="color-picker-input" className="sr-only">Pick custom color</label>
                 <input
+                  id="color-picker-input"
                   type="color"
                   value={customColor}
                   onChange={handleCustomColorChange}
                   className="w-12 h-8 border border-gray-300 rounded cursor-pointer"
+                  aria-label="Custom color picker"
                 />
+                <label htmlFor="color-hex-input" className="sr-only">Enter hex color code</label>
                 <input
+                  id="color-hex-input"
                   type="text"
                   value={customColor}
                   onChange={(e) => {
@@ -92,6 +103,7 @@ export function ColorPicker({
                   }}
                   className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
                   placeholder="#000000"
+                  aria-label="Hex color code"
                 />
               </div>
             </div>

@@ -3,9 +3,16 @@ import path from 'path'
 import crypto from 'crypto'
 import { db } from './db'
 import type { DataRow } from './store'
+import {
+  validateFile,
+  sanitizeFileName,
+  FILE_SIZE_LIMITS,
+  ALLOWED_MIME_TYPES,
+  ALL_ALLOWED_MIME_TYPES,
+} from './utils/file-validation'
 
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads')
-const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
+const MAX_FILE_SIZE = FILE_SIZE_LIMITS.DATA_FILE
 
 /**
  * Ensure upload directory exists
@@ -36,6 +43,8 @@ export function generateFileName(originalName: string, hash: string): string {
 
 /**
  * Save uploaded file and store metadata
+ *
+ * Security: Performs comprehensive validation before saving
  */
 export async function saveUploadedFile(
   sessionId: string,
@@ -47,15 +56,39 @@ export async function saveUploadedFile(
   },
   parsedData: DataRow[]
 ): Promise<string> {
-  // Validate file size
-  if (file.size > MAX_FILE_SIZE) {
-    throw new Error(`File size exceeds maximum limit of ${MAX_FILE_SIZE / 1024 / 1024}MB`)
+  // ========================================================================
+  // SECURITY: Comprehensive File Validation
+  // ========================================================================
+
+  const validationResult = validateFile(
+    {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      buffer: file.data,
+    },
+    {
+      maxSize: MAX_FILE_SIZE,
+      allowedMimeTypes: ALL_ALLOWED_MIME_TYPES,
+      validateMagicBytes: true,
+      checkDoubleExtensions: true,
+    }
+  )
+
+  if (!validationResult.valid) {
+    const error = new Error(validationResult.error || 'File validation failed')
+    ;(error as any).statusCode = validationResult.httpStatus || 400
+    ;(error as any).code = validationResult.errorCode
+    throw error
   }
+
+  // Use sanitized filename from validation
+  const sanitizedOriginalName = validationResult.sanitizedName!
 
   await ensureUploadDir()
 
   const fileHash = generateFileHash(file.data)
-  const fileName = generateFileName(file.name, fileHash)
+  const fileName = generateFileName(sanitizedOriginalName, fileHash)
   const filePath = path.join(UPLOAD_DIR, fileName)
 
   // Check if file with same hash already exists
@@ -76,11 +109,11 @@ export async function saveUploadedFile(
   // Generate data schema
   const dataSchema = generateDataSchema(parsedData)
 
-  // Store file metadata in database
+  // Store file metadata in database (use sanitized name)
   const uploadedFile = await db.uploadedFile.create({
     data: {
       fileName,
-      originalName: file.name,
+      originalName: sanitizedOriginalName, // Store sanitized name, not raw user input
       fileSize: file.size,
       mimeType: file.type,
       fileHash,

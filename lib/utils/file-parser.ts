@@ -1,6 +1,6 @@
 import Papa from 'papaparse'
-import * as XLSX from 'xlsx'
 import type { DataRow } from '@/lib/store'
+import { parseExcelSecurely } from './secure-xlsx-parser'
 
 export const parseCSV = (file: File): Promise<DataRow[]> => {
   console.log('[FILE-PARSER] parseCSV called for file:', file.name)
@@ -35,55 +35,21 @@ export const parseCSV = (file: File): Promise<DataRow[]> => {
   })
 }
 
-export const parseExcel = (file: File): Promise<DataRow[]> => {
+export const parseExcel = async (file: File): Promise<DataRow[]> => {
   console.log('[FILE-PARSER] parseExcel called for file:', file.name)
-  return new Promise((resolve, reject) => {
-    try {
-      const reader = new FileReader()
-
-      reader.onload = (e) => {
-        try {
-          console.log('[FILE-PARSER] FileReader onload triggered')
-          const data = e.target?.result
-          if (!data) {
-            throw new Error('No data read from file')
-          }
-
-          console.log('[FILE-PARSER] Reading Excel workbook...')
-          const workbook = XLSX.read(data, { type: 'binary' })
-          console.log('[FILE-PARSER] Workbook read successfully, sheets:', workbook.SheetNames)
-
-          // Get the first worksheet
-          const firstSheetName = workbook.SheetNames[0]
-          const worksheet = workbook.Sheets[firstSheetName]
-
-          // Convert to JSON
-          console.log('[FILE-PARSER] Converting sheet to JSON...')
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, {
-            raw: false,
-            dateNF: 'yyyy-mm-dd'
-          })
-
-          console.log('[FILE-PARSER] parseExcel completed, rows:', jsonData.length)
-          resolve(jsonData as DataRow[])
-        } catch (error) {
-          console.error('[FILE-PARSER] parseExcel processing error:', error)
-          reject(error)
-        }
-      }
-
-      reader.onerror = (error) => {
-        console.error('[FILE-PARSER] FileReader error:', error)
-        reject(error)
-      }
-
-      console.log('[FILE-PARSER] Starting to read file as binary string...')
-      reader.readAsBinaryString(file)
-    } catch (error) {
-      console.error('[FILE-PARSER] parseExcel synchronous error:', error)
-      reject(error)
-    }
-  })
+  try {
+    console.log('[FILE-PARSER] Using secure Excel parser...')
+    const jsonData = await parseExcelSecurely<DataRow>(file, {
+      sheetIndex: 0,
+      dateFormat: 'yyyy-mm-dd',
+      raw: false
+    })
+    console.log('[FILE-PARSER] parseExcel completed securely, rows:', jsonData.length)
+    return jsonData
+  } catch (error) {
+    console.error('[FILE-PARSER] parseExcel error:', error)
+    throw error
+  }
 }
 
 export const parseFile = async (file: File): Promise<DataRow[]> => {

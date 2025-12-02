@@ -1,6 +1,6 @@
 import type { DataRow, AnalysisResult } from '@/lib/store'
 import type { ChartConfig } from '@/lib/types/chart-types'
-import { auth, DEBUG_MODE } from '@/lib/config/firebase'
+import { auth } from '@/lib/config/firebase'
 
 /**
  * Analyzes data using OpenAI GPT-4 for intelligent insights and visualization recommendations
@@ -34,15 +34,11 @@ export function analyzeData(
         authToken = await currentUser.getIdToken()
         console.log('✅ [AI-ANALYSIS] Got Firebase auth token for API request')
       } else {
-        if (!DEBUG_MODE) {
-          console.warn('⚠️ [AI-ANALYSIS] No authenticated user - using unauthenticated upload')
-        }
+        console.warn('⚠️ [AI-ANALYSIS] No authenticated user - using unauthenticated upload')
         // Continue without auth token (server will handle anonymous users)
       }
     } catch (authError) {
-      if (!DEBUG_MODE) {
-        console.warn('⚠️ [AI-ANALYSIS] Failed to get auth token:', authError)
-      }
+      console.warn('⚠️ [AI-ANALYSIS] Failed to get auth token:', authError)
       // Continue without token - let API decide if auth is required
     }
 

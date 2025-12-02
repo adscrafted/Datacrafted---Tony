@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/lib/middleware/auth'
 import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 import { getUserByFirebaseUid, updateUser, deleteUser } from '@/lib/api/user-service'
+import { validateRequest, updateUserSchema } from '@/lib/utils/api-validation'
+import { userNotFound, databaseError } from '@/lib/utils/api-errors'
 
 /**
  * GET /api/user
@@ -27,10 +29,7 @@ const getHandler = withAuth(async (request: NextRequest, firebaseUser) => {
 
     if (!user) {
       console.log('[API] User not found in database:', firebaseUser.uid)
-      return NextResponse.json(
-        { error: 'User not found in database' },
-        { status: 404 }
-      )
+      return userNotFound()
     }
 
     console.log('[API] User profile retrieved:', user.id)
@@ -48,10 +47,7 @@ const getHandler = withAuth(async (request: NextRequest, firebaseUser) => {
     })
   } catch (error) {
     console.error('[API] Error getting user profile:', error)
-    return NextResponse.json(
-      { error: 'Failed to get user profile' },
-      { status: 500 }
-    )
+    return databaseError('get user profile', error)
   }
 })
 
@@ -90,23 +86,16 @@ const patchHandler = withAuth(async (request: NextRequest, firebaseUser) => {
 
     if (!existingUser) {
       console.log('[API] User not found in database:', firebaseUser.uid)
-      return NextResponse.json(
-        { error: 'User not found in database' },
-        { status: 404 }
-      )
+      return userNotFound()
     }
 
-    // Parse request body
-    const body = await request.json()
-    const { name, email, photoURL } = body
-
-    // Validate input
-    if (!name && !email && !photoURL) {
-      return NextResponse.json(
-        { error: 'At least one field must be provided: name, email, or photoURL' },
-        { status: 400 }
-      )
+    // Validate request body with Zod
+    const validation = await validateRequest(request, updateUserSchema)
+    if (!validation.success) {
+      return validation.response
     }
+
+    const { name, email, photoURL } = validation.data
 
     // Update user
     const updatedUser = await updateUser(existingUser.id, {
@@ -131,10 +120,7 @@ const patchHandler = withAuth(async (request: NextRequest, firebaseUser) => {
     })
   } catch (error) {
     console.error('[API] Error updating user profile:', error)
-    return NextResponse.json(
-      { error: 'Failed to update user profile' },
-      { status: 500 }
-    )
+    return databaseError('update user profile', error)
   }
 })
 
@@ -170,10 +156,7 @@ const deleteHandler = withAuth(async (request: NextRequest, firebaseUser) => {
 
     if (!user) {
       console.log('[API] User not found in database:', firebaseUser.uid)
-      return NextResponse.json(
-        { error: 'User not found in database' },
-        { status: 404 }
-      )
+      return userNotFound()
     }
 
     // Delete user (cascades to sessions, etc.)
@@ -191,10 +174,7 @@ const deleteHandler = withAuth(async (request: NextRequest, firebaseUser) => {
     })
   } catch (error) {
     console.error('[API] Error deleting user account:', error)
-    return NextResponse.json(
-      { error: 'Failed to delete user account' },
-      { status: 500 }
-    )
+    return databaseError('delete user account', error)
   }
 })
 
