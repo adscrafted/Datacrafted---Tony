@@ -7,8 +7,8 @@ builder = "nixpacks"
 
 [deploy]
 # Start command: Sync Prisma schema to database then start Next.js
-# Using ./node_modules/.bin/prisma to use project's installed version (6.13.0)
-startCommand = "./node_modules/.bin/prisma db push --accept-data-loss && npm run start"
+# Using npx with exact version to avoid Prisma 7 breaking changes
+startCommand = "npx prisma@6.13.0 db push --accept-data-loss && npm run start"
 # Health check
 healthcheckPath = "/api/health"
 healthcheckTimeout = 300
