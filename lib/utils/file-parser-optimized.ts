@@ -175,11 +175,16 @@ class FileParserOptimized {
         reject(new Error(`Worker error: ${error.message}`))
       }
 
-      // Start parsing
+      // Start parsing - don't pass onProgress callback (functions can't be cloned)
+      // The worker will send progress messages back via postMessage
       this.worker.postMessage({
         type: 'parseFile',
         file,
-        options
+        options: {
+          chunkSize: options.chunkSize,
+          maxFileSize: options.maxFileSize
+          // Note: onProgress and signal are handled on main thread
+        }
       })
     })
   }
