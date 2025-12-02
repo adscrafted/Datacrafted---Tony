@@ -6,6 +6,9 @@
 builder = "nixpacks"
 
 [deploy]
+# Start command: Sync Prisma schema to database then start Next.js
+# Using db push since there are no migration files (safe for new database)
+startCommand = "npx prisma db push --accept-data-loss && npm run start"
 # Health check
 healthcheckPath = "/api/health"
 healthcheckTimeout = 300
