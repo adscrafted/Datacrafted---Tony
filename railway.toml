@@ -6,8 +6,9 @@
 builder = "nixpacks"
 
 [deploy]
-# Start command: Just start Next.js (db push done locally with direct connection)
-startCommand = "npm run start"
+# Start command: Run the standalone Next.js server
+# Note: Dockerfile builds standalone output, so we use node server.js directly
+startCommand = "node server.js"
 # Health check
 healthcheckPath = "/api/health"
 healthcheckTimeout = 300
