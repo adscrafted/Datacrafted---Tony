@@ -87,14 +87,14 @@ export function buildCSPDirectives(
     'https://accounts.google.com',
   ]
 
-  // Production: Use strict-dynamic for modern browsers
-  // This allows scripts loaded by nonce-verified scripts to execute
-  // without needing to whitelist every chunk URL
+  // Production: Allow inline scripts for Next.js compatibility
+  // NOTE: Next.js injects inline scripts that don't have nonce attributes,
+  // so we need 'unsafe-inline' for the app to function.
+  // TODO: Implement custom document with nonce injection for stricter CSP
   const scriptSrcProduction = [
     ...scriptSrcBase,
-    "'strict-dynamic'",
-    // Fallback for older browsers that don't support strict-dynamic
-    // These are ignored if strict-dynamic is supported
+    "'unsafe-inline'", // Required for Next.js inline scripts
+    "'unsafe-eval'", // Required for some Next.js features
     'https:',
   ]
 
