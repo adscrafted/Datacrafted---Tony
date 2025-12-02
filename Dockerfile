@@ -75,18 +75,14 @@ RUN chown -R nextjs:nodejs /app
 # Switch to non-root user
 USER nextjs
 
-# Expose port 3000
-EXPOSE 3000
+# Expose port (Railway injects PORT env var, typically 8080)
+EXPOSE 8080
 
-# Set port environment variable
-ENV PORT=3000
+# Set hostname for Next.js
 ENV HOSTNAME="0.0.0.0"
 
-# Health check
-# Ensures the container is healthy and ready to serve traffic
-# Checks every 30s with 3s timeout, 3 retries before marking unhealthy
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:3000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+# Note: Railway injects PORT automatically, don't hardcode it
+# Health check disabled - Railway handles health checks externally
 
 # Start the Next.js server
 # The standalone server.js includes all necessary dependencies
