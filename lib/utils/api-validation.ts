@@ -200,8 +200,8 @@ export const uploadProjectDataSchema = z.object({
   data: z.array(z.record(z.unknown()))
     .min(1, 'Data array must contain at least one row')
     .max(1000000, 'Data exceeds maximum allowed rows (1,000,000)'),
-  analysis: z.record(z.unknown()).optional(),
-  chartCustomizations: z.record(z.unknown()).optional(),
+  analysis: z.record(z.unknown()).optional().nullable(),
+  chartCustomizations: z.record(z.unknown()).optional().nullable(),
   metadata: z.object({
     fileName: z.string()
       .min(1, 'fileName is required')

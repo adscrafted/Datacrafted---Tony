@@ -15,6 +15,25 @@ const getHandler = withAuth(async (request, authUser) => {
   try {
     console.log('[API PROJECTS] Fetching projects for user:', authUser.uid)
 
+    // Test database connection first
+    try {
+      await db.$queryRaw`SELECT 1`
+      console.log('[API PROJECTS] Database connection successful')
+    } catch (dbError: any) {
+      console.error('[API PROJECTS] Database connection failed:', {
+        message: dbError.message,
+        code: dbError.code,
+        meta: dbError.meta
+      })
+
+      // Return empty projects array on connection failure
+      // This allows the frontend to fall back to local storage
+      return NextResponse.json({
+        projects: [],
+        warning: 'Database temporarily unavailable'
+      })
+    }
+
     // First, get the database user ID from Firebase UID
     const dbUser = await db.user.findUnique({
       where: { firebaseUid: authUser.uid }
@@ -156,8 +175,30 @@ const getHandler = withAuth(async (request, authUser) => {
     return NextResponse.json({
       projects: transformedProjects
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('[API PROJECTS] Error fetching projects:', error)
+
+    // Check for specific database connection errors
+    if (error.code === 'P1001' || error.code === 'P1002' || error.code === 'P1008') {
+      // Prisma connection errors - return empty array instead of 500 error
+      console.error('[API PROJECTS] Database connection error, falling back to local storage')
+      return NextResponse.json({
+        projects: [],
+        warning: 'Database connection error - using local storage'
+      })
+    }
+
+    if (error.message?.includes('connect ECONNREFUSED') ||
+        error.message?.includes('Connection terminated') ||
+        error.message?.includes('Connection pool timeout')) {
+      console.error('[API PROJECTS] Connection pool exhausted or database unreachable')
+      return NextResponse.json({
+        projects: [],
+        warning: 'Database temporarily unavailable'
+      })
+    }
+
+    // For other errors, return standard database error
     return databaseError('fetch projects', error)
   }
 })
@@ -167,6 +208,24 @@ export const GET = withRateLimit(RATE_LIMITS.SESSION, getHandler)
 const postHandler = withAuth(async (request, authUser) => {
   try {
     console.log('[API PROJECTS] Creating project for user:', authUser.uid)
+
+    // Test database connection first
+    try {
+      await db.$queryRaw`SELECT 1`
+      console.log('[API PROJECTS] Database connection successful')
+    } catch (dbError: any) {
+      console.error('[API PROJECTS] Database connection failed during project creation:', {
+        message: dbError.message,
+        code: dbError.code
+      })
+
+      // Return error indicating database is unavailable
+      // Frontend will fall back to local creation
+      return NextResponse.json({
+        error: 'Database temporarily unavailable',
+        message: 'Project will be created locally'
+      }, { status: 503 })
+    }
 
     // Validate request body with Zod
     const validation = await validateRequest(request, createProjectSchema)
@@ -223,8 +282,30 @@ const postHandler = withAuth(async (request, authUser) => {
         icon: project.icon || undefined,
       }
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('[API PROJECTS] Error creating project:', error)
+
+    // Check for specific database connection errors
+    if (error.code === 'P1001' || error.code === 'P1002' || error.code === 'P1008') {
+      // Prisma connection errors - return 503 for frontend fallback
+      console.error('[API PROJECTS] Database connection error during project creation')
+      return NextResponse.json({
+        error: 'Database connection error',
+        message: 'Project will be created locally'
+      }, { status: 503 })
+    }
+
+    if (error.message?.includes('connect ECONNREFUSED') ||
+        error.message?.includes('Connection terminated') ||
+        error.message?.includes('Connection pool timeout')) {
+      console.error('[API PROJECTS] Connection pool exhausted during project creation')
+      return NextResponse.json({
+        error: 'Database temporarily unavailable',
+        message: 'Project will be created locally'
+      }, { status: 503 })
+    }
+
+    // For other errors, return standard database error
     return databaseError('create project', error)
   }
 })

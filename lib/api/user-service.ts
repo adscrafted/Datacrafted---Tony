@@ -1,4 +1,4 @@
-import { db } from '../db'
+import { db, withDatabaseRetry, isDatabaseHealthy } from '../db'
 
 /**
  * User service for managing Postgres user records synced from Firebase
@@ -27,34 +27,63 @@ export interface UserData {
  *
  * @param firebaseUser - Firebase user data from authentication
  * @returns Synced user record from database
+ * @throws Error if database is unavailable or operation fails
  */
 export async function syncUser(firebaseUser: FirebaseUserData): Promise<UserData> {
   try {
     console.log('[USER-SERVICE] Syncing Firebase user to database:', firebaseUser.uid)
 
+    // Check database health before attempting operation
+    if (!isDatabaseHealthy()) {
+      console.warn('[USER-SERVICE] Database connection may be unhealthy, attempting operation anyway...')
+    }
+
     // Upsert user: create if not exists, update if exists
-    const user = await db.user.upsert({
-      where: {
-        firebaseUid: firebaseUser.uid,
+    // Use retry mechanism to handle transient connection issues
+    const user = await withDatabaseRetry(
+      async () => {
+        return await db.user.upsert({
+          where: {
+            firebaseUid: firebaseUser.uid,
+          },
+          update: {
+            email: firebaseUser.email,
+            name: firebaseUser.displayName,
+            photoURL: firebaseUser.photoURL,
+            updatedAt: new Date(),
+          },
+          create: {
+            firebaseUid: firebaseUser.uid,
+            email: firebaseUser.email,
+            name: firebaseUser.displayName,
+            photoURL: firebaseUser.photoURL,
+          },
+        })
       },
-      update: {
-        email: firebaseUser.email,
-        name: firebaseUser.displayName,
-        photoURL: firebaseUser.photoURL,
-        updatedAt: new Date(),
-      },
-      create: {
-        firebaseUid: firebaseUser.uid,
-        email: firebaseUser.email,
-        name: firebaseUser.displayName,
-        photoURL: firebaseUser.photoURL,
-      },
-    })
+      {
+        retries: 2,
+        timeout: 10000,
+        retryDelay: 500,
+        operationName: 'syncUser upsert'
+      }
+    )
 
     console.log('[USER-SERVICE] User synced successfully:', user.id)
     return user
-  } catch (error) {
+  } catch (error: any) {
     console.error('[USER-SERVICE] Error syncing user:', error)
+
+    // Provide more specific error messages
+    if (error.message?.includes('timed out')) {
+      throw new Error('Database operation timed out. Please try again.')
+    } else if (error.message?.includes('connection')) {
+      throw new Error('Unable to connect to database. Please check your connection.')
+    } else if (error.code === 'P2002') {
+      // Unique constraint violation
+      console.error('[USER-SERVICE] Unique constraint violation - this should not happen with upsert')
+      throw new Error('User already exists with conflicting data')
+    }
+
     throw new Error('Failed to sync user to database')
   }
 }

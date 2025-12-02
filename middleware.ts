@@ -164,6 +164,8 @@ function applyCorsHeaders(response: NextResponse, request: NextRequest): void {
  *
  * SECURITY HEADERS:
  * - Content-Security-Policy: XSS prevention with nonce-based scripts
+ * - Cross-Origin-Opener-Policy: Spectre protection with popup support
+ * - Cross-Origin-Embedder-Policy: Cross-origin isolation
  * - X-Frame-Options: Clickjacking protection
  * - X-Content-Type-Options: MIME type sniffing prevention
  * - Referrer-Policy: Referrer information control
@@ -181,6 +183,18 @@ function applySecurityHeaders(response: NextResponse, nonce: string): void {
 
   // Set security headers
   response.headers.set('Content-Security-Policy', cspHeader)
+
+  // COOP: Allow popups for Firebase Auth (OAuth flows)
+  // This prevents "Cross-Origin-Opener-Policy policy would block the window.closed call" errors
+  // while maintaining Spectre attack protection
+  // OWASP Reference: A05:2021 - Security Misconfiguration
+  response.headers.set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups')
+
+  // COEP: Require explicit opt-in for loading cross-origin resources
+  // NOTE: Using 'unsafe-none' to maintain compatibility with third-party resources
+  // In strict security mode, use 'require-corp' instead
+  response.headers.set('Cross-Origin-Embedder-Policy', 'unsafe-none')
+
   response.headers.set('X-Frame-Options', 'DENY')
   response.headers.set('X-Content-Type-Options', 'nosniff')
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')

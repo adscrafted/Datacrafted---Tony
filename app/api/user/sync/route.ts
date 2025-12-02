@@ -47,14 +47,53 @@ const handler = withAuth(async (request: NextRequest, firebaseUser) => {
         updatedAt: user.updatedAt,
       },
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('[API] Error syncing user:', error)
+
+    // Determine appropriate error message and status code
+    let statusCode = 500
+    let errorMessage = 'Failed to sync user to database'
+    let errorDetails: string | undefined
+
+    if (error.message?.includes('timed out')) {
+      statusCode = 504 // Gateway Timeout
+      errorMessage = 'Database operation timed out'
+      errorDetails = 'The database took too long to respond. Please try again.'
+    } else if (error.message?.includes('connection') || error.message?.includes('connect')) {
+      statusCode = 503 // Service Unavailable
+      errorMessage = 'Database temporarily unavailable'
+      errorDetails = 'Unable to connect to the database. Please try again in a moment.'
+    } else if (error.code === 'P2002') {
+      statusCode = 409 // Conflict
+      errorMessage = 'User data conflict'
+      errorDetails = 'A user with this data already exists.'
+    } else if (error.code?.startsWith('P')) {
+      // Prisma error codes
+      errorMessage = 'Database operation failed'
+      errorDetails = 'A database constraint or validation error occurred.'
+    }
+
+    // Log detailed error for debugging (server-side only)
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[API] Detailed error:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack,
+      })
+    }
+
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to sync user to database',
+        error: errorMessage,
+        ...(errorDetails && { details: errorDetails }),
+        // Include error code in development for debugging
+        ...(process.env.NODE_ENV !== 'production' && {
+          errorCode: error.code,
+          errorType: error.constructor.name
+        }),
       },
-      { status: 500 }
+      { status: statusCode }
     )
   }
 })

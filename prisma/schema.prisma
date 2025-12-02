@@ -8,8 +8,10 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  // Note: directUrl is not needed for Railway's direct PostgreSQL connection
-  // Only add it if using a connection pooler like PgBouncer or Supabase pooling
+  // directUrl is required for Supabase Transaction pooler (port 6543)
+  // Uses direct connection (port 5432) for migrations and schema operations
+  // Transaction pooler (port 6543) is used for queries at runtime
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 model User {
