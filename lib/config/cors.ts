@@ -69,7 +69,7 @@ const DEVELOPMENT_ORIGINS = [
  * @returns Array of validated production origins
  */
 function getProductionOrigins(): string[] {
-  const envOrigins = process.env.ALLOWED_ORIGINS || process.env.NEXT_PUBLIC_APP_URL || ''
+  let envOrigins = process.env.ALLOWED_ORIGINS || process.env.NEXT_PUBLIC_APP_URL || ''
 
   if (!envOrigins) {
     console.warn(
@@ -78,6 +78,17 @@ function getProductionOrigins(): string[] {
       '      Example: ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com'
     )
     return []
+  }
+
+  // Defensive: Strip any accidental "KEY=" prefix from the value
+  // This can happen if env vars are misconfigured
+  if (envOrigins.startsWith('ALLOWED_ORIGINS=')) {
+    console.warn('[CORS] WARNING: ALLOWED_ORIGINS value contains "ALLOWED_ORIGINS=" prefix. Stripping it.')
+    envOrigins = envOrigins.replace('ALLOWED_ORIGINS=', '')
+  }
+  if (envOrigins.startsWith('NEXT_PUBLIC_APP_URL=')) {
+    console.warn('[CORS] WARNING: NEXT_PUBLIC_APP_URL value contains prefix. Stripping it.')
+    envOrigins = envOrigins.replace('NEXT_PUBLIC_APP_URL=', '')
   }
 
   // Parse and validate origins
