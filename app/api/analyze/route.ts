@@ -603,7 +603,7 @@ Analyze the dataset following a three-phase approach:
 2. IDENTIFY INSIGHTS - What stories does this data tell?
 3. SELECT VISUALIZATIONS - Match each insight to the best chart type
 
-Your goal is to create 14-18 charts (6-8 scorecards + 8-10 visualizations) that tell a comprehensive story about the data.
+Your goal is to create a COMPREHENSIVE dashboard with as many charts as the data supports. Generate more charts for richer datasets.
 </TASK>
 
 <ANALYSIS_APPROACH>
@@ -635,43 +635,67 @@ Match each insight to the appropriate chart type:
 - Patterns: Cross-dimensional insights (heatmap, cohort)
 - Details: Comprehensive data view (table)
 
-Use advanced chart types (waterfall, heatmap, gauge, bullet, treemap, cohort) ONLY when:
-- The data pattern specifically justifies them
-- They reveal insights that simpler charts cannot
-- The data structure supports them (e.g., hierarchies for treemap)
+Use advanced chart types based on data complexity:
+- 5-10 columns: Include 1-2 advanced charts
+- 11-20 columns: Include 3-5 advanced charts
+- 20+ columns: Include 5-8 advanced charts
 
-DON'T force advanced charts if simpler ones tell the story better.
+Advanced types add analytical sophistication when the data supports them.
 </ANALYSIS_APPROACH>
 
 <CHART_REQUIREMENTS>
-Generate charts in TWO SEPARATE CATEGORIES:
+Generate charts COMPREHENSIVELY based on the data. More columns = more charts.
 
-CATEGORY 1 - SCORECARDS (6-8 high-level metrics):
-- TARGET: 6-8 scorecards showing key business metrics
-- MUST use diverse aggregations (sum, avg, count, min, max, distinct)
-- Each aggregation type should be used at least once
-- Generate 7-8 scorecards as 1-2 may fail validation
-- Examples: Total Revenue, Total Orders, Average Order Value, Unique Customers
+<SCALING_TABLE>
+| Data Complexity | Columns | Scorecards | Visualizations | Total Charts |
+|-----------------|---------|------------|----------------|--------------|
+| Simple          | 3-5     | 4-6        | 6-10           | 10-16        |
+| Medium          | 6-10    | 6-10       | 10-16          | 16-26        |
+| Rich            | 11-20   | 10-14      | 16-24          | 26-38        |
+| Complex         | 20+     | 14-20      | 24-35          | 38-55        |
+</SCALING_TABLE>
 
-CATEGORY 2 - VISUALIZATIONS & TABLES (8-10 detailed analysis):
-- TARGET: 8-10 charts (NOT including scorecards above)
-- Breakdown:
-  * Rankings: 3-4 charts showing Top X and/or Bottom X performers
-    - Use bar charts with sortBy, sortOrder, and limit parameters
-    - Include at least 1 "Top 10" (sortOrder="desc") and 1 "Bottom 10" (sortOrder="asc")
-    - Example: {type: "bar", dataMapping: {category: "Product", values: ["Revenue"], aggregation: "sum", sortBy: "Revenue", sortOrder: "desc", limit: 10}}
-    - NOTE: Use treemaps for hierarchical composition, NOT rankings
-  * Analytical charts: 4-6 charts showing trends, relationships, distributions
-    - Use advanced types when data patterns justify them (conditional, not mandatory)
-    - Advanced: waterfall (variance), heatmap (2D patterns), gauge/bullet (vs target), treemap (hierarchy), cohort (retention)
-    - Core: line/area (trends), scatter (relationships), combo (multi-scale), pie (proportions)
-  * Tables: 1-2 comprehensive data views
-    - Show top 20 records with key columns
-    - Example: {type: "table", dataMapping: {columns: [...], sortBy: "...", sortOrder: "desc", limit: 20}}
+CATEGORY 1 - SCORECARDS:
+- Create one scorecard for EACH meaningful numeric metric
+- REQUIRED: Use ALL six aggregation types across your scorecards:
+  * sum: Totals (Total Revenue, Total Spend)
+  * avg: Averages (Average Order Value, Average Rating)
+  * count: Counts (Total Transactions, Number of Records)
+  * distinct: Unique counts (Unique Customers, Product Variety)
+  * min: Minimums (Earliest Date, Lowest Price)
+  * max: Maximums (Latest Date, Peak Value)
+- If you have 8 numeric columns, generate 10-12 scorecards using different aggregations
 
-TOTAL TARGET: 14-18 charts (6-8 scorecards + 8-10 visualizations)
+CATEGORY 2 - VISUALIZATIONS & TABLES:
+Generate charts for EVERY analytical angle:
 
-IMPORTANT: Scorecards are counted SEPARATELY from the 8-10 visualization requirement.
+RANKINGS (generate for each categorical dimension):
+- Top 10 and Bottom 10 for primary dimension
+- Top 5 for secondary dimensions
+- Use bar charts with sortBy, sortOrder, limit
+
+TRENDS (generate for each time column):
+- Line chart for each key metric over time
+- Area chart for cumulative views
+
+RELATIONSHIPS (generate for numeric pairs):
+- Scatter plots for efficiency analysis
+- Combo charts for dual-axis comparisons
+
+DISTRIBUTIONS (generate for each category):
+- Pie/bar for proportional breakdowns
+- Treemap for hierarchical data (10+ categories)
+
+PATTERNS (generate when data supports):
+- Heatmap for 2D categorical patterns
+- Cohort for retention/behavior analysis
+- Waterfall for variance/change analysis
+- Gauge for KPI vs target tracking
+
+TABLES:
+- At least 1-2 detailed data views
+
+NO MAXIMUM LIMIT - Generate as many charts as the data supports.
 </CHART_REQUIREMENTS>
 
 <COLUMN_VALIDATION>
@@ -764,6 +788,36 @@ ${domainGuidance}
   })
 
   prompt += `\n</AVAILABLE_COLUMNS>`
+
+  // Add column acknowledgment requirement
+  prompt += `\n\n<COLUMN_ACKNOWLEDGMENT>
+BEFORE generating charts, you MUST acknowledge the available columns in your reasoning:
+
+1. List all columns by type:
+   - Numeric metrics (for scorecards, values, y-axis)
+   - Categorical dimensions (for grouping, x-axis, categories)
+   - Time/date fields (for trends, time-series)
+   - Identifiers (for counts, not aggregation)
+
+2. Plan chart coverage:
+   - How many scorecards? (based on numeric columns)
+   - How many ranking charts? (based on categorical dimensions)
+   - How many trend charts? (based on time columns)
+   - How many relationship charts? (based on numeric pairs)
+
+3. CRITICAL: NEVER invent column names. If a column is not in AVAILABLE_COLUMNS, your chart will FAIL.
+
+Include this in your reasoning output:
+{
+  "reasoning": {
+    "availableColumns": ["list", "all", "columns", "here"],
+    "numericMetrics": ["Revenue", "Units"],
+    "categoricalDimensions": ["Product", "Category"],
+    "timeFields": ["Order Date"],
+    "plannedChartCount": 25
+  }
+}
+</COLUMN_ACKNOWLEDGMENT>`
 
   // Add filter context section
   prompt += `\n\n<FILTERING_CAPABILITIES>`
@@ -1036,237 +1090,57 @@ More columns and richer data = more charts. Don't hold back.
 </OUTPUT_FORMAT>
 
 <EXAMPLE_OUTPUT>
-Here's a complete example for an e-commerce dataset with columns [Order Date, Product, Category, Revenue, Units, Customer ID]:
+Example for dataset with 6 columns [Order Date, Product, Category, Revenue, Units, Customer ID]:
 
 {
   "reasoning": {
+    "availableColumns": ["Order Date", "Product", "Category", "Revenue", "Units", "Customer ID"],
+    "numericMetrics": ["Revenue", "Units"],
+    "categoricalDimensions": ["Product", "Category"],
+    "timeFields": ["Order Date"],
+    "identifiers": ["Customer ID"],
     "domain": "E-commerce retail sales",
-    "keyEntities": ["Products", "Categories", "Customers", "Orders"],
-    "businessProcess": "Online sales tracking with product performance and customer behavior"
+    "plannedChartCount": 22
   },
-  "businessQuestions": [
-    "Which products and categories drive the most revenue?",
-    "What are our sales trends over time?",
-    "Which products are underperforming and need attention?",
-    "How do units sold correlate with revenue generation?"
-  ],
-  "insights": [
-    "Revenue concentration analysis reveals top performers",
-    "Time-based patterns show seasonality and growth trends",
-    "Product efficiency varies significantly across categories"
-  ],
+  "businessQuestions": ["Which products drive revenue?", "What are the trends?", "Which products underperform?"],
+  "insights": ["Revenue concentration in top products", "Seasonal patterns visible", "Category efficiency varies"],
   "chartConfig": [
-    // CATEGORY 1: SCORECARDS (6-8 high-level metrics)
-    {
-      "type": "scorecard",
-      "title": "Total Revenue",
-      "description": "Total sales revenue across all orders",
-      "insight_level": "high",
-      "answers_question": "What is our total revenue?",
-      "dataMapping": {"metric": "Revenue", "aggregation": "sum"},
-      "confidence": 95,
-      "reasoning": "Critical KPI showing overall business performance"
-    },
-    {
-      "type": "scorecard",
-      "title": "Total Orders",
-      "description": "Total number of orders placed",
-      "insight_level": "high",
-      "answers_question": "How many orders have we processed?",
-      "dataMapping": {"metric": "Revenue", "aggregation": "count"},
-      "confidence": 95,
-      "reasoning": "Shows transaction volume and business activity"
-    },
-    {
-      "type": "scorecard",
-      "title": "Average Order Value",
-      "description": "Average revenue per order",
-      "insight_level": "high",
-      "answers_question": "What is our typical order size?",
-      "dataMapping": {"metric": "Revenue", "aggregation": "avg"},
-      "confidence": 95,
-      "reasoning": "Key metric for pricing strategy and upselling opportunities"
-    },
-    {
-      "type": "scorecard",
-      "title": "Total Units Sold",
-      "description": "Total quantity of products sold",
-      "insight_level": "medium",
-      "answers_question": "What is our total sales volume?",
-      "dataMapping": {"metric": "Units", "aggregation": "sum"},
-      "confidence": 90,
-      "reasoning": "Shows inventory turnover and demand volume"
-    },
-    {
-      "type": "scorecard",
-      "title": "Unique Customers",
-      "description": "Number of distinct customers",
-      "insight_level": "high",
-      "answers_question": "How many customers have we served?",
-      "dataMapping": {"metric": "Customer ID", "aggregation": "distinct"},
-      "confidence": 95,
-      "reasoning": "Shows customer base size and reach"
-    },
-    {
-      "type": "scorecard",
-      "title": "Product Variety",
-      "description": "Number of distinct products sold",
-      "insight_level": "medium",
-      "answers_question": "How diverse is our product catalog?",
-      "dataMapping": {"metric": "Product", "aggregation": "distinct"},
-      "confidence": 90,
-      "reasoning": "Shows product portfolio breadth"
-    },
-    {
-      "type": "scorecard",
-      "title": "Peak Order Value",
-      "description": "Highest single order revenue",
-      "insight_level": "medium",
-      "answers_question": "What is our largest order?",
-      "dataMapping": {"metric": "Revenue", "aggregation": "max"},
-      "confidence": 85,
-      "reasoning": "Shows potential for high-value transactions"
-    },
+    // SCORECARDS - One per metric with diverse aggregations (7 total using all agg types)
+    {"type": "scorecard", "title": "Total Revenue", "dataMapping": {"metric": "Revenue", "aggregation": "sum"}},
+    {"type": "scorecard", "title": "Total Units", "dataMapping": {"metric": "Units", "aggregation": "sum"}},
+    {"type": "scorecard", "title": "Avg Order Value", "dataMapping": {"metric": "Revenue", "aggregation": "avg"}},
+    {"type": "scorecard", "title": "Total Orders", "dataMapping": {"metric": "Revenue", "aggregation": "count"}},
+    {"type": "scorecard", "title": "Unique Customers", "dataMapping": {"metric": "Customer ID", "aggregation": "distinct"}},
+    {"type": "scorecard", "title": "Peak Revenue", "dataMapping": {"metric": "Revenue", "aggregation": "max"}},
+    {"type": "scorecard", "title": "Min Order", "dataMapping": {"metric": "Revenue", "aggregation": "min"}},
 
-    // CATEGORY 2: VISUALIZATIONS & TABLES (8-10 detailed analysis)
+    // RANKINGS - Top/Bottom for each categorical dimension (6 total)
+    {"type": "bar", "title": "Top 10 Products by Revenue", "dataMapping": {"category": "Product", "values": ["Revenue"], "aggregation": "sum", "sortBy": "Revenue", "sortOrder": "desc", "limit": 10}},
+    {"type": "bar", "title": "Bottom 10 Products by Revenue", "dataMapping": {"category": "Product", "values": ["Revenue"], "aggregation": "sum", "sortBy": "Revenue", "sortOrder": "asc", "limit": 10}},
+    {"type": "bar", "title": "Top 10 Products by Units", "dataMapping": {"category": "Product", "values": ["Units"], "aggregation": "sum", "sortBy": "Units", "sortOrder": "desc", "limit": 10}},
+    {"type": "bar", "title": "Top 5 Categories by Revenue", "dataMapping": {"category": "Category", "values": ["Revenue"], "aggregation": "sum", "sortBy": "Revenue", "sortOrder": "desc", "limit": 5}},
+    {"type": "bar", "title": "Bottom 5 Categories by Revenue", "dataMapping": {"category": "Category", "values": ["Revenue"], "aggregation": "sum", "sortBy": "Revenue", "sortOrder": "asc", "limit": 5}},
+    {"type": "bar", "title": "Top 5 Categories by Units", "dataMapping": {"category": "Category", "values": ["Units"], "aggregation": "sum", "sortBy": "Units", "sortOrder": "desc", "limit": 5}},
 
-    // Rankings (3-4 charts)
-    {
-      "type": "bar",
-      "title": "Top 10 Products by Revenue",
-      "description": "Highest revenue generating products - focus investment here",
-      "insight_level": "high",
-      "answers_question": "Which products are our top performers?",
-      "dataMapping": {
-        "category": "Product",
-        "values": ["Revenue"],
-        "aggregation": "sum",
-        "sortBy": "Revenue",
-        "sortOrder": "desc",
-        "limit": 10
-      },
-      "confidence": 95,
-      "reasoning": "Identifies best sellers for inventory and marketing prioritization"
-    },
-    {
-      "type": "bar",
-      "title": "Bottom 10 Products by Revenue",
-      "description": "Lowest revenue products - candidates for discontinuation or promotion",
-      "insight_level": "high",
-      "answers_question": "Which products are underperforming?",
-      "dataMapping": {
-        "category": "Product",
-        "values": ["Revenue"],
-        "aggregation": "sum",
-        "sortBy": "Revenue",
-        "sortOrder": "asc",
-        "limit": 10
-      },
-      "confidence": 95,
-      "reasoning": "Identifies underperformers needing attention or removal"
-    },
-    {
-      "type": "bar",
-      "title": "Top 5 Categories by Units Sold",
-      "description": "Most popular product categories by volume",
-      "insight_level": "high",
-      "answers_question": "Which categories have highest demand?",
-      "dataMapping": {
-        "category": "Category",
-        "values": ["Units"],
-        "aggregation": "sum",
-        "sortBy": "Units",
-        "sortOrder": "desc",
-        "limit": 5
-      },
-      "confidence": 90,
-      "reasoning": "Shows demand patterns across categories"
-    },
+    // TRENDS - One per metric over time (3 total)
+    {"type": "line", "title": "Revenue Trend", "dataMapping": {"xAxis": "Order Date", "yAxis": ["Revenue"], "aggregation": "sum"}, "filters": [{"column": "Order Date", "operator": "group_by", "value": "month"}]},
+    {"type": "line", "title": "Units Trend", "dataMapping": {"xAxis": "Order Date", "yAxis": ["Units"], "aggregation": "sum"}, "filters": [{"column": "Order Date", "operator": "group_by", "value": "month"}]},
+    {"type": "area", "title": "Cumulative Revenue", "dataMapping": {"xAxis": "Order Date", "yAxis": ["Revenue"], "aggregation": "sum"}, "filters": [{"column": "Order Date", "operator": "group_by", "value": "month"}]},
 
-    // Analytical charts (4-6 charts)
-    {
-      "type": "line",
-      "title": "Monthly Revenue Trend",
-      "description": "Revenue progression over time showing growth patterns and seasonality",
-      "insight_level": "high",
-      "answers_question": "How is revenue trending over time?",
-      "dataMapping": {
-        "xAxis": "Order Date",
-        "yAxis": ["Revenue"],
-        "aggregation": "sum"
-      },
-      "filters": [{"column": "Order Date", "operator": "group_by", "value": "month"}],
-      "confidence": 95,
-      "reasoning": "Essential for tracking growth and identifying seasonal patterns"
-    },
-    {
-      "type": "scatter",
-      "title": "Product Efficiency: Units vs Revenue",
-      "description": "Bubble size shows total revenue, color shows category - upper right = high volume & high value",
-      "insight_level": "high",
-      "answers_question": "Which products deliver best revenue per unit?",
-      "dataMapping": {
-        "xAxis": "Units",
-        "yAxis": "Revenue",
-        "color": "Category"
-      },
-      "confidence": 90,
-      "reasoning": "Multi-dimensional efficiency analysis reveals pricing and volume patterns"
-    },
-    {
-      "type": "pie",
-      "title": "Revenue Distribution by Category",
-      "description": "Proportion of revenue from each product category",
-      "insight_level": "medium",
-      "answers_question": "How is revenue distributed across categories?",
-      "dataMapping": {
-        "category": "Category",
-        "value": "Revenue",
-        "aggregation": "sum"
-      },
-      "confidence": 85,
-      "reasoning": "Shows revenue concentration and diversification"
-    },
-    {
-      "type": "area",
-      "title": "Cumulative Units Sold Over Time",
-      "description": "Running total of units sold showing inventory movement",
-      "insight_level": "medium",
-      "answers_question": "What is our cumulative sales volume?",
-      "dataMapping": {
-        "xAxis": "Order Date",
-        "yAxis": ["Units"],
-        "aggregation": "sum"
-      },
-      "filters": [{"column": "Order Date", "operator": "group_by", "value": "month"}],
-      "confidence": 85,
-      "reasoning": "Shows cumulative demand patterns for inventory planning"
-    },
+    // RELATIONSHIPS & DISTRIBUTIONS (4 total)
+    {"type": "scatter", "title": "Units vs Revenue by Category", "dataMapping": {"xAxis": "Units", "yAxis": "Revenue", "color": "Category"}},
+    {"type": "pie", "title": "Revenue by Category", "dataMapping": {"category": "Category", "value": "Revenue", "aggregation": "sum"}},
+    {"type": "treemap", "title": "Revenue Distribution", "dataMapping": {"category": "Product", "value": "Revenue", "aggregation": "sum"}},
+    {"type": "combo", "title": "Revenue vs Units by Category", "dataMapping": {"xAxis": "Category", "yAxis": ["Revenue"], "yAxis2": ["Units"], "yAxis1Type": "bar", "yAxis2Type": "line", "aggregation": "sum"}},
 
-    // Table (1-2 comprehensive views)
-    {
-      "type": "table",
-      "title": "Top 20 Orders by Revenue",
-      "description": "Detailed view of highest value orders for analysis",
-      "insight_level": "medium",
-      "answers_question": "What are the details of our largest orders?",
-      "dataMapping": {
-        "columns": ["Order Date", "Product", "Category", "Revenue", "Units", "Customer ID"],
-        "sortBy": "Revenue",
-        "sortOrder": "desc",
-        "limit": 20
-      },
-      "confidence": 90,
-      "reasoning": "Provides drill-down capability for detailed investigation"
-    }
+    // TABLES (2 total)
+    {"type": "table", "title": "Top 20 Orders", "dataMapping": {"columns": ["Order Date", "Product", "Category", "Revenue", "Units"], "sortBy": "Revenue", "sortOrder": "desc", "limit": 20}},
+    {"type": "table", "title": "Product Summary", "dataMapping": {"columns": ["Product", "Category", "Revenue", "Units"], "sortBy": "Units", "sortOrder": "desc", "limit": 20}}
   ],
-  "summary": {
-    "dataQuality": "good",
-    "keyFindings": "E-commerce dataset with 6 scorecards tracking overall performance and 10 visualizations revealing product performance, trends, and efficiency patterns. Rankings identify top and bottom performers for strategic decisions."
-  }
+  "summary": {"dataQuality": "good", "keyFindings": "22 charts covering all metrics, dimensions, and analytical angles"}
 }
 
-NOTE: This example shows 7 scorecards + 10 visualizations = 17 total charts (within 14-18 target range)
+This 6-column dataset generated 22 charts. A 15-column dataset should generate 30-40 charts.
 </EXAMPLE_OUTPUT>`
 
   // Add sample data if available
@@ -1279,17 +1153,17 @@ NOTE: This example shows 7 scorecards + 10 visualizations = 17 total charts (wit
   }
 
   prompt += `\n\nFINAL REQUIREMENTS CHECKLIST:
-1. Follow the 3-phase approach: Understand Data → Identify Insights → Select Visualizations
-2. CATEGORY 1: Generate 6-8 scorecards (high-level metrics with diverse aggregations)
-3. CATEGORY 2: Generate 8-10 visualizations & tables (NOT including scorecards)
-   - 3-4 ranking charts (Top X and/or Bottom X using bar charts)
-   - 4-6 analytical charts (use advanced types when data patterns justify)
-   - 1-2 table charts (comprehensive data views)
-4. TOTAL TARGET: 14-18 charts (6-8 scorecards + 8-10 visualizations)
-5. Use ONLY exact column names from AVAILABLE COLUMNS section
-6. Use "avg" (NOT "average") for aggregations
-7. Every chart must answer a specific business question with clear reasoning
-8. Validate all column references before finalizing output`
+1. ACKNOWLEDGE all columns in your reasoning (list them by type)
+2. Generate COMPREHENSIVELY - more columns = more charts (use scaling table)
+3. SCORECARDS: Use ALL 6 aggregation types (sum, avg, count, distinct, min, max)
+4. RANKINGS: Top 10 AND Bottom 10 for each categorical dimension
+5. TRENDS: Line/area chart for each metric over time
+6. RELATIONSHIPS: Scatter/combo for numeric pairs
+7. ADVANCED: Use waterfall, heatmap, gauge, treemap when data supports them
+8. TABLES: At least 1-2 detailed views
+9. Use ONLY exact column names from AVAILABLE COLUMNS
+10. Use "avg" (NOT "average") for aggregations
+11. Every chart must answer a specific business question`
 
   return prompt
 }
