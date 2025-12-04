@@ -243,11 +243,11 @@ describe('DataCompressionService', () => {
 
     it('should reject data exceeding max rows', () => {
       const service = new DataCompressionService();
-      const data = Array.from({ length: 10001 }, (_, i) => ({ id: i }));
+      const data = Array.from({ length: 100001 }, (_, i) => ({ id: i }));
       const result = service.validateDataSize(data);
 
       expect(result.valid).toBe(false);
-      expect(result.reason).toContain('exceeds maximum of 10000');
+      expect(result.reason).toContain('exceeds maximum of 100000');
     });
 
     it('should reject data exceeding max size', () => {
@@ -285,7 +285,7 @@ describe('DataCompressionService', () => {
 
     it('should throw error for invalid data', () => {
       const service = new DataCompressionService();
-      const data = Array.from({ length: 10001 }, (_, i) => ({ id: i }));
+      const data = Array.from({ length: 100001 }, (_, i) => ({ id: i }));
 
       expect(() => service.estimateCompressedSize(data)).toThrow('Cannot estimate size');
     });
@@ -294,12 +294,12 @@ describe('DataCompressionService', () => {
   describe('Static methods', () => {
     it('should return max uncompressed size', () => {
       const maxSize = DataCompressionService.getMaxUncompressedSize();
-      expect(maxSize).toBe(50 * 1024 * 1024); // 50MB
+      expect(maxSize).toBe(200 * 1024 * 1024); // 200MB (for 100K rows)
     });
 
     it('should return max rows', () => {
       const maxRows = DataCompressionService.getMaxRows();
-      expect(maxRows).toBe(10000);
+      expect(maxRows).toBe(100000); // 100K rows
     });
   });
 

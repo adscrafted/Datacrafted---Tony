@@ -26,9 +26,9 @@ import type {
 } from '@/lib/types/api-types'
 
 // Security: Input validation limits
-const MAX_ROWS = 10000
+const MAX_ROWS = 100000 // 100K rows
 const MAX_COLUMNS = 100
-const MAX_PAYLOAD_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_PAYLOAD_SIZE = 50 * 1024 * 1024 // 50MB (for large datasets)
 
 // Production-ready logging utility
 const isDevelopment = process.env.NODE_ENV === 'development'

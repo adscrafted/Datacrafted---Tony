@@ -149,7 +149,7 @@ export const chatRequestSchema = z.object({
 export const analyzeRequestSchema = z.object({
   data: z.array(z.record(z.unknown()))
     .min(1, 'Data array must contain at least one row')
-    .max(10000, 'Data exceeds maximum allowed rows (10,000)'),
+    .max(100000, 'Data exceeds maximum allowed rows (100,000)'),
   schema: z.object({
     fileName: z.string().optional(),
     fileSize: z.number().optional(),
@@ -180,7 +180,7 @@ export const analyzeRequestSchema = z.object({
 // Validate data array doesn't exceed size limits
 export const validateDataSize = (data: unknown[]): boolean => {
   const jsonSize = JSON.stringify(data).length
-  const MAX_SIZE = 10 * 1024 * 1024 // 10MB
+  const MAX_SIZE = 50 * 1024 * 1024 // 50MB (for large datasets)
   return jsonSize <= MAX_SIZE
 }
 
@@ -286,7 +286,7 @@ export const sessionDataSchema = z.object({
 export const analyzeSimpleRequestSchema = z.object({
   data: z.array(z.record(z.unknown()))
     .min(1, 'Data array must contain at least one row')
-    .max(10000, 'Data exceeds maximum allowed rows (10,000)'),
+    .max(100000, 'Data exceeds maximum allowed rows (100,000)'),
 })
 
 // ============================================================================

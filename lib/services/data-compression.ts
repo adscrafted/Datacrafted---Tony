@@ -57,8 +57,8 @@ export interface CompressedData {
  */
 export class DataCompressionService {
   // Constants
-  private static readonly MAX_UNCOMPRESSED_SIZE = 50 * 1024 * 1024; // 50MB
-  private static readonly MAX_ROWS = 10000;
+  private static readonly MAX_UNCOMPRESSED_SIZE = 200 * 1024 * 1024; // 200MB (for 100K rows)
+  private static readonly MAX_ROWS = 100000; // 100K rows
   private static readonly MIN_COMPRESSION_RATIO = 0.7; // 70%
   private static readonly MAX_COMPRESSION_RATIO = 0.8; // 80%
 

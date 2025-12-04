@@ -26,8 +26,8 @@ import * as XLSX from 'xlsx'
 
 // Security Configuration
 const SECURITY_CONFIG = {
-  MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
-  MAX_ROWS: 10000,
+  MAX_FILE_SIZE: 50 * 1024 * 1024, // 50MB (increased for large datasets)
+  MAX_ROWS: 100000, // 100K rows
   MAX_COLUMNS: 100,
   // Dangerous keys that can lead to prototype pollution
   DANGEROUS_KEYS: ['__proto__', 'constructor', 'prototype'],

@@ -18,8 +18,8 @@ describe('Secure XLSX Parser', () => {
   describe('Security Configuration', () => {
     it('exports security configuration', () => {
       const config = getSecurityConfig()
-      expect(config.MAX_FILE_SIZE).toBe(10 * 1024 * 1024) // 10MB
-      expect(config.MAX_ROWS).toBe(10000)
+      expect(config.MAX_FILE_SIZE).toBe(50 * 1024 * 1024) // 50MB
+      expect(config.MAX_ROWS).toBe(100000) // 100K rows
       expect(config.MAX_COLUMNS).toBe(100)
       expect(config.DANGEROUS_KEYS).toContain('__proto__')
       expect(config.DANGEROUS_KEYS).toContain('constructor')
@@ -131,9 +131,9 @@ describe('Secure XLSX Parser', () => {
   })
 
   describe('File Size Validation', () => {
-    it('rejects files larger than 10MB', async () => {
+    it('rejects files larger than 50MB', async () => {
       const largeFile = new File(
-        [new ArrayBuffer(11 * 1024 * 1024)], // 11MB
+        [new ArrayBuffer(51 * 1024 * 1024)], // 51MB
         'large.xlsx',
         { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
       )
@@ -182,8 +182,8 @@ describe('Secure XLSX Parser', () => {
   })
 
   describe('Row Limit Validation', () => {
-    it('rejects data with more than 10,000 rows', async () => {
-      const tooManyRows = Array.from({ length: 10001 }, (_, i) => ({
+    it('rejects data with more than 100,000 rows', async () => {
+      const tooManyRows = Array.from({ length: 100001 }, (_, i) => ({
         id: i,
         name: `User ${i}`,
       }))
@@ -193,7 +193,7 @@ describe('Secure XLSX Parser', () => {
       const worksheet = {} as XLSX.WorkSheet
 
       expect(() => secureSheetToJson(worksheet)).toThrow(XLSXSecurityError)
-      expect(() => secureSheetToJson(worksheet)).toThrow(/exceeds maximum of 10000 rows/)
+      expect(() => secureSheetToJson(worksheet)).toThrow(/exceeds maximum of 100000 rows/)
     })
 
     it('accepts data within row limit', async () => {
