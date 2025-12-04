@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import { createUserWithEmailAndPassword, updateProfile, GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
+import { auth } from '@/lib/config/firebase'
 import { useAuth } from '@/lib/contexts/auth-context'
 import type { AuthFormProps } from './types'
 
-export function SignUpForm({ onSuccess, onSwitchView }: AuthFormProps) {
+export function SignUpForm({ onSuccess, onSwitchView, skipRedirect }: AuthFormProps) {
   const { signUp, signInWithGoogle, error } = useAuth()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -33,7 +35,13 @@ export function SignUpForm({ onSuccess, onSwitchView }: AuthFormProps) {
     }
 
     try {
-      await signUp(email, password, name)
+      if (skipRedirect) {
+        // Use Firebase directly to avoid auth context redirect
+        const { user } = await createUserWithEmailAndPassword(auth, email, password)
+        await updateProfile(user, { displayName: name })
+      } else {
+        await signUp(email, password, name)
+      }
       onSuccess?.()
     } catch (err: any) {
       setLocalError(err.message || 'Failed to create account')
@@ -47,7 +55,13 @@ export function SignUpForm({ onSuccess, onSwitchView }: AuthFormProps) {
     setLocalError(null)
 
     try {
-      await signInWithGoogle()
+      if (skipRedirect) {
+        // Use Firebase directly to avoid auth context redirect
+        const provider = new GoogleAuthProvider()
+        await signInWithPopup(auth, provider)
+      } else {
+        await signInWithGoogle()
+      }
       onSuccess?.()
     } catch (err: any) {
       setLocalError(err.message || 'Failed to sign up with Google')

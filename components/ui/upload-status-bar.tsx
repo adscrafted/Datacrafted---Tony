@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation'
 import { CheckCircle, Loader2, X } from 'lucide-react'
 import { useUIStore } from '@/lib/stores/ui-store'
 import { useDataStore } from '@/lib/stores/data-store'
+import { useAuth } from '@/lib/contexts/auth-context'
 import { cn } from '@/lib/utils/cn'
+import { UploadAuthPrompt } from '@/components/auth/upload-auth-prompt'
 
 interface UploadStage {
   id: string
@@ -15,6 +17,7 @@ interface UploadStage {
 
 export function UploadStatusBar() {
   const router = useRouter()
+  const { user, isDebugMode } = useAuth()
 
   // Upload state from UI store (modular store migration)
   const uploadProgress = useUIStore((state) => state.uploadProgress)
@@ -27,6 +30,7 @@ export function UploadStatusBar() {
   const isAnalyzing = useDataStore((state) => state.isAnalyzing)
 
   const [isVisible, setIsVisible] = useState(false)
+  const [showAuthPrompt, setShowAuthPrompt] = useState(false)
   const [stages, setStages] = useState<UploadStage[]>([
     { id: 'uploading', label: 'Uploading file', status: 'pending' },
     { id: 'parsing', label: 'Parsing data', status: 'pending' },
@@ -59,27 +63,54 @@ export function UploadStatusBar() {
     }))
   }, [uploadStage])
 
-  // Auto-navigate when upload completes
+  // Auto-navigate when upload completes (or show auth prompt for unauthenticated users)
   useEffect(() => {
     if (uploadComplete && uploadProjectId) {
       // Mark all stages as complete
       setStages(prev => prev.map(s => ({ ...s, status: 'complete' })))
 
-      // Wait a moment to show completion, then navigate
-      const timer = setTimeout(() => {
-        router.push(`/dashboard?id=${uploadProjectId}`)
-        setIsVisible(false)
-        dismissUpload()
-      }, 1500)
+      // Check if user is authenticated
+      if (user || isDebugMode) {
+        // User is authenticated - navigate to dashboard
+        const timer = setTimeout(() => {
+          router.push(`/dashboard?id=${uploadProjectId}`)
+          setIsVisible(false)
+          dismissUpload()
+        }, 1500)
 
-      return () => clearTimeout(timer)
+        return () => clearTimeout(timer)
+      } else {
+        // User is NOT authenticated - show auth prompt after brief delay
+        const timer = setTimeout(() => {
+          setShowAuthPrompt(true)
+        }, 1500)
+
+        return () => clearTimeout(timer)
+      }
     }
-  }, [uploadComplete, uploadProjectId, router, dismissUpload])
+  }, [uploadComplete, uploadProjectId, router, dismissUpload, user, isDebugMode])
 
   // Handle manual dismiss
   const handleDismiss = () => {
     setIsVisible(false)
+    setShowAuthPrompt(false)
     dismissUpload()
+  }
+
+  // Handle auth prompt close
+  const handleAuthPromptClose = () => {
+    setShowAuthPrompt(false)
+    setIsVisible(false)
+  }
+
+  // Render auth prompt if needed
+  if (showAuthPrompt && uploadProjectId) {
+    return (
+      <UploadAuthPrompt
+        projectId={uploadProjectId}
+        onClose={handleAuthPromptClose}
+      />
+    )
   }
 
   if (!isVisible) return null

@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
+import { auth } from '@/lib/config/firebase'
 import { useAuth } from '@/lib/contexts/auth-context'
 import type { AuthFormProps } from './types'
 
-export function SignInForm({ onSuccess, onSwitchView }: AuthFormProps) {
+export function SignInForm({ onSuccess, onSwitchView, skipRedirect }: AuthFormProps) {
   const { signIn, signInWithGoogle, error } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -17,7 +19,12 @@ export function SignInForm({ onSuccess, onSwitchView }: AuthFormProps) {
     setLocalError(null)
 
     try {
-      await signIn(email, password)
+      if (skipRedirect) {
+        // Use Firebase directly to avoid auth context redirect
+        await signInWithEmailAndPassword(auth, email, password)
+      } else {
+        await signIn(email, password)
+      }
       onSuccess?.()
     } catch (err: any) {
       setLocalError(err.message || 'Failed to sign in')
@@ -31,7 +38,13 @@ export function SignInForm({ onSuccess, onSwitchView }: AuthFormProps) {
     setLocalError(null)
 
     try {
-      await signInWithGoogle()
+      if (skipRedirect) {
+        // Use Firebase directly to avoid auth context redirect
+        const provider = new GoogleAuthProvider()
+        await signInWithPopup(auth, provider)
+      } else {
+        await signInWithGoogle()
+      }
       onSuccess?.()
     } catch (err: any) {
       setLocalError(err.message || 'Failed to sign in with Google')
