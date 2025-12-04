@@ -913,10 +913,10 @@ Examples (INCLUDE ADVANCED CHART TYPES):
 <VALIDATION_AND_OUTPUT>
 After generating charts, validate:
 1. Column names: Every dataMapping field must reference columns from AVAILABLE COLUMNS (exact match)
-2. Chart counts: 14-18 total (6-8 scorecards + 8-10 visualizations)
+2. Chart counts: Generate as many charts as needed to fully analyze the data (minimum 14, no maximum)
 3. Diversity: Multiple chart types, all aggregation types used
 4. Business value: Each chart answers a specific stakeholder question
-5. Ranking requirements: 3-4 ranking charts with sortBy, sortOrder, limit
+5. Ranking requirements: Include ranking charts with sortBy, sortOrder, limit where appropriate
 
 Charts that fail validation will be:
 - Logged with specific error messages (column not found, missing required fields, etc.)
@@ -1015,12 +1015,24 @@ Provide clear reasoning for each chart explaining:
 }
 
 CHART COUNT REQUIREMENTS:
-CATEGORY 1 - SCORECARDS: MINIMUM 6, TARGET 8
-CATEGORY 2 - VISUALIZATIONS & TABLES: MINIMUM 8, TARGET 10 (NOT including scorecards)
-  - EXACTLY 2 ranking charts (Top 10 AND Bottom 10)
-  - 5-7 analytical charts with diverse types
-  - 1-2 table charts
-TOTAL: 14-18 charts (scorecards counted separately from visualizations)
+Generate as many charts as the data supports - be comprehensive and thorough.
+
+MINIMUMS (must include at least):
+- SCORECARDS: Minimum 6 (one for each key metric in the data)
+- VISUALIZATIONS: Minimum 8 (diverse chart types)
+- RANKING CHARTS: At least 2 (Top N and Bottom N analyses)
+- TABLE CHARTS: At least 1
+
+NO MAXIMUM - Create additional charts for:
+- Every meaningful metric deserves a scorecard
+- Every categorical dimension deserves a breakdown chart
+- Every time-based column deserves a trend chart
+- Every numeric relationship deserves a correlation/scatter chart
+- Cross-dimensional analyses (heatmaps, cohorts) where applicable
+- Multiple aggregation views of the same data (sum, avg, count, etc.)
+
+The goal is COMPREHENSIVE coverage - if the data supports 30+ charts, generate 30+ charts.
+More columns and richer data = more charts. Don't hold back.
 </OUTPUT_FORMAT>
 
 <EXAMPLE_OUTPUT>
