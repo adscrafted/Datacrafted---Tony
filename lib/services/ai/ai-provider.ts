@@ -13,7 +13,7 @@
  */
 
 import OpenAI from 'openai'
-import { GoogleGenerativeAI, type GenerativeModel, type Content } from '@google/generative-ai'
+import { GoogleGenAI, type Content } from '@google/genai'
 
 // ============================================================================
 // TYPES
@@ -28,6 +28,7 @@ export interface AICompletionOptions {
   temperature?: number
   maxTokens?: number
   jsonMode?: boolean
+  responseSchema?: object
 }
 
 export interface AIStreamChunk {
@@ -68,32 +69,24 @@ function getOpenAIClient(): OpenAI {
 // GEMINI CLIENT
 // ============================================================================
 
-let geminiClient: GoogleGenerativeAI | null = null
+let geminiClient: GoogleGenAI | null = null
 
-function getGeminiClient(): GoogleGenerativeAI {
+function getGeminiClient(): GoogleGenAI {
   if (!geminiClient) {
     const apiKey = process.env.GOOGLE_GEMINI_API_KEY
     if (!apiKey) {
       throw new Error('GOOGLE_GEMINI_API_KEY is not configured')
     }
-    geminiClient = new GoogleGenerativeAI(apiKey)
+    geminiClient = new GoogleGenAI({ apiKey })
   }
   return geminiClient
 }
 
-function getGeminiModel(jsonMode: boolean = false): GenerativeModel {
-  const client = getGeminiClient()
+function getGeminiModelName(): string {
   // Use gemini-2.0-flash or configurable via environment variable
   const modelName = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
-
   console.log('[AI-PROVIDER] Using Gemini model:', modelName)
-
-  return client.getGenerativeModel({
-    model: modelName,
-    generationConfig: jsonMode ? {
-      responseMimeType: 'application/json'
-    } : undefined
-  })
+  return modelName
 }
 
 // ============================================================================
@@ -101,34 +94,32 @@ function getGeminiModel(jsonMode: boolean = false): GenerativeModel {
 // ============================================================================
 
 /**
- * Convert messages to Gemini format
- * Gemini doesn't have a system role, so we prepend system content to first user message
+ * Convert messages to Gemini format and extract system instruction
+ * Returns both the converted messages and the system instruction
  */
-function convertToGeminiMessages(messages: AIMessage[]): Content[] {
+function convertToGeminiMessages(messages: AIMessage[]): {
+  contents: Content[]
+  systemInstruction?: string
+} {
   const geminiMessages: Content[] = []
-  let systemPrompt = ''
+  let systemInstruction = ''
 
   for (const msg of messages) {
     if (msg.role === 'system') {
-      systemPrompt += msg.content + '\n\n'
+      systemInstruction += msg.content + '\n\n'
     } else {
       const role = msg.role === 'user' ? 'user' : 'model'
-      const content = msg.role === 'user' && systemPrompt
-        ? systemPrompt + msg.content
-        : msg.content
-
-      if (msg.role === 'user') {
-        systemPrompt = '' // Clear after first use
-      }
-
       geminiMessages.push({
         role,
-        parts: [{ text: content }]
+        parts: [{ text: msg.content }]
       })
     }
   }
 
-  return geminiMessages
+  return {
+    contents: geminiMessages,
+    systemInstruction: systemInstruction.trim() || undefined
+  }
 }
 
 function convertToOpenAIMessages(messages: AIMessage[]): OpenAI.Chat.ChatCompletionMessageParam[] {
@@ -143,17 +134,27 @@ function convertToOpenAIMessages(messages: AIMessage[]): OpenAI.Chat.ChatComplet
 // ============================================================================
 
 /**
- * Normalize AI response to handle different field names from various AI providers.
- * Gemini may use different field names than OpenAI (e.g., "analysis" vs "insights").
+ * Normalize AI response for consistent structure.
  *
- * This is CRITICAL for consistent behavior across providers.
+ * With Gemini's responseSchema enforcement, field names are now guaranteed.
+ * This function provides type safety and handles edge cases.
+ *
+ * Expected schema fields (enforced by responseSchema for Gemini):
+ * - insights: string[]
+ * - chartConfig: array of chart objects
+ * - summary: { dataQuality, keyFindings }
+ * - reasoning: { availableColumns, numericMetrics, etc. } (optional)
+ * - businessQuestions: string[] (optional)
  */
 export function normalizeAnalysisResponse(response: any): {
   insights: string[]
   chartConfig: any[]
   summary: any
   dataContext?: any
+  reasoning?: any
+  businessQuestions?: string[]
 } {
+  // Handle invalid responses
   if (!response || typeof response !== 'object') {
     console.error('[AI-PROVIDER] Invalid response to normalize:', response)
     return {
@@ -163,48 +164,35 @@ export function normalizeAnalysisResponse(response: any): {
     }
   }
 
-  // Handle different field names for insights
-  const insights = response.insights || response.analysis || response.key_insights ||
-                   response.keyInsights || response.findings || []
+  // With responseSchema, these fields should be consistent
+  // Keep minimal fallbacks for OpenAI compatibility
+  const insights = response.insights || response.analysis || []
+  const chartConfig = response.chartConfig || response.charts || []
+  const summary = response.summary || {}
 
-  // Handle different field names for chart config
-  const chartConfig = response.chartConfig || response.charts || response.chart_config ||
-                      response.chartConfigs || response.visualizations ||
-                      response.recommendations || response.chartRecommendations || []
-
-  // Handle different field names for summary
-  const summary = response.summary || response.data_summary || response.dataSummary ||
-                  response.overview || {}
-
-  // Ensure insights is an array of strings
+  // Ensure type safety
   const normalizedInsights = Array.isArray(insights)
-    ? insights.map(i => typeof i === 'string' ? i : String(i))
-    : typeof insights === 'string' ? [insights] : []
+    ? insights.map((i: any) => typeof i === 'string' ? i : String(i))
+    : []
 
-  // Ensure chartConfig is an array
-  const normalizedChartConfig = Array.isArray(chartConfig)
-    ? chartConfig
-    : (typeof chartConfig === 'object' && chartConfig !== null) ? [chartConfig] : []
-
-  // Ensure summary is an object
+  const normalizedChartConfig = Array.isArray(chartConfig) ? chartConfig : []
   const normalizedSummary = typeof summary === 'object' && summary !== null ? summary : {}
 
-  // Log normalization for debugging
-  console.log('[AI-PROVIDER] Response normalization:', {
-    originalKeys: Object.keys(response),
-    insightsSource: response.insights ? 'insights' : response.analysis ? 'analysis' :
-                    response.key_insights ? 'key_insights' : response.findings ? 'findings' : 'unknown',
-    chartConfigSource: response.chartConfig ? 'chartConfig' : response.charts ? 'charts' :
-                       response.chart_config ? 'chart_config' : response.recommendations ? 'recommendations' : 'unknown',
-    normalizedInsightsCount: normalizedInsights.length,
-    normalizedChartConfigCount: normalizedChartConfig.length
+  // Log for debugging (simplified)
+  console.log('[AI-PROVIDER] Response normalized:', {
+    insightsCount: normalizedInsights.length,
+    chartConfigCount: normalizedChartConfig.length,
+    hasReasoning: !!response.reasoning,
+    hasSummary: Object.keys(normalizedSummary).length > 0
   })
 
   return {
     insights: normalizedInsights,
     chartConfig: normalizedChartConfig,
     summary: normalizedSummary,
-    dataContext: response.dataContext || response.data_context || response.context
+    dataContext: response.dataContext,
+    reasoning: response.reasoning,
+    businessQuestions: response.businessQuestions
   }
 }
 
@@ -220,19 +208,22 @@ export async function generateCompletion(
   options: AICompletionOptions = {}
 ): Promise<string> {
   const provider = getAIProvider()
-  const { temperature = 0.7, maxTokens = 4000, jsonMode = false } = options
+  // Don't set default temperature here - let each provider handle its own defaults
+  const { temperature, maxTokens = 4000, jsonMode = false, responseSchema } = options
 
   console.log(`[AI-PROVIDER] Generating completion with ${provider}:`, {
     messageCount: messages.length,
     temperature,
     maxTokens,
-    jsonMode
+    jsonMode,
+    hasResponseSchema: !!responseSchema
   })
 
   if (provider === 'gemini') {
-    return generateGeminiCompletion(messages, { temperature, maxTokens, jsonMode })
+    return generateGeminiCompletion(messages, { temperature, maxTokens, jsonMode, responseSchema })
   } else {
-    return generateOpenAICompletion(messages, { temperature, maxTokens, jsonMode })
+    // OpenAI doesn't support responseSchema, use default temperature 0.7
+    return generateOpenAICompletion(messages, { temperature: temperature ?? 0.7, maxTokens, jsonMode })
   }
 }
 
@@ -244,14 +235,15 @@ export async function* generateStreamingCompletion(
   options: AICompletionOptions = {}
 ): AsyncGenerator<AIStreamChunk> {
   const provider = getAIProvider()
-  const { temperature = 0.7, maxTokens = 1500 } = options
+  // Don't set default temperature here - let each provider handle its own defaults
+  const { temperature, maxTokens = 1500 } = options
 
   console.log(`[AI-PROVIDER] Starting streaming completion with ${provider}`)
 
   if (provider === 'gemini') {
     yield* generateGeminiStreamingCompletion(messages, { temperature, maxTokens })
   } else {
-    yield* generateOpenAIStreamingCompletion(messages, { temperature, maxTokens })
+    yield* generateOpenAIStreamingCompletion(messages, { temperature: temperature ?? 0.7, maxTokens })
   }
 }
 
@@ -314,33 +306,44 @@ async function generateGeminiCompletion(
   messages: AIMessage[],
   options: AICompletionOptions
 ): Promise<string> {
-  const { temperature, maxTokens, jsonMode } = options
-  const model = getGeminiModel(jsonMode)
-  const geminiMessages = convertToGeminiMessages(messages)
+  const { temperature, maxTokens, jsonMode, responseSchema } = options
+  const client = getGeminiClient()
+  const modelName = getGeminiModelName()
+  const { contents, systemInstruction } = convertToGeminiMessages(messages)
+
+  // Determine temperature based on model version
+  // Gemini 3.x models default to 1.0, Gemini 2.x models default to 0.7
+  const modelVersion = modelName.includes('gemini-3') ? 3 : 2
+  const defaultTemperature = modelVersion === 3 ? 1.0 : 0.7
+  const finalTemperature = temperature ?? defaultTemperature
 
   console.log('[AI-PROVIDER] Calling Gemini:', {
-    messageCount: geminiMessages.length,
-    temperature,
+    model: modelName,
+    messageCount: contents.length,
+    hasSystemInstruction: !!systemInstruction,
+    temperature: finalTemperature,
     maxTokens,
-    jsonMode
+    jsonMode,
+    hasResponseSchema: !!responseSchema
   })
 
-  const result = await model.generateContent({
-    contents: geminiMessages,
-    generationConfig: {
-      temperature,
+  const response = await client.models.generateContent({
+    model: modelName,
+    contents,
+    config: {
+      systemInstruction,
+      temperature: finalTemperature,
       maxOutputTokens: maxTokens,
-      responseMimeType: jsonMode ? 'application/json' : undefined
+      responseMimeType: jsonMode ? 'application/json' : undefined,
+      responseSchema
     }
   })
 
-  const response = result.response
-  const text = response.text()
+  const text = response.text || ''
 
   console.log('[AI-PROVIDER] Gemini response:', {
-    textLength: text?.length || 0,
-    preview: text?.substring(0, 300) || 'EMPTY',
-    finishReason: response.candidates?.[0]?.finishReason
+    textLength: text.length,
+    preview: text.substring(0, 300) || 'EMPTY'
   })
 
   // Debug: Log parsed keys for JSON mode
@@ -361,19 +364,27 @@ async function* generateGeminiStreamingCompletion(
   options: AICompletionOptions
 ): AsyncGenerator<AIStreamChunk> {
   const { temperature, maxTokens } = options
-  const model = getGeminiModel(false) // No JSON mode for streaming
-  const geminiMessages = convertToGeminiMessages(messages)
+  const client = getGeminiClient()
+  const modelName = getGeminiModelName()
+  const { contents, systemInstruction } = convertToGeminiMessages(messages)
 
-  const result = await model.generateContentStream({
-    contents: geminiMessages,
-    generationConfig: {
-      temperature,
+  // Determine temperature based on model version
+  const modelVersion = modelName.includes('gemini-3') ? 3 : 2
+  const defaultTemperature = modelVersion === 3 ? 1.0 : 0.7
+  const finalTemperature = temperature ?? defaultTemperature
+
+  const stream = await client.models.generateContentStream({
+    model: modelName,
+    contents,
+    config: {
+      systemInstruction,
+      temperature: finalTemperature,
       maxOutputTokens: maxTokens
     }
   })
 
-  for await (const chunk of result.stream) {
-    const content = chunk.text() || ''
+  for await (const chunk of stream) {
+    const content = chunk.text || ''
     yield { content, done: false }
   }
 
@@ -428,4 +439,4 @@ export async function generateCompletionWithRetry(
 // EXPORTS
 // ============================================================================
 
-export type { Content as GeminiContent }
+export type { Content as GeminiContent, GoogleGenAI }

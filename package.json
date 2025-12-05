@@ -31,7 +31,7 @@
   "description": "",
   "dependencies": {
     "@google-cloud/bigquery": "^8.1.1",
-    "@google/generative-ai": "^0.24.1",
+    "@google/genai": "^1.31.0",
     "@nivo/core": "^0.99.0",
     "@nivo/sankey": "^0.99.0",
     "@prisma/client": "^6.13.0",
