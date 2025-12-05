@@ -1267,9 +1267,14 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
   })
 
   try {
-    // Check API key - REQUIRED
-    if (!process.env.OPENAI_API_KEY) {
-      logger.error('[API-ANALYZE] OpenAI API key not configured', { requestId })
+    // Check API key based on provider - REQUIRED
+    const aiProvider = getAIProvider()
+    const hasApiKey = aiProvider === 'gemini'
+      ? !!process.env.GOOGLE_GEMINI_API_KEY
+      : !!process.env.OPENAI_API_KEY
+
+    if (!hasApiKey) {
+      logger.error(`[API-ANALYZE] ${aiProvider.toUpperCase()} API key not configured`, { requestId })
       return NextResponse.json(
         {
           error: 'Service temporarily unavailable',
@@ -1280,7 +1285,7 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
       )
     }
 
-    logger.info('[API-ANALYZE] OpenAI API key found, proceeding with analysis')
+    logger.info(`[API-ANALYZE] ${aiProvider.toUpperCase()} API key found, proceeding with analysis`)
 
     // NOTE: Rate limiting is now handled by withRateLimit middleware
     // No need for manual rate limit checks here
@@ -1360,7 +1365,6 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
     const prompt = buildEnhancedPrompt(dataStructure, (schema ?? undefined) as DataSchema | undefined, correctedSchema, feedback)
 
     // Build AI messages for provider abstraction
-    const aiProvider = getAIProvider()
     const promptLength = prompt.length
     const promptTokensEst = Math.ceil(promptLength / 4) // Rough estimate: 1 token ≈ 4 characters
     logger.info(`[API-ANALYZE] Making ${aiProvider.toUpperCase()} API call...`, {
