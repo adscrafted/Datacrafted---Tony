@@ -6,7 +6,7 @@ import React, { useEffect, useState, Suspense } from 'react'
 // Note: Metadata export only works in Server Components
 // For this Client Component, metadata should be set via layout or page wrapper
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Clock, ChevronRight, Plus, FileText, Trash2 } from 'lucide-react'
+import { Clock, ChevronRight, Plus, FileText, Trash2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/lib/contexts/auth-context'
 import { AuthGateModal } from '@/components/auth/auth-gate-modal'
@@ -69,6 +69,19 @@ function ProjectsContent() {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <h2 className="text-xl font-medium text-gray-900 mb-2">Setting up your account...</h2>
           <p className="text-gray-500">This will only take a moment</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show loading overlay when creating a new project
+  if (isCreatingProject) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 text-blue-500 animate-spin mx-auto mb-4" />
+          <h2 className="text-xl font-medium text-gray-900 mb-2">Creating your project...</h2>
+          <p className="text-gray-500">Setting up your dashboard</p>
         </div>
       </div>
     )
@@ -167,6 +180,7 @@ function ProjectsContent() {
             <div className="mb-8 p-8 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
               <FileUploadCore
                 onUploadComplete={handleFileUpload}
+                onUploadPreparing={() => setIsCreatingProject(true)}
                 onUploadError={(error) => {
                   console.error('Upload error:', error)
                   setIsCreatingProject(false)

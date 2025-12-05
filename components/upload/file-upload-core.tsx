@@ -22,16 +22,20 @@ interface FileUploadCoreProps {
   onUploadStart?: () => void
   onUploadComplete?: (data: any) => void
   onUploadError?: (error: string) => void
+  onUploadPreparing?: () => void  // Called when upload is done but before navigation
   disabled?: boolean
   isTypingComplete?: boolean
+  showLoading?: boolean  // External control to keep loading state visible
 }
 
 export function FileUploadCore({
   onUploadStart,
   onUploadComplete,
   onUploadError,
+  onUploadPreparing,
   disabled = false,
-  isTypingComplete = false
+  isTypingComplete = false,
+  showLoading = false
 }: FileUploadCoreProps) {
   const router = useRouter()
   // Data Store selectors
@@ -267,6 +271,10 @@ export function FileUploadCore({
       // Reset analyzing state since upload is complete
       setIsAnalyzing(false)
 
+      // Notify parent that upload is preparing to complete
+      // This allows parent to show its own loading state immediately
+      onUploadPreparing?.()
+
       // Small delay to show completion before navigation
       logger.debug('[FILE-UPLOAD] Preparing navigation to dashboard in 500ms')
       logger.debug('[FILE-UPLOAD] Final store state before navigation', {
@@ -343,7 +351,7 @@ export function FileUploadCore({
     } finally {
       setAutoProcessing(false)
     }
-  }, [clearData, setFileName, setRawData, setDataSchema, setError, setIsAnalyzing, handleProgress, onUploadStart, onUploadComplete, onUploadError, setUploadStage, setUploadProgress])
+  }, [clearData, setFileName, setRawData, setDataSchema, setError, setIsAnalyzing, handleProgress, onUploadStart, onUploadComplete, onUploadError, onUploadPreparing, setUploadStage, setUploadProgress])
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0]
@@ -464,7 +472,7 @@ export function FileUploadCore({
     <div className="w-full max-w-2xl mx-auto">
       <div className="p-8">
         {/* Show upload progress */}
-        {(isAnalyzing || autoProcessing) ? (
+        {(isAnalyzing || autoProcessing || showLoading) ? (
           <div className="relative p-16 md:p-20 rounded-[2rem] bg-white/60 border-2 border-white/20 backdrop-blur-xl shadow-2xl">
             <div className="flex flex-col items-center space-y-4">
               <div className="relative">
