@@ -55,9 +55,29 @@ function initializeFirebaseAdmin(): App {
   try {
     // Method 1: Using service account key file (recommended for development)
     if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-      const serviceAccount = JSON.parse(
-        process.env.FIREBASE_SERVICE_ACCOUNT_KEY
-      )
+      let serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
+
+      // Check if it's base64 encoded
+      if (!serviceAccountJson.trim().startsWith('{')) {
+        try {
+          serviceAccountJson = Buffer.from(serviceAccountJson, 'base64').toString('utf-8')
+        } catch (error) {
+          console.error('❌ [FIREBASE-ADMIN] Failed to decode base64:', error)
+          throw error
+        }
+      }
+
+      // Fix literal newlines in the JSON string that should be escaped
+      // This handles the case where Railway or other platforms convert \n to actual newlines
+      serviceAccountJson = serviceAccountJson.replace(/\n/g, '\\n')
+
+      const serviceAccount = JSON.parse(serviceAccountJson)
+
+      // If private_key has escaped newlines, convert them back to actual newlines
+      if (serviceAccount.private_key) {
+        serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n')
+      }
+
       adminApp = initializeApp({
         credential: cert(serviceAccount),
         projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
