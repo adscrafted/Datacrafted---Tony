@@ -38,11 +38,11 @@ export interface RebalanceOptions {
 }
 
 const DEFAULT_OPTIONS: Required<RebalanceOptions> = {
-  targetCount: 16,
+  targetCount: 16,        // Minimum charts (no maximum)
   minScorecards: 4,
-  maxScorecards: 6,
-  preferredScorecards: 6,
-  minNonScorecards: 8,  // NEW: Default minimum non-scorecard charts
+  maxScorecards: 100,     // Effectively unlimited - keep all valid scorecards
+  preferredScorecards: 8,
+  minNonScorecards: 8,    // Minimum non-scorecard charts (visualizations + tables)
   requireTable: true,
   fallbackChartType: 'table'
 }
@@ -263,9 +263,10 @@ export function selectTopCharts(
 
 /**
  * Enforces layout constraints on charts:
- * - Positions 1-6: Scorecards
- * - Positions 7-15: Visualizations
- * - Position 16: Table
+ * - Scorecards first (minimum enforced, no maximum)
+ * - Visualizations in middle (all kept, no trimming)
+ * - Table at the end
+ * NOTE: No maximum chart count - allows unlimited charts if AI generates them
  */
 export function enforceLayoutConstraints(
   charts: ChartConfig[],
@@ -309,11 +310,9 @@ export function enforceLayoutConstraints(
     selectedTable = sortedVisualizations[0] || createFallbackTable(charts)
   }
 
-  // Calculate how many visualizations we need (positions 7-15)
-  const visualizationSlots = opts.targetCount - selectedScorecards.length - 1 // -1 for table
-
-  // Select top visualizations for remaining slots
-  let selectedVisualizations = sortedVisualizations.slice(0, visualizationSlots)
+  // Keep ALL valid visualizations (no maximum limit)
+  // Only slice if we need to enforce a minimum, but never trim extras
+  let selectedVisualizations = [...sortedVisualizations] // Keep all visualizations
 
   // NEW: Ensure we have enough non-scorecard charts (visualizations + table)
   // The table counts as 1 non-scorecard, so we need (minNonScorecards - 1) visualizations
@@ -483,27 +482,17 @@ export function rebalanceCharts(
   // Apply layout constraints
   const rebalanced = enforceLayoutConstraints(validCharts, opts)
 
-  // Verify we have exactly the target count
+  // Verify we have at least the minimum count (no maximum - allow unlimited charts)
   const finalCount = rebalanced.length
-  if (finalCount !== opts.targetCount) {
-    console.warn('⚠️ [REBALANCER] Chart count mismatch:', {
-      expected: opts.targetCount,
+  if (finalCount < opts.targetCount) {
+    console.warn('⚠️ [REBALANCER] Chart count below minimum:', {
+      minimum: opts.targetCount,
       actual: finalCount,
-      difference: finalCount - opts.targetCount
+      difference: opts.targetCount - finalCount
     })
 
-    // Trim excess or pad shortfall
-    if (finalCount > opts.targetCount) {
-      // Remove lowest quality visualizations (keep scorecards and table)
-      const scorecards = rebalanced.filter(c => c.type === 'scorecard')
-      const table = rebalanced[rebalanced.length - 1] // Last item should be table
-      const visualizations = rebalanced.filter(c => c.type !== 'scorecard' && c !== table)
-
-      const visualizationsToKeep = opts.targetCount - scorecards.length - 1
-      const trimmedVisualizations = sortByQuality(visualizations).slice(0, visualizationsToKeep)
-
-      return [...scorecards, ...trimmedVisualizations, table]
-    } else {
+    // Pad shortfall to meet minimum (but never trim excess - allow unlimited charts)
+    {
       // Pad with fallback scorecards
       const padding: ChartConfig[] = []
       for (let i = finalCount; i < opts.targetCount; i++) {
@@ -548,9 +537,9 @@ export function validateChartLayout(
   const opts = { ...DEFAULT_OPTIONS, ...options }
   const errors: string[] = []
 
-  // Check total count
-  if (charts.length !== opts.targetCount) {
-    errors.push(`Expected ${opts.targetCount} charts, got ${charts.length}`)
+  // Check minimum count (no maximum - allow unlimited charts)
+  if (charts.length < opts.targetCount) {
+    errors.push(`Below minimum ${opts.targetCount} charts, got ${charts.length}`)
   }
 
   // Check scorecard count
