@@ -1257,24 +1257,43 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
   const requestStartTime = Date.now()
   const requestId = crypto.randomUUID()
 
+  // Get AI provider early for error logging
+  const aiProvider = getAIProvider()
+
   logger.info('[API-ANALYZE] POST request received:', {
     requestId,
     url: request.url,
     method: request.method,
     timestamp: new Date().toISOString(),
     userId: authUser.uid,
-    isAuthenticated: true
+    isAuthenticated: true,
+    aiProvider
   })
 
   try {
     // Check API key based on provider - REQUIRED
-    const aiProvider = getAIProvider()
+
+    // Diagnostic logging for provider detection
+    logger.info('[API-ANALYZE] Provider detection:', {
+      requestId,
+      AI_PROVIDER_ENV: process.env.AI_PROVIDER || 'NOT SET',
+      detectedProvider: aiProvider,
+      hasOpenAIKey: !!process.env.OPENAI_API_KEY,
+      openAIKeyPrefix: process.env.OPENAI_API_KEY?.substring(0, 10) || 'NONE',
+      hasGeminiKey: !!process.env.GOOGLE_GEMINI_API_KEY,
+      geminiKeyPrefix: process.env.GOOGLE_GEMINI_API_KEY?.substring(0, 10) || 'NONE'
+    })
+
     const hasApiKey = aiProvider === 'gemini'
       ? !!process.env.GOOGLE_GEMINI_API_KEY
       : !!process.env.OPENAI_API_KEY
 
     if (!hasApiKey) {
-      logger.error(`[API-ANALYZE] ${aiProvider.toUpperCase()} API key not configured`, { requestId })
+      logger.error(`[API-ANALYZE] ${aiProvider.toUpperCase()} API key not configured`, {
+        requestId,
+        provider: aiProvider,
+        checkedKey: aiProvider === 'gemini' ? 'GOOGLE_GEMINI_API_KEY' : 'OPENAI_API_KEY'
+      })
       return NextResponse.json(
         {
           error: 'Service temporarily unavailable',
@@ -2643,7 +2662,10 @@ CRITICAL FIELD NAMES - use EXACTLY these names:
     const totalDuration = Date.now() - requestStartTime
     logger.error('[API-ANALYZE] Error in analysis API:', {
       requestId,
+      provider: aiProvider,
       error: error instanceof Error ? error.message : 'Unknown error',
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
+      stack: error instanceof Error ? error.stack?.split('\n').slice(0, 5).join('\n') : undefined,
       duration: totalDuration + 'ms'
     })
 
