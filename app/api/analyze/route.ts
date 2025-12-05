@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAIProvider, generateCompletionWithRetry, normalizeAnalysisResponse, type AIMessage } from '@/lib/services/ai/ai-provider'
 import type { DataRow, AnalysisResult, DataSchema, ColumnSchema } from '@/lib/store'
-import { Type } from '@google/genai'
+// NOTE: Type import removed - responseSchema disabled due to complex dataMapping structure
+// import { Type } from '@google/genai'
 import type { ScoredRecommendation, DataProfile, CorrectedColumn as ScorerCorrectedColumn } from '@/lib/utils/recommendation-scorer'
 import { scoreRecommendation, rankRecommendations } from '@/lib/utils/recommendation-scorer'
 import type { ChartSuggestion } from '@/lib/types/chart-suggestion'
@@ -89,50 +90,10 @@ const SUPPORTED_CHART_TYPES = [
 ] as const
 type SupportedChartType = typeof SUPPORTED_CHART_TYPES[number]
 
-// Response schema for Gemini structured output
-const ANALYSIS_RESPONSE_SCHEMA = {
-  type: Type.OBJECT,
-  properties: {
-    reasoning: {
-      type: Type.OBJECT,
-      properties: {
-        availableColumns: { type: Type.ARRAY, items: { type: Type.STRING } },
-        numericMetrics: { type: Type.ARRAY, items: { type: Type.STRING } },
-        categoricalDimensions: { type: Type.ARRAY, items: { type: Type.STRING } },
-        timeFields: { type: Type.ARRAY, items: { type: Type.STRING } },
-        domain: { type: Type.STRING },
-        plannedChartCount: { type: Type.NUMBER }
-      }
-    },
-    businessQuestions: { type: Type.ARRAY, items: { type: Type.STRING } },
-    insights: { type: Type.ARRAY, items: { type: Type.STRING } },
-    chartConfig: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          type: { type: Type.STRING },
-          title: { type: Type.STRING },
-          description: { type: Type.STRING },
-          dataMapping: { type: Type.OBJECT },
-          confidence: { type: Type.NUMBER },
-          reasoning: { type: Type.STRING }
-        },
-        required: ['type', 'title', 'dataMapping']
-      }
-    },
-    summary: {
-      type: Type.OBJECT,
-      properties: {
-        dataQuality: { type: Type.STRING },
-        keyFindings: { type: Type.STRING }
-      }
-    }
-  },
-  required: ['insights', 'chartConfig'],
-  // REQUIRED for Gemini 2.0 - specifies property generation order
-  propertyOrdering: ['reasoning', 'businessQuestions', 'insights', 'chartConfig', 'summary']
-}
+// NOTE: Response schema disabled - dataMapping has variable structure based on chart type
+// which causes "properties should be non-empty for OBJECT type" error
+// The prompt defines the expected structure, and Gemini follows it via jsonMode
+// To re-enable, need to fully define dataMapping properties for each chart type
 
 // Enhanced chart recommendation with chart-type-specific data mappings
 interface ChartRecommendation {
@@ -1258,8 +1219,10 @@ CRITICAL FIELD NAMES - use EXACTLY these names:
 
     // PERFORMANCE: Use timeout utility wrapper for cleaner timeout handling
     // RELIABILITY: Use AI provider with built-in retry logic for transient failures
+    // NOTE: responseSchema disabled for now - dataMapping structure is too complex/variable
+    // The prompt still defines the expected JSON structure, Gemini will follow it via jsonMode
     const response = await withTimeout(
-      generateCompletionWithRetry(aiMessages, { temperature: 0.7, maxTokens: 16000, jsonMode: true, responseSchema: ANALYSIS_RESPONSE_SCHEMA }),
+      generateCompletionWithRetry(aiMessages, { temperature: 0.7, maxTokens: 16000, jsonMode: true }),
       240000, // 4 minute timeout (240 seconds)
       `${aiProvider.toUpperCase()} API call timed out after 240 seconds`
     )
