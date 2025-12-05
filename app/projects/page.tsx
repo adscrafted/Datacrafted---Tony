@@ -6,7 +6,7 @@ import React, { useEffect, useState, Suspense } from 'react'
 // Note: Metadata export only works in Server Components
 // For this Client Component, metadata should be set via layout or page wrapper
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Clock, ChevronRight, Plus, FileText, Trash2, Loader2 } from 'lucide-react'
+import { Clock, ChevronRight, Plus, FileText, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/lib/contexts/auth-context'
 import { AuthGateModal } from '@/components/auth/auth-gate-modal'
@@ -14,7 +14,9 @@ import { useProjectStore } from '@/lib/stores/project-store'
 import { FileUploadCore } from '@/components/upload/file-upload-core'
 import { formatDistanceToNow } from 'date-fns'
 import { useDataStore } from '@/lib/stores/data-store'
+import { useUIStore } from '@/lib/stores/ui-store'
 import { MinimalHeader } from '@/components/ui/minimal-header'
+import { UploadStatusBar } from '@/components/ui/upload-status-bar'
 
 function ProjectsContent() {
   const { user, logout, loading: authLoading, isSyncing, isDebugMode } = useAuth()
@@ -32,6 +34,7 @@ function ProjectsContent() {
   } = useProjectStore()
 
   const { setFileName, setRawData, setAnalysis, setDataSchema } = useDataStore()
+  const { setUploadStage, setUploadComplete, setUploadProjectId } = useUIStore()
 
   // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
   // Move all state declarations to the top
@@ -74,23 +77,12 @@ function ProjectsContent() {
     )
   }
 
-  // Show loading overlay when creating a new project
-  if (isCreatingProject) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-12 w-12 text-blue-500 animate-spin mx-auto mb-4" />
-          <h2 className="text-xl font-medium text-gray-900 mb-2">Creating your project...</h2>
-          <p className="text-gray-500">Setting up your dashboard</p>
-        </div>
-      </div>
-    )
-  }
-
   const handleFileUpload = async (data: any) => {
     if (isCreatingProject) return
 
     setIsCreatingProject(true)
+    // Set stage to 'saving' - this shows in the UploadStatusBar
+    setUploadStage('saving')
 
     try {
       const currentSchema = useDataStore.getState().dataSchema
@@ -110,10 +102,12 @@ function ProjectsContent() {
       setFileName(projectName)
       setRawData(data)
 
-      // Hide upload after successful creation
+      // Hide upload area after successful creation
       setShowUpload(false)
-      // Navigate to simple dashboard
-      router.push(`/dashboard?id=${project.id}`)
+
+      // Signal completion to UploadStatusBar - it will handle navigation
+      setUploadProjectId(project.id)
+      setUploadComplete(true)
     } catch (error) {
       console.error('Error creating project:', error)
     } finally {
@@ -180,7 +174,6 @@ function ProjectsContent() {
             <div className="mb-8 p-8 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
               <FileUploadCore
                 onUploadComplete={handleFileUpload}
-                onUploadPreparing={() => setIsCreatingProject(true)}
                 onUploadError={(error) => {
                   console.error('Upload error:', error)
                   setIsCreatingProject(false)
@@ -249,6 +242,9 @@ function ProjectsContent() {
           </div>
         )}
       </main>
+
+      {/* Upload Status Bar - shows progress at bottom of screen */}
+      <UploadStatusBar />
     </div>
   )
 }
