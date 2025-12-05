@@ -8,12 +8,24 @@
  */
 
 import { NextResponse } from 'next/server'
+import { getAIProvider } from '@/lib/services/ai/ai-provider'
 
 export async function GET() {
+  const aiProvider = getAIProvider()
+
   // Simple health check - just prove the server is responding
   return NextResponse.json({
     status: 'ok',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    ai: {
+      provider: aiProvider,
+      model: aiProvider === 'gemini'
+        ? (process.env.GEMINI_MODEL || 'gemini-2.0-flash')
+        : 'gpt-4o-mini',
+      configured: aiProvider === 'gemini'
+        ? !!process.env.GOOGLE_GEMINI_API_KEY
+        : !!process.env.OPENAI_API_KEY
+    }
   })
 }
 
