@@ -83,8 +83,13 @@ function getGeminiClient(): GoogleGenerativeAI {
 
 function getGeminiModel(jsonMode: boolean = false): GenerativeModel {
   const client = getGeminiClient()
+  // Use gemini-2.0-flash or configurable via environment variable
+  const modelName = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
+
+  console.log('[AI-PROVIDER] Using Gemini model:', modelName)
+
   return client.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: modelName,
     generationConfig: jsonMode ? {
       responseMimeType: 'application/json'
     } : undefined
