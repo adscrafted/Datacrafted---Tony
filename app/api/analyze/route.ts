@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import OpenAI from 'openai'
+import { getAIProvider, generateCompletionWithRetry, normalizeAnalysisResponse, type AIMessage } from '@/lib/services/ai/ai-provider'
 import type { DataRow, AnalysisResult, DataSchema, ColumnSchema } from '@/lib/store'
 import type { ScoredRecommendation, DataProfile, CorrectedColumn as ScorerCorrectedColumn } from '@/lib/utils/recommendation-scorer'
 import { scoreRecommendation, rankRecommendations } from '@/lib/utils/recommendation-scorer'
@@ -16,9 +16,6 @@ import { withTimeout, isTimeoutError } from '@/lib/utils/timeout'
 import { validateRequest, analyzeRequestSchema, validateDataSize } from '@/lib/utils/api-validation'
 import type {
   Logger,
-  OpenAIError,
-  OpenAIChatParams,
-  OpenAIChatResponse,
   DataStructure,
   DataMapping,
   CorrectedColumn,
@@ -350,53 +347,8 @@ interface DataContext {
   improvementNotes?: string // Notes on how user corrections improved analysis
 }
 
-// Initialize OpenAI client only when needed
-function getOpenAIClient() {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error('OpenAI API key not configured')
-  }
-
-  return new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  })
-}
-
-/**
- * Retry wrapper for OpenAI API calls with exponential backoff
- * Handles transient errors (5xx) and rate limits (429)
- */
-async function callOpenAIWithRetry(
-  openai: OpenAI,
-  params: OpenAIChatParams,
-  maxRetries: number = 3
-): Promise<OpenAIChatResponse> {
-  let lastError: Error | null = null
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await openai.chat.completions.create(params) as unknown as OpenAIChatResponse
-    } catch (error) {
-      const openAIError = error as OpenAIError
-      lastError = error as Error
-
-      // Don't retry on client errors (4xx) except rate limits
-      if (openAIError.status && openAIError.status >= 400 && openAIError.status < 500 && openAIError.status !== 429) {
-        throw error
-      }
-
-      // Retry on server errors (5xx) and rate limits (429)
-      if (attempt < maxRetries) {
-        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000) // Exponential backoff, max 10s
-        logger.warn(`[API-ANALYZE] OpenAI retry ${attempt}/${maxRetries} after ${delay}ms`)
-        await new Promise(resolve => setTimeout(resolve, delay))
-      }
-    }
-  }
-
-  throw lastError
-}
-
 // NOTE: Rate limiting is now handled by withRateLimit middleware
+// NOTE: AI client initialization and retry logic moved to lib/services/ai/ai-provider.ts
 // The old in-memory implementation has been replaced with the centralized middleware
 
 /**
@@ -1407,12 +1359,12 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
 
     const prompt = buildEnhancedPrompt(dataStructure, (schema ?? undefined) as DataSchema | undefined, correctedSchema, feedback)
 
-    // Get OpenAI client and call API with timeout
-    const openai = getOpenAIClient()
+    // Build AI messages for provider abstraction
+    const aiProvider = getAIProvider()
     const promptLength = prompt.length
     const promptTokensEst = Math.ceil(promptLength / 4) // Rough estimate: 1 token ≈ 4 characters
-    logger.info('[API-ANALYZE] Making OpenAI API call...', {
-      model: 'gpt-4o-mini',
+    logger.info(`[API-ANALYZE] Making ${aiProvider.toUpperCase()} API call...`, {
+      provider: aiProvider,
       promptLength,
       promptTokensEstimate: promptTokensEst,
       maxTokens: 16000,
@@ -1422,15 +1374,11 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
     })
     const startTime = Date.now()
 
-    // PERFORMANCE: Use timeout utility wrapper for cleaner timeout handling
-    // RELIABILITY: Wrap OpenAI call with retry logic for transient failures
-    const completion = await withTimeout(
-      callOpenAIWithRetry(openai, {
-        model: "gpt-4o-mini", // Using GPT-4o-mini for fast and efficient analysis
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert data analyst specializing in business intelligence and visualization strategy.
+    // Build messages array for AI provider
+    const aiMessages: AIMessage[] = [
+      {
+        role: "system",
+        content: `You are an expert data analyst specializing in business intelligence and visualization strategy.
 
 <EXPERTISE>
 - Identify business domains (advertising, e-commerce, SaaS, operations, finance)
@@ -1501,51 +1449,67 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
 - Clear business questions (what decision does this support?)
 - High confidence recommendations (80%+ confidence)
 - Prioritize actionable insights over basic aggregations
-</QUALITY_STANDARDS>`
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-      ],
-        // temperature: 0.7, // Using default temperature for balanced creativity and consistency
-        max_completion_tokens: 16000, // Increased to 16k to prevent truncation (PHASE 3 OPTIMIZED: prompt ~4k + completion 16k = 20k total, 56% token reduction)
-        response_format: { type: "json_object" }, // Force valid JSON output
-      }),
-      240000, // 4 minute timeout (240 seconds) - increased from 3 minutes to handle slower OpenAI responses
-      'OpenAI API call timed out after 240 seconds'
+</QUALITY_STANDARDS>
+
+<RESPONSE_FORMAT>
+You MUST respond with valid JSON using EXACTLY these field names (case-sensitive):
+{
+  "insights": ["array of string insights - minimum 3 insights required"],
+  "chartConfig": [/* array of chart recommendation objects */],
+  "summary": {
+    "dataQuality": "string describing data quality",
+    "keyFindings": "string with key findings",
+    "recommendations": "string with recommendations"
+  }
+}
+
+CRITICAL FIELD NAMES - use EXACTLY these names:
+- "insights" (NOT "analysis", "key_insights", or "findings")
+- "chartConfig" (NOT "charts", "chart_config", or "visualizations")
+- "summary" (NOT "data_summary" or "dataSummary")
+</RESPONSE_FORMAT>`
+      },
+      {
+        role: "user",
+        content: prompt
+      }
+    ]
+
+    // PERFORMANCE: Use timeout utility wrapper for cleaner timeout handling
+    // RELIABILITY: Use AI provider with built-in retry logic for transient failures
+    const response = await withTimeout(
+      generateCompletionWithRetry(aiMessages, { temperature: 0.7, maxTokens: 16000, jsonMode: true }),
+      240000, // 4 minute timeout (240 seconds)
+      `${aiProvider.toUpperCase()} API call timed out after 240 seconds`
     )
 
     const endTime = Date.now()
-    const openaiDuration = endTime - startTime
-    logger.info('[API-ANALYZE] OpenAI API call completed:', {
-      duration: openaiDuration + 'ms'
+    const aiDuration = endTime - startTime
+    logger.info(`[API-ANALYZE] ${aiProvider.toUpperCase()} API call completed:`, {
+      provider: aiProvider,
+      duration: aiDuration + 'ms'
     })
 
-    const response = completion.choices[0]?.message?.content
-
     if (!response) {
-      logger.error('[API-ANALYZE] No response from OpenAI', {
-        requestId,
-        hasChoices: !!completion.choices,
-        choicesLength: completion.choices?.length,
-        firstChoice: completion.choices?.[0],
-        finishReason: completion.choices?.[0]?.finish_reason,
-        completionObject: JSON.stringify(completion).substring(0, 500)
-      })
-      throw new Error(`No response from OpenAI. Finish reason: ${completion.choices?.[0]?.finish_reason || 'unknown'}`)
+      logger.error(`[API-ANALYZE] No response from ${aiProvider}`, { requestId })
+      throw new Error(`No response from ${aiProvider} API`)
     }
 
     try {
-      // Parse OpenAI response using robust JSON extraction
-      const aiAnalysis = parseJSONFromString<AIAnalysisResponse>(response)
+      // Parse AI response using robust JSON extraction
+      const rawAiAnalysis = parseJSONFromString<any>(response)
+
+      // Normalize response to handle different field names from various AI providers
+      // (e.g., Gemini may use "analysis" instead of "insights", "charts" instead of "chartConfig")
+      const aiAnalysis = normalizeAnalysisResponse(rawAiAnalysis) as AIAnalysisResponse
 
       // Log filter recommendations from AI
       const chartsWithFilters = aiAnalysis.chartConfig?.filter(c =>
         c.dataMapping?.filters && c.dataMapping.filters.length > 0
       ) || []
 
-      logger.debug('[API-ANALYZE] AI response parsed:', {
+      logger.debug('[API-ANALYZE] AI response parsed and normalized:', {
+        provider: aiProvider,
         chartsCount: aiAnalysis.chartConfig?.length || 0,
         insightsCount: aiAnalysis.insights?.length || 0,
         chartsWithFilters: chartsWithFilters.length,
@@ -1555,13 +1519,19 @@ DIVERSITY REQUIREMENT: Ensure at least 2-3 different advanced chart types in eve
         }))
       })
 
-      // Validate required structure
-      if (!aiAnalysis.insights || !Array.isArray(aiAnalysis.insights)) {
-        logger.error('[API-ANALYZE] Invalid insights format:', aiAnalysis.insights)
+      // Validate required structure (after normalization)
+      if (!aiAnalysis.insights || !Array.isArray(aiAnalysis.insights) || aiAnalysis.insights.length === 0) {
+        logger.error('[API-ANALYZE] Invalid insights format after normalization:', {
+          insights: aiAnalysis.insights,
+          rawKeys: Object.keys(rawAiAnalysis || {})
+        })
         throw new Error('Invalid insights format')
       }
-      if (!aiAnalysis.chartConfig || !Array.isArray(aiAnalysis.chartConfig)) {
-        logger.error('[API-ANALYZE] Invalid chartConfig format:', aiAnalysis.chartConfig)
+      if (!aiAnalysis.chartConfig || !Array.isArray(aiAnalysis.chartConfig) || aiAnalysis.chartConfig.length === 0) {
+        logger.error('[API-ANALYZE] Invalid chartConfig format after normalization:', {
+          chartConfig: aiAnalysis.chartConfig,
+          rawKeys: Object.keys(rawAiAnalysis || {})
+        })
         throw new Error('Invalid chartConfig format')
       }
 

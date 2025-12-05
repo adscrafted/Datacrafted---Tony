@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import OpenAI from 'openai'
 import { parseJSONFromString } from '@/lib/utils/json-extractor'
 import { validateRequest, generateChartTitleRequestSchema } from '@/lib/utils/api-validation'
+import {
+  getAIProvider,
+  generateCompletionWithRetry,
+  type AIMessage
+} from '@/lib/services/ai/ai-provider'
 
 interface GenerateTitleResponse {
   title: string
@@ -18,17 +22,19 @@ export async function POST(request: NextRequest) {
 
     const { chartType, dataMapping, sampleData, dataSchema } = validation.data
 
-    // Check if OpenAI API key is configured
-    const apiKey = process.env.OPENAI_API_KEY
-    if (!apiKey) {
-      console.error('❌ [GENERATE-TITLE] OpenAI API key not configured')
+    // Check if API key is configured based on provider
+    const aiProvider = getAIProvider()
+    const hasApiKey = aiProvider === 'gemini'
+      ? !!process.env.GOOGLE_GEMINI_API_KEY
+      : !!process.env.OPENAI_API_KEY
+
+    if (!hasApiKey) {
+      console.error(`❌ [GENERATE-TITLE] ${aiProvider.toUpperCase()} API key not configured`)
       return NextResponse.json(
-        { error: 'OpenAI API is not configured. Please check your environment variables.' },
+        { error: `${aiProvider.toUpperCase()} API is not configured. Please check your environment variables.` },
         { status: 500 }
       )
     }
-
-    const openai = new OpenAI({ apiKey })
 
     // Build context for AI
     const context = buildPromptContext(chartType, dataMapping, sampleData, dataSchema)
@@ -36,36 +42,42 @@ export async function POST(request: NextRequest) {
     console.log('🎯 [GENERATE-TITLE] Generating title and description for:', {
       chartType,
       dataMapping,
-      sampleDataRows: sampleData?.length || 0
+      sampleDataRows: sampleData?.length || 0,
+      provider: aiProvider
     })
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: `You are an expert data visualization specialist. Generate concise, clear chart titles and descriptions.
+    const messages: AIMessage[] = [
+      {
+        role: 'system',
+        content: `You are an expert data visualization specialist. Generate concise, clear chart titles and descriptions.
 
 Rules:
 - Title: Max 60 characters, clear and descriptive
 - Description: 1-2 sentences, max 150 characters, explain key insights or what the chart shows
 - Focus on the "why" and "what" rather than technical details
 - Be specific about metrics and dimensions
-- Use business-friendly language`
-        },
-        {
-          role: 'user',
-          content: context
-        }
-      ],
+- Use business-friendly language
+
+You MUST respond with valid JSON using EXACTLY this format:
+{
+  "title": "Brief, clear chart title (max 60 chars)",
+  "description": "1-2 sentence description of key insights (max 150 chars)"
+}`
+      },
+      {
+        role: 'user',
+        content: context
+      }
+    ]
+
+    const responseText = await generateCompletionWithRetry(messages, {
       temperature: 0.7,
-      max_tokens: 200,
-      response_format: { type: 'json_object' }
+      maxTokens: 200,
+      jsonMode: true
     })
 
-    const responseText = completion.choices[0]?.message?.content
     if (!responseText) {
-      throw new Error('No response from OpenAI')
+      throw new Error(`No response from ${aiProvider.toUpperCase()}`)
     }
 
     const result: GenerateTitleResponse = parseJSONFromString<GenerateTitleResponse>(responseText)

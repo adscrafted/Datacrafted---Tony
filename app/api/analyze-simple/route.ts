@@ -1,13 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import OpenAI from 'openai'
 import { parseJSONFromString } from '@/lib/utils/json-extractor'
 import { validateRequest, analyzeSimpleRequestSchema } from '@/lib/utils/api-validation'
 import { serverError, externalServiceError } from '@/lib/utils/api-errors'
+import {
+  getAIProvider,
+  generateCompletionWithRetry,
+  normalizeAnalysisResponse,
+  type AIMessage
+} from '@/lib/services/ai/ai-provider'
 
 export async function POST(request: NextRequest) {
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      return serverError('OpenAI API key not configured')
+    const aiProvider = getAIProvider()
+    const hasApiKey = aiProvider === 'gemini'
+      ? !!process.env.GOOGLE_GEMINI_API_KEY
+      : !!process.env.OPENAI_API_KEY
+
+    if (!hasApiKey) {
+      return serverError(`${aiProvider.toUpperCase()} API key not configured`)
     }
 
     // Validate request body with Zod
@@ -18,9 +28,7 @@ export async function POST(request: NextRequest) {
 
     const { data } = validation.data
 
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
-    console.log('Making simple OpenAI call for analysis...')
+    console.log(`Making simple ${aiProvider} call for analysis...`)
     const startTime = Date.now()
 
     // Very simple prompt
@@ -29,45 +37,49 @@ Data: ${data.length} rows
 Columns: ${Object.keys(data[0]).join(', ')}
 Sample: ${JSON.stringify(data.slice(0, 2))}
 
-Respond with JSON:
+Respond with JSON using EXACTLY these field names:
 {
   "insights": ["insight1", "insight2"],
   "chartConfig": [
     {"type": "bar", "title": "Chart Title", "dataKey": ["column1", "column2"], "description": "Description"}
   ],
   "summary": {"rowCount": ${data.length}, "columnCount": ${Object.keys(data[0]).length}, "columns": []}
-}`
+}
 
-    const completion = await Promise.race([
-      openai.chat.completions.create({
-        model: "gpt-4o-mini", // Fastest model
-        messages: [
-          { role: "system", content: "You are a data analyst. Respond only with valid JSON." },
-          { role: "user", content: prompt }
-        ],
+CRITICAL: Use EXACTLY "insights" (not "analysis"), "chartConfig" (not "charts"), "summary" (not "data_summary").`
+
+    const messages: AIMessage[] = [
+      { role: "system", content: "You are a data analyst. Respond only with valid JSON." },
+      { role: "user", content: prompt }
+    ]
+
+    const response = await Promise.race([
+      generateCompletionWithRetry(messages, {
         temperature: 0.3,
-        max_tokens: 1000,
+        maxTokens: 1000,
+        jsonMode: true
       }),
-      new Promise((_, reject) =>
+      new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Timeout after 15s')), 15000)
       )
-    ]) as any
+    ])
 
     const endTime = Date.now()
-    console.log(`Simple OpenAI call completed in ${endTime - startTime}ms`)
+    console.log(`Simple ${aiProvider} call completed in ${endTime - startTime}ms`)
 
-    const response = completion.choices[0]?.message?.content
     if (!response) {
-      throw new Error('No response from OpenAI')
+      throw new Error(`No response from ${aiProvider.toUpperCase()}`)
     }
 
-    const result = parseJSONFromString(response)
+    const rawResult = parseJSONFromString(response)
+    const result = normalizeAnalysisResponse(rawResult)
     return NextResponse.json(result)
 
   } catch (error) {
     console.error('Simple analyze error:', error)
-    if (error instanceof Error && error.message.includes('OpenAI')) {
-      return externalServiceError('OpenAI', error)
+    const aiProvider = getAIProvider()
+    if (error instanceof Error && (error.message.includes('OpenAI') || error.message.includes('Gemini'))) {
+      return externalServiceError(aiProvider.toUpperCase(), error)
     }
     return serverError('Analysis failed', error as Error)
   }

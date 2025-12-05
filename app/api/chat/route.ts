@@ -1,19 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import OpenAI from 'openai'
 import type { DataRow, DataSchema } from '@/lib/store'
 import { withAuth } from '@/lib/middleware/auth'
 import { validateRequest, chatRequestSchema } from '@/lib/utils/api-validation'
-
-// Initialize OpenAI client
-function getOpenAIClient() {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error('OpenAI API key not configured')
-  }
-
-  return new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  })
-}
+import {
+  getAIProvider,
+  generateCompletion,
+  generateStreamingCompletion,
+  type AIMessage
+} from '@/lib/services/ai/ai-provider'
 
 // Rate limiting (simple in-memory store for demo)
 const requestCounts = new Map<string, { count: number; resetTime: number }>()
@@ -151,10 +145,15 @@ ${JSON.stringify(sampleData, null, 2)}`
 
 export const POST = withAuth(async (request, authUser) => {
   try {
-    // Check API key
-    if (!process.env.OPENAI_API_KEY) {
+    // Check API key based on provider
+    const aiProvider = getAIProvider()
+    const hasApiKey = aiProvider === 'gemini'
+      ? !!process.env.GOOGLE_GEMINI_API_KEY
+      : !!process.env.OPENAI_API_KEY
+
+    if (!hasApiKey) {
       return NextResponse.json(
-        { error: 'OpenAI API key not configured' },
+        { error: `${aiProvider.toUpperCase()} API key not configured` },
         { status: 500 }
       )
     }
@@ -182,7 +181,7 @@ export const POST = withAuth(async (request, authUser) => {
     const dataContext = generateDataContext((data || []) as DataRow[], (dataSchema ?? null) as DataSchema | null, fileName ?? null)
 
     // Prepare conversation messages
-    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+    const messages: AIMessage[] = [
       {
         role: "system",
         content: `You are an expert data scientist assistant helping users analyze their uploaded data. You have access to the following dataset:
@@ -312,27 +311,26 @@ Current conversation context: The user is asking about their uploaded dataset.`
     // Check if client wants streaming response
     const wantsStreaming = request.headers.get('accept')?.includes('text/event-stream')
 
-    // Get OpenAI client and call API
-    const openai = getOpenAIClient()
-    
-    if (wantsStreaming) {
-      // Streaming response
-      const stream = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages,
-        max_completion_tokens: 1500,
-        stream: true
-      })
+    console.log(`[CHAT API] Using ${aiProvider} provider, streaming: ${wantsStreaming}`)
 
+    if (wantsStreaming) {
+      // Streaming response using AI provider abstraction
       const encoder = new TextEncoder()
       const readable = new ReadableStream({
         async start(controller) {
           try {
+            const stream = generateStreamingCompletion(messages, {
+              temperature: 0.7,
+              maxTokens: 1500
+            })
+
             for await (const chunk of stream) {
-              const content = chunk.choices[0]?.delta?.content || ''
-              if (content) {
-                const data = `data: ${JSON.stringify({ content, timestamp: new Date().toISOString() })}\n\n`
+              if (chunk.content) {
+                const data = `data: ${JSON.stringify({ content: chunk.content, timestamp: new Date().toISOString() })}\n\n`
                 controller.enqueue(encoder.encode(data))
+              }
+              if (chunk.done) {
+                break
               }
             }
             // Send final event
@@ -352,17 +350,14 @@ Current conversation context: The user is asking about their uploaded dataset.`
         }
       })
     } else {
-      // Non-streaming response (fallback)
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages,
-        max_completion_tokens: 1500,
-        stream: false
+      // Non-streaming response using AI provider abstraction
+      const response = await generateCompletion(messages, {
+        temperature: 0.7,
+        maxTokens: 1500
       })
 
-      const response = completion.choices[0]?.message?.content
       if (!response) {
-        throw new Error('No response from OpenAI')
+        throw new Error(`No response from ${aiProvider.toUpperCase()}`)
       }
 
       return NextResponse.json({
@@ -382,7 +377,7 @@ Current conversation context: The user is asking about their uploaded dataset.`
 
     if (error instanceof Error && error.message.includes('API key')) {
       return NextResponse.json(
-        { error: 'OpenAI API is not configured properly' },
+        { error: 'AI API is not configured properly' },
         { status: 500 }
       )
     }

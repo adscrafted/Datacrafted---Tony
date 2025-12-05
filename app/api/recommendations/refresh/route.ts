@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import OpenAI from 'openai'
 import type { DataRow, DataSchema, ColumnSchema } from '@/lib/store'
 import type {
   ChartRecommendation,
@@ -10,6 +9,11 @@ import type {
 import { analyzeDataSchema } from '@/lib/utils/schema-analyzer'
 import { parseJSONFromString } from '@/lib/utils/json-extractor'
 import { validateRequest, recommendationsRefreshRequestSchema } from '@/lib/utils/api-validation'
+import {
+  getAIProvider,
+  generateCompletionWithRetry,
+  type AIMessage
+} from '@/lib/services/ai/ai-provider'
 
 // Rate limiting (shared with analyze endpoint)
 const requestCounts = new Map<string, { count: number; resetTime: number }>()
@@ -31,17 +35,6 @@ function checkRateLimit(clientId: string): boolean {
 
   clientData.count++
   return true
-}
-
-// Initialize OpenAI client
-function getOpenAIClient() {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error('OpenAI API key not configured')
-  }
-
-  return new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  })
 }
 
 // Get data sample for AI analysis
@@ -387,16 +380,22 @@ interface RefreshRequest {
 
 export async function POST(request: NextRequest) {
   const requestStartTime = Date.now()
+  const aiProvider = getAIProvider()
+
   console.log('🔵 [API-REFRESH] POST request received:', {
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    provider: aiProvider
   })
 
   try {
-    // Check API key
-    const hasApiKey = !!process.env.OPENAI_API_KEY
+    // Check API key based on provider
+    const hasApiKey = aiProvider === 'gemini'
+      ? !!process.env.GOOGLE_GEMINI_API_KEY
+      : !!process.env.OPENAI_API_KEY
+
     if (!hasApiKey) {
       return NextResponse.json(
-        { error: 'OpenAI API key not configured' },
+        { error: `${aiProvider.toUpperCase()} API key not configured` },
         { status: 503 }
       )
     }
@@ -469,45 +468,46 @@ export async function POST(request: NextRequest) {
       activeFilters as ActiveFilter[] | undefined
     )
 
-    // Call OpenAI API
-    console.log('🚀 [API-REFRESH] Calling OpenAI API...')
+    // Call AI API
+    console.log(`🚀 [API-REFRESH] Calling ${aiProvider.toUpperCase()} API...`)
     const startTime = Date.now()
-    const openai = getOpenAIClient()
 
-    const completion = await Promise.race([
-      openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert data visualization specialist. Generate high-quality chart recommendations tailored to specific analytical needs. Always respond with valid JSON. Focus on the requested analytical perspective (${focus}). Each recommendation should be unique, valuable, and aligned with the focus area.`
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
+    const messages: AIMessage[] = [
+      {
+        role: "system",
+        content: `You are an expert data visualization specialist. Generate high-quality chart recommendations tailored to specific analytical needs. Always respond with valid JSON. Focus on the requested analytical perspective (${focus}). Each recommendation should be unique, valuable, and aligned with the focus area.
+
+You MUST respond with valid JSON using the expected format with "recommendations" array and "dataContext" object.`
+      },
+      {
+        role: "user",
+        content: prompt
+      }
+    ]
+
+    const response = await Promise.race([
+      generateCompletionWithRetry(messages, {
         temperature: 0.8, // Higher temperature for more diverse recommendations
-        max_tokens: 4000,
+        maxTokens: 4000,
+        jsonMode: true
       }),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('OpenAI API call timed out after 25 seconds')), 25000)
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`${aiProvider.toUpperCase()} API call timed out after 25 seconds`)), 25000)
       )
-    ]) as any
+    ])
 
     const endTime = Date.now()
-    const openaiDuration = endTime - startTime
-    console.log('✅ [API-REFRESH] OpenAI API call completed:', {
-      duration: openaiDuration + 'ms'
+    const aiDuration = endTime - startTime
+    console.log(`✅ [API-REFRESH] ${aiProvider.toUpperCase()} API call completed:`, {
+      duration: aiDuration + 'ms'
     })
 
-    const response = completion.choices[0]?.message?.content
     if (!response) {
-      throw new Error('No response from OpenAI')
+      throw new Error(`No response from ${aiProvider.toUpperCase()}`)
     }
 
-    // Parse OpenAI response using robust JSON extraction
-    console.log('🔵 [API-REFRESH] Parsing OpenAI response...')
+    // Parse AI response using robust JSON extraction
+    console.log('🔵 [API-REFRESH] Parsing AI response...')
     const aiAnalysis = parseJSONFromString<{
       recommendations: ChartRecommendation[]
       dataContext?: DataContext
@@ -587,7 +587,8 @@ export async function POST(request: NextRequest) {
       focusArea: focus,
       excludedCount,
       totalDuration: totalDuration + 'ms',
-      openaiDuration: openaiDuration + 'ms'
+      aiDuration: aiDuration + 'ms',
+      provider: aiProvider
     })
 
     return NextResponse.json(result)
@@ -601,7 +602,7 @@ export async function POST(request: NextRequest) {
       duration: totalDuration + 'ms'
     })
 
-    // Handle specific OpenAI errors
+    // Handle specific AI provider errors
     if (error && typeof error === 'object') {
       const err = error as any
 
@@ -618,7 +619,7 @@ export async function POST(request: NextRequest) {
       if (err.code === 'insufficient_quota' || err.status === 402) {
         return NextResponse.json(
           {
-            error: 'OpenAI quota exceeded. Please check your billing.',
+            error: 'AI quota exceeded. Please check your billing.',
             type: 'quota_exceeded'
           },
           { status: 402 }
@@ -628,7 +629,7 @@ export async function POST(request: NextRequest) {
       if (err.status === 401) {
         return NextResponse.json(
           {
-            error: 'OpenAI API key is invalid or expired.',
+            error: 'AI API key is invalid or expired.',
             type: 'auth_error'
           },
           { status: 401 }
@@ -638,7 +639,7 @@ export async function POST(request: NextRequest) {
       if (err.status >= 500) {
         return NextResponse.json(
           {
-            error: 'OpenAI service is temporarily unavailable.',
+            error: 'AI service is temporarily unavailable.',
             type: 'server_error'
           },
           { status: 503 }
