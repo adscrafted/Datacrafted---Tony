@@ -60,7 +60,10 @@ function initializeFirebaseAdmin(): App {
       // Check if it's base64 encoded
       if (!serviceAccountJson.trim().startsWith('{')) {
         try {
-          serviceAccountJson = Buffer.from(serviceAccountJson, 'base64').toString('utf-8')
+          // Strip all whitespace (including newlines) from base64 before decoding
+          // This handles cases where Railway or copy/paste introduces line breaks
+          const cleanedBase64 = serviceAccountJson.replace(/\s/g, '')
+          serviceAccountJson = Buffer.from(cleanedBase64, 'base64').toString('utf-8')
         } catch (error) {
           console.error('❌ [FIREBASE-ADMIN] Failed to decode base64:', error)
           throw error
