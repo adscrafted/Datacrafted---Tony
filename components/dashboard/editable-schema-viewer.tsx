@@ -273,6 +273,25 @@ export function EditableSchemaViewer({ onAIUpdateComplete }: EditableSchemaViewe
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         console.error('❌ [PUSH-TO-AI] API error response:', errorData)
+
+        // Handle paywall (402) response - show upgrade modal
+        if (response.status === 402 && errorData.type === 'paywall') {
+          console.log('💰 [PUSH-TO-AI] Paywall triggered:', errorData)
+          // Import UI store and show paywall modal
+          const { useUIStore } = await import('@/lib/stores/ui-store')
+          useUIStore.getState().openPaywallModal('analysis', {
+            used: errorData.usage?.used ?? 0,
+            limit: errorData.usage?.limit ?? 3,
+            plan: errorData.usage?.plan ?? 'free'
+          })
+          // Clear states without showing error toast
+          clearInterval(progressInterval)
+          setAnalysisProgress(0)
+          setIsPushingToAI(false)
+          setIsAnalyzing(false)
+          return // Exit early - modal handles the UX
+        }
+
         throw new Error(errorData.error || 'Failed to push to AI')
       }
 

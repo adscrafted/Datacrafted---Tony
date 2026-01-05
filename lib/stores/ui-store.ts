@@ -59,6 +59,11 @@ interface UIStore {
   uploadComplete: boolean
   uploadProjectId: string | null
 
+  // Paywall modal state
+  showPaywallModal: boolean
+  paywallType: 'analysis' | 'chat' | null
+  paywallUsageInfo: { used: number; limit: number; plan: string } | null
+
   // Actions
   setIsCustomizing: (isCustomizing: boolean) => void
   setShowChartSettings: (show: boolean) => void
@@ -82,6 +87,10 @@ interface UIStore {
   setUploadProjectId: (projectId: string | null) => void
   dismissUpload: () => void
 
+  // Paywall modal actions
+  openPaywallModal: (type: 'analysis' | 'chat', usageInfo: { used: number; limit: number; plan: string }) => void
+  closePaywallModal: () => void
+
   // Reset all UI state
   resetUI: () => void
 }
@@ -103,6 +112,9 @@ const initialState = {
   uploadStage: null,
   uploadComplete: false,
   uploadProjectId: null,
+  showPaywallModal: false,
+  paywallType: null,
+  paywallUsageInfo: null,
 }
 
 export const useUIStore = create<UIStore>((set) => ({
@@ -199,6 +211,25 @@ export const useUIStore = create<UIStore>((set) => ({
       uploadStage: null,
       uploadComplete: false,
       uploadProjectId: null,
+    })
+  },
+
+  // Paywall modal actions
+  openPaywallModal: (type, usageInfo) => {
+    console.log('💰 [UI_STORE] Opening paywall modal:', { type, usageInfo })
+    set({
+      showPaywallModal: true,
+      paywallType: type,
+      paywallUsageInfo: usageInfo,
+    })
+  },
+
+  closePaywallModal: () => {
+    console.log('💰 [UI_STORE] Closing paywall modal')
+    set({
+      showPaywallModal: false,
+      paywallType: null,
+      paywallUsageInfo: null,
     })
   },
 

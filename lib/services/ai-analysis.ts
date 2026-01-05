@@ -101,6 +101,22 @@ export function analyzeData(
           throw new Error('Authentication required. Please sign in to analyze your data.')
         }
 
+        // Handle paywall (402) - show upgrade modal
+        if (response.status === 402 && errorData.type === 'paywall') {
+          console.log('💰 [AI-ANALYSIS] Paywall triggered:', errorData)
+          // Import UI store and show paywall modal (dynamic import to avoid circular deps)
+          const { useUIStore } = await import('@/lib/stores/ui-store')
+          useUIStore.getState().openPaywallModal('analysis', {
+            used: errorData.usage?.used ?? 0,
+            limit: errorData.usage?.limit ?? 3,
+            plan: errorData.usage?.plan ?? 'free'
+          })
+          // Throw a special error that callers can detect
+          const paywallError = new Error('Analysis limit reached. Please upgrade to continue.')
+          ;(paywallError as any).isPaywall = true
+          throw paywallError
+        }
+
         // Handle rate limiting (429)
         if (response.status === 429) {
           throw new Error('Rate limit exceeded. Please try again in a few minutes.')

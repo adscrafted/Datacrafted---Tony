@@ -1025,6 +1025,45 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
 
     logger.info(`[API-ANALYZE] ${aiProvider.toUpperCase()} API key found, proceeding with analysis`)
 
+    // Paywall check - verify user has analysis credits remaining
+    const { canPerformAnalysis } = await import('@/lib/services/subscription-service')
+    const usageCheck = await canPerformAnalysis(authUser.uid)
+
+    if (!usageCheck.allowed) {
+      logger.info('[API-ANALYZE] Paywall triggered - analysis limit reached:', {
+        requestId,
+        userId: authUser.uid,
+        used: usageCheck.used,
+        limit: usageCheck.limit,
+        plan: usageCheck.plan
+      })
+
+      return NextResponse.json(
+        {
+          error: 'Analysis limit reached',
+          code: 'PAYWALL_REQUIRED',
+          type: 'paywall',
+          message: usageCheck.message,
+          usage: {
+            used: usageCheck.used,
+            limit: usageCheck.limit,
+            remaining: usageCheck.remaining,
+            plan: usageCheck.plan
+          },
+          upgradeUrl: '/account/billing',
+          requestId
+        },
+        { status: 402, headers: corsHeaders() }
+      )
+    }
+
+    logger.info('[API-ANALYZE] Paywall check passed:', {
+      requestId,
+      used: usageCheck.used,
+      limit: usageCheck.limit,
+      remaining: usageCheck.remaining
+    })
+
     // NOTE: Rate limiting is now handled by withRateLimit middleware
     // No need for manual rate limit checks here
 
@@ -2358,6 +2397,15 @@ CRITICAL FIELD NAMES - use EXACTLY these names:
     // PERFORMANCE: Cache the result for future requests
     await setCachedAnalysis(dataHash, analysisResult, JSON.stringify(data).length)
     logger.info('[API-ANALYZE] Result cached for hash:', dataHash.substring(0, 8) + '...')
+
+    // Increment analysis count after successful analysis
+    const { incrementAnalysisCount } = await import('@/lib/services/subscription-service')
+    const newCount = await incrementAnalysisCount(authUser.uid)
+    logger.info('[API-ANALYZE] Analysis count incremented:', {
+      requestId,
+      userId: authUser.uid,
+      newCount
+    })
 
     return NextResponse.json(analysisResult, { headers: corsHeaders() })
 

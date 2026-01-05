@@ -221,6 +221,22 @@ export const ChatInterface = React.memo(function ChatInterface() {
         try {
           const errorData = await response.json()
           console.error('❌ [CHAT] Server error response:', errorData)
+
+          // Handle paywall (402) response - show upgrade modal
+          if (response.status === 402 && errorData.type === 'paywall') {
+            console.log('💰 [CHAT] Paywall triggered:', errorData)
+            // Import UI store and show paywall modal
+            const { useUIStore } = await import('@/lib/stores/ui-store')
+            useUIStore.getState().openPaywallModal('chat', {
+              used: errorData.usage?.used ?? 0,
+              limit: errorData.usage?.limit ?? 50,
+              plan: errorData.usage?.plan ?? 'free'
+            })
+            // Remove the loading message and return early
+            setIsChatLoading(false)
+            return // Exit early - modal handles the UX
+          }
+
           errorMessage = errorData.error || errorData.details || errorMessage
         } catch (e) {
           console.error('❌ [CHAT] Could not parse error response')

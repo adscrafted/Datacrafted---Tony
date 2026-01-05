@@ -1,3 +1,14 @@
+/**
+ * Simple Analysis API Route
+ *
+ * A lightweight analysis endpoint with authentication and paywall protection.
+ * Uses the same limits as the main analyze endpoint.
+ *
+ * POST /api/analyze-simple
+ * Body: { data: DataRow[] }
+ * Returns: Analysis result with insights and chart configs
+ */
+
 import { NextRequest, NextResponse } from 'next/server'
 import { parseJSONFromString } from '@/lib/utils/json-extractor'
 import { validateRequest, analyzeSimpleRequestSchema } from '@/lib/utils/api-validation'
@@ -8,9 +19,44 @@ import {
   normalizeAnalysisResponse,
   type AIMessage
 } from '@/lib/services/ai/ai-provider'
+import { withAuth } from '@/lib/middleware/auth'
+import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 
-export async function POST(request: NextRequest) {
+const handler = withAuth(async (request: NextRequest, authUser) => {
+  const requestId = crypto.randomUUID()
+
   try {
+    // Paywall check - verify user has analysis credits remaining
+    const { canPerformAnalysis, incrementAnalysisCount } = await import('@/lib/services/subscription-service')
+    const usageCheck = await canPerformAnalysis(authUser.uid)
+
+    if (!usageCheck.allowed) {
+      console.log('[API-ANALYZE-SIMPLE] Paywall triggered:', {
+        requestId,
+        userId: authUser.uid,
+        used: usageCheck.used,
+        limit: usageCheck.limit
+      })
+
+      return NextResponse.json(
+        {
+          error: 'Analysis limit reached',
+          code: 'PAYWALL_REQUIRED',
+          type: 'paywall',
+          message: usageCheck.message,
+          usage: {
+            used: usageCheck.used,
+            limit: usageCheck.limit,
+            remaining: usageCheck.remaining,
+            plan: usageCheck.plan
+          },
+          upgradeUrl: '/account/billing',
+          requestId
+        },
+        { status: 402 }
+      )
+    }
+
     const aiProvider = getAIProvider()
     const hasApiKey = aiProvider === 'gemini'
       ? !!process.env.GOOGLE_GEMINI_API_KEY
@@ -28,7 +74,10 @@ export async function POST(request: NextRequest) {
 
     const { data } = validation.data
 
-    console.log(`Making simple ${aiProvider} call for analysis...`)
+    console.log(`[API-ANALYZE-SIMPLE] Making simple ${aiProvider} call for analysis...`, {
+      requestId,
+      userId: authUser.uid
+    })
     const startTime = Date.now()
 
     // Very simple prompt
@@ -65,7 +114,9 @@ CRITICAL: Use EXACTLY "insights" (not "analysis"), "chartConfig" (not "charts"),
     ])
 
     const endTime = Date.now()
-    console.log(`Simple ${aiProvider} call completed in ${endTime - startTime}ms`)
+    console.log(`[API-ANALYZE-SIMPLE] ${aiProvider} call completed in ${endTime - startTime}ms`, {
+      requestId
+    })
 
     if (!response) {
       throw new Error(`No response from ${aiProvider.toUpperCase()}`)
@@ -73,14 +124,26 @@ CRITICAL: Use EXACTLY "insights" (not "analysis"), "chartConfig" (not "charts"),
 
     const rawResult = parseJSONFromString(response)
     const result = normalizeAnalysisResponse(rawResult)
+
+    // Increment analysis count after successful analysis
+    const newCount = await incrementAnalysisCount(authUser.uid)
+    console.log('[API-ANALYZE-SIMPLE] Analysis count incremented:', {
+      requestId,
+      userId: authUser.uid,
+      newCount
+    })
+
     return NextResponse.json(result)
 
   } catch (error) {
-    console.error('Simple analyze error:', error)
+    console.error('[API-ANALYZE-SIMPLE] Error:', error)
     const aiProvider = getAIProvider()
     if (error instanceof Error && (error.message.includes('OpenAI') || error.message.includes('Gemini'))) {
       return externalServiceError(aiProvider.toUpperCase(), error)
     }
     return serverError('Analysis failed', error as Error)
   }
-}
+})
+
+// Apply rate limiting to the authenticated handler
+export const POST = withRateLimit(RATE_LIMITS.ANALYSIS, handler)

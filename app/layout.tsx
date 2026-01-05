@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/lib/contexts/auth-context'
 import { ToastContainer } from '@/components/ui/toast'
+import { UpgradeModal } from '@/components/paywall/upgrade-modal'
 
 // PERFORMANCE OPTIMIZATION: Single optimized Inter font with font-display swap
 // Removed: Space_Grotesk, Montserrat, duplicate Inter instances, Google Sans CDN
@@ -129,6 +130,7 @@ export default function RootLayout({
         <AuthProvider>
           {children}
           <ToastContainer />
+          <UpgradeModal />
         </AuthProvider>
       </body>
     </html>

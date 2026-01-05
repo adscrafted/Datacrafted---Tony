@@ -169,6 +169,38 @@ export const POST = withAuth(async (request, authUser) => {
       )
     }
 
+    // Check chat message limit (paywall)
+    const { canSendChatMessage, incrementChatCount, resetChatCountIfNeeded } = await import('@/lib/services/subscription-service')
+
+    // Reset count if new month
+    await resetChatCountIfNeeded(authUser.uid)
+
+    const chatCheck = await canSendChatMessage(authUser.uid)
+    if (!chatCheck.allowed) {
+      console.log('[CHAT API] Chat limit reached:', {
+        userId: authUser.uid,
+        used: chatCheck.used,
+        limit: chatCheck.limit
+      })
+
+      return NextResponse.json(
+        {
+          error: 'Chat message limit reached',
+          code: 'CHAT_LIMIT_REACHED',
+          type: 'paywall',
+          message: chatCheck.message,
+          usage: {
+            used: chatCheck.used,
+            limit: chatCheck.limit,
+            remaining: chatCheck.remaining,
+            plan: chatCheck.plan
+          },
+          upgradeUrl: '/account/billing'
+        },
+        { status: 402 }
+      )
+    }
+
     // Validate request body with Zod
     const validation = await validateRequest(request, chatRequestSchema)
     if (!validation.success) {
@@ -314,6 +346,9 @@ Current conversation context: The user is asking about their uploaded dataset.`
     console.log(`[CHAT API] Using ${aiProvider} provider, streaming: ${wantsStreaming}`)
 
     if (wantsStreaming) {
+      // Increment chat count for streaming response (count at start since we can't await after streaming)
+      await incrementChatCount(authUser.uid)
+
       // Streaming response using AI provider abstraction
       const encoder = new TextEncoder()
       const readable = new ReadableStream({
@@ -359,6 +394,9 @@ Current conversation context: The user is asking about their uploaded dataset.`
       if (!response) {
         throw new Error(`No response from ${aiProvider.toUpperCase()}`)
       }
+
+      // Increment chat count after successful non-streaming response
+      await incrementChatCount(authUser.uid)
 
       return NextResponse.json({
         message: response,

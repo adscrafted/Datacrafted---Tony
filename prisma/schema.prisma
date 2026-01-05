@@ -24,6 +24,19 @@ model User {
   photoURL           String?
   firebaseUid        String?            @unique
   preferences        String?
+
+  // Usage tracking
+  analysisCount      Int                @default(0)        // Lifetime analyses used
+  chatMessageCount   Int                @default(0)        // Monthly chat messages used
+  chatCountResetDate DateTime?                             // When chat count was last reset
+
+  // Subscription
+  subscriptionTier   String             @default("free")   // "free" | "pro" | "enterprise"
+  stripeCustomerId   String?            @unique            // Stripe customer ID
+  subscriptionId     String?                               // Stripe subscription ID
+  subscriptionStatus String?                               // "active" | "past_due" | "canceled"
+  subscriptionEndDate DateTime?                            // When current period ends
+
   dashboard_configs  dashboard_configs[]
   projects           projects[]
   sessions           Session[]
