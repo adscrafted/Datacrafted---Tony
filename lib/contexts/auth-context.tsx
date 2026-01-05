@@ -10,7 +10,10 @@ import {
   sendPasswordResetEmail,
   updateProfile,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider
 } from 'firebase/auth'
 import { auth, isProductionEnvironment } from '@/lib/config/firebase'
 import { useRouter } from 'next/navigation'
@@ -31,6 +34,7 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
   updateUserProfile: (displayName: string, photoURL?: string) => Promise<void>
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -291,6 +295,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  // MEMOIZATION: Wrap changePassword with useCallback to prevent unnecessary re-renders
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    try {
+      setError(null)
+      const currentUser = auth.currentUser
+
+      if (!currentUser) {
+        throw new Error('No user is currently signed in')
+      }
+
+      if (!currentUser.email) {
+        throw new Error('User email not found')
+      }
+
+      // Re-authenticate user before changing password (Firebase requirement)
+      const credential = EmailAuthProvider.credential(currentUser.email, currentPassword)
+      await reauthenticateWithCredential(currentUser, credential)
+
+      // Now update the password
+      await updatePassword(currentUser, newPassword)
+
+      console.log('✅ [AUTH] Password changed successfully')
+    } catch (err: any) {
+      console.error('❌ [AUTH] Password change failed:', err)
+
+      // Provide user-friendly error messages
+      let errorMessage = 'Failed to change password'
+      if (err.code === 'auth/wrong-password') {
+        errorMessage = 'Current password is incorrect'
+      } else if (err.code === 'auth/weak-password') {
+        errorMessage = 'New password is too weak. Please use at least 6 characters'
+      } else if (err.code === 'auth/requires-recent-login') {
+        errorMessage = 'Please sign out and sign back in before changing your password'
+      } else if (err.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many attempts. Please try again later'
+      } else if (err.message) {
+        errorMessage = err.message
+      }
+
+      setError(errorMessage)
+      throw new Error(errorMessage)
+    }
+  }, [])
+
   // MEMOIZATION: Wrap context value with useMemo to prevent unnecessary re-renders of consumers
   // Only recreate when primitive values or memoized callbacks change
   const isDebugMode = !isProductionEnvironment
@@ -306,8 +354,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout,
     signInWithGoogle,
     resetPassword,
-    updateUserProfile
-  }), [user, loading, isSyncing, error, syncError, isDebugMode, signIn, signUp, logout, signInWithGoogle, resetPassword, updateUserProfile])
+    updateUserProfile,
+    changePassword
+  }), [user, loading, isSyncing, error, syncError, isDebugMode, signIn, signUp, logout, signInWithGoogle, resetPassword, updateUserProfile, changePassword])
 
   return (
     <AuthContext.Provider value={value}>

@@ -10,7 +10,7 @@ import { Loader2, Check } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 export default function ProfilePage() {
-  const { user, updateUserProfile, isDebugMode } = useAuth()
+  const { user, updateUserProfile, changePassword, isDebugMode } = useAuth()
   const [displayName, setDisplayName] = useState(user?.displayName || '')
   const [isUpdating, setIsUpdating] = useState(false)
   const [updateSuccess, setUpdateSuccess] = useState(false)
@@ -40,36 +40,42 @@ export default function ProfilePage() {
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault()
     setPasswordError('')
-    
+
     if (newPassword !== confirmPassword) {
       setPasswordError('Passwords do not match')
       return
     }
-    
+
     if (newPassword.length < 6) {
       setPasswordError('Password must be at least 6 characters')
       return
     }
-    
+
+    if (!currentPassword) {
+      setPasswordError('Please enter your current password')
+      return
+    }
+
     setIsUpdatingPassword(true)
     setPasswordUpdateSuccess(false)
-    
+
     try {
       // In debug mode, just simulate success
       if (isDebugMode) {
         console.log('Debug mode: Password would be updated')
+        setPasswordUpdateSuccess(true)
       } else {
-        // TODO: Implement actual password update with Firebase
-        console.log('Password update not implemented yet')
+        // Actually change the password using Firebase
+        await changePassword(currentPassword, newPassword)
+        setPasswordUpdateSuccess(true)
       }
-      
-      setPasswordUpdateSuccess(true)
+
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
       setTimeout(() => setPasswordUpdateSuccess(false), 3000)
-    } catch (error) {
-      setPasswordError('Failed to update password')
+    } catch (error: any) {
+      setPasswordError(error.message || 'Failed to update password')
     } finally {
       setIsUpdatingPassword(false)
     }

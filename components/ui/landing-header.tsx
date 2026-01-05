@@ -71,7 +71,7 @@ export function LandingHeader({ user, onSignInClick, onLogout }: LandingHeaderPr
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
                   <DropdownMenuItem asChild>
-                    <Link href="/account" className="flex items-center cursor-pointer">
+                    <Link href="/account/profile" className="flex items-center cursor-pointer">
                       <UserIcon className="mr-2 h-4 w-4" />
                       Profile
                     </Link>
