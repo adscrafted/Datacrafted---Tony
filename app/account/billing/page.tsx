@@ -10,14 +10,11 @@ import { Check, CreditCard, Zap, Building, Crown, Loader2, ExternalLink, AlertCi
 import { cn } from '@/lib/utils/cn'
 
 interface UsageData {
+  plan: string
+  subscriptionStatus: string | null
+  subscriptionEndDate: string | null
   analyses: { used: number; limit: number; remaining: number }
-  chatMessages: { used: number; limit: number; remaining: number }
-  subscription: {
-    tier: string
-    status: string | null
-    endDate: string | null
-    stripeCustomerId: string | null
-  }
+  chat: { used: number; limit: number; remaining: number; resetsAt: string | null }
 }
 
 const plans = [
@@ -198,16 +195,18 @@ export default function BillingPage() {
     }
   }
 
-  const currentTier = usage?.subscription?.tier || 'free'
+  const currentTier = usage?.plan || 'free'
   const isSubscribed = currentTier === 'pro' || currentTier === 'enterprise'
-  const subscriptionStatus = usage?.subscription?.status
+  const subscriptionStatus = usage?.subscriptionStatus
 
-  // Calculate usage percentages
-  const analysisPercentage = usage
-    ? Math.min(100, (usage.analyses.used / usage.analyses.limit) * 100)
+  // Calculate usage percentages (handle -1 as unlimited)
+  const analysisLimit = usage?.analyses?.limit === -1 ? Infinity : (usage?.analyses?.limit || 3)
+  const chatLimit = usage?.chat?.limit === -1 ? Infinity : (usage?.chat?.limit || 50)
+  const analysisPercentage = usage?.analyses
+    ? Math.min(100, (usage.analyses.used / analysisLimit) * 100)
     : 0
-  const chatPercentage = usage
-    ? Math.min(100, (usage.chatMessages.used / usage.chatMessages.limit) * 100)
+  const chatPercentage = usage?.chat
+    ? Math.min(100, (usage.chat.used / chatLimit) * 100)
     : 0
 
   return (
@@ -268,7 +267,7 @@ export default function BillingPage() {
                   <div className="flex justify-between text-sm mb-2">
                     <span className="text-gray-600">AI Analyses {!isSubscribed && '(Lifetime)'}</span>
                     <span className="font-medium">
-                      {usage.analyses.used} / {usage.analyses.limit === Infinity ? '∞' : usage.analyses.limit}
+                      {usage.analyses.used} / {usage.analyses.limit === -1 ? '∞' : usage.analyses.limit}
                     </span>
                   </div>
                   {!isSubscribed && (
@@ -292,7 +291,7 @@ export default function BillingPage() {
                   <div className="flex justify-between text-sm mb-2">
                     <span className="text-gray-600">Chat Messages {!isSubscribed && '(This Month)'}</span>
                     <span className="font-medium">
-                      {usage.chatMessages.used} / {usage.chatMessages.limit === Infinity ? '∞' : usage.chatMessages.limit}
+                      {usage.chat.used} / {usage.chat.limit === -1 ? '∞' : usage.chat.limit}
                     </span>
                   </div>
                   {!isSubscribed && (
@@ -312,17 +311,17 @@ export default function BillingPage() {
                 </div>
 
                 {/* Subscription End Date */}
-                {isSubscribed && usage.subscription.endDate && (
+                {isSubscribed && usage.subscriptionEndDate && (
                   <div className="flex justify-between text-sm pt-2 border-t">
                     <span className="text-gray-600">Next billing date</span>
                     <span className="font-medium">
-                      {new Date(usage.subscription.endDate).toLocaleDateString()}
+                      {new Date(usage.subscriptionEndDate).toLocaleDateString()}
                     </span>
                   </div>
                 )}
 
                 {/* Manage Subscription Button */}
-                {isSubscribed && usage.subscription.stripeCustomerId && (
+                {isSubscribed && (
                   <div className="pt-2">
                     <Button
                       variant="outline"
