@@ -47,6 +47,9 @@ const PROTECTED_ROUTES = ['/dashboard', '/projects', '/account']
 // Public routes that should never be protected
 const PUBLIC_ROUTES = ['/', '/signin', '/signup', '/api']
 
+// Routes that should skip CORS checks entirely (server-to-server webhooks)
+const CORS_EXEMPT_ROUTES = ['/api/stripe/webhook']
+
 /**
  * Check if a pathname matches any protected route patterns
  */
@@ -59,6 +62,13 @@ function isProtectedRoute(pathname: string): boolean {
  */
 function isPublicRoute(pathname: string): boolean {
   return PUBLIC_ROUTES.some(route => pathname === route || pathname.startsWith(route))
+}
+
+/**
+ * Check if a pathname should skip CORS checks (server-to-server webhooks)
+ */
+function isCorsExemptRoute(pathname: string): boolean {
+  return CORS_EXEMPT_ROUTES.some(route => pathname.startsWith(route))
 }
 
 /**
@@ -246,9 +256,13 @@ export function middleware(request: NextRequest) {
     hasAuthHeader: !!request.headers.get('authorization'),
   })
 
+  // STEP 0: Skip CORS for exempt routes (server-to-server webhooks)
+  // These routes don't need CORS headers as they're not browser requests
+  const corsExempt = isCorsExemptRoute(pathname)
+
   // STEP 1: Handle CORS preflight OPTIONS requests
   // These must be handled before any other checks
-  if (method === 'OPTIONS') {
+  if (method === 'OPTIONS' && !corsExempt) {
     console.log('[MIDDLEWARE] Handling CORS preflight request')
 
     // Validate origin for preflight
@@ -289,7 +303,7 @@ export function middleware(request: NextRequest) {
   if (isPublicRoute(pathname)) {
     console.log('[MIDDLEWARE] Public route - allowing access')
     const response = NextResponse.next()
-    applyCorsHeaders(response, request)
+    if (!corsExempt) applyCorsHeaders(response, request)
     applySecurityHeaders(response, nonce)
     return response
   }
@@ -300,7 +314,7 @@ export function middleware(request: NextRequest) {
   if (!shouldProtect) {
     console.log('[MIDDLEWARE] Route not protected - allowing access')
     const response = NextResponse.next()
-    applyCorsHeaders(response, request)
+    if (!corsExempt) applyCorsHeaders(response, request)
     applySecurityHeaders(response, nonce)
     return response
   }
@@ -311,7 +325,7 @@ export function middleware(request: NextRequest) {
   if (hasAuth) {
     console.log('[MIDDLEWARE] Authenticated - allowing access to', pathname)
     const response = NextResponse.next()
-    applyCorsHeaders(response, request)
+    if (!corsExempt) applyCorsHeaders(response, request)
     applySecurityHeaders(response, nonce)
     return response
   }
@@ -326,7 +340,7 @@ export function middleware(request: NextRequest) {
     // Add a header to indicate debug mode was used
     const response = NextResponse.next()
     response.headers.set('X-Debug-Mode', 'true')
-    applyCorsHeaders(response, request)
+    if (!corsExempt) applyCorsHeaders(response, request)
     applySecurityHeaders(response, nonce)
     return response
   }
@@ -342,7 +356,7 @@ export function middleware(request: NextRequest) {
   redirectUrl.searchParams.set('redirect_from', pathname)
 
   const response = NextResponse.redirect(redirectUrl)
-  applyCorsHeaders(response, request)
+  if (!corsExempt) applyCorsHeaders(response, request)
   applySecurityHeaders(response, nonce)
   return response
 }

@@ -113,6 +113,22 @@ export async function POST(request: NextRequest) {
 }
 
 /**
+ * Safely convert a Unix timestamp to a Date object
+ * Returns undefined if the timestamp is invalid
+ */
+function safeUnixToDate(timestamp: number | undefined | null): Date | undefined {
+  if (timestamp === undefined || timestamp === null || isNaN(timestamp)) {
+    return undefined
+  }
+  const date = new Date(timestamp * 1000)
+  // Validate the date is valid
+  if (isNaN(date.getTime())) {
+    return undefined
+  }
+  return date
+}
+
+/**
  * Handle checkout.session.completed
  * Activates the subscription after successful payment
  */
@@ -136,12 +152,13 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   // Access current_period_end with type assertion since Stripe types can be inconsistent
   const periodEnd = (subscription as unknown as { current_period_end: number }).current_period_end
+  const periodEndDate = safeUnixToDate(periodEnd)
 
   await updateSubscriptionStatus(
     customerId,
     subscription.status,
     subscription.id,
-    new Date(periodEnd * 1000)
+    periodEndDate
   )
 
   console.log(`[STRIPE WEBHOOK] Subscription activated for customer ${customerId}`)
@@ -161,12 +178,13 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 
   // Access current_period_end with type assertion since Stripe types can be inconsistent
   const periodEnd = (subscription as unknown as { current_period_end: number }).current_period_end
+  const periodEndDate = safeUnixToDate(periodEnd)
 
   await updateSubscriptionStatus(
     customerId,
     subscription.status,
     subscription.id,
-    new Date(periodEnd * 1000)
+    periodEndDate
   )
 
   console.log(
@@ -241,12 +259,13 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice) {
 
   // Access current_period_end with type assertion
   const periodEnd = (subscription as unknown as { current_period_end: number }).current_period_end
+  const periodEndDate = safeUnixToDate(periodEnd)
 
   await updateSubscriptionStatus(
     customerId,
     'active',
     subscription.id,
-    new Date(periodEnd * 1000)
+    periodEndDate
   )
 
   console.log(`[STRIPE WEBHOOK] Payment succeeded for customer ${customerId}`)
