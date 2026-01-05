@@ -1,9 +1,17 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import type { User } from 'firebase/auth'
 import { Button } from '@/components/ui/button'
-import { BarChart3, LogOut } from 'lucide-react'
+import { BarChart3, LogOut, CreditCard, User as UserIcon, ChevronDown } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 interface LandingHeaderProps {
   user: User | null
@@ -39,16 +47,6 @@ export function LandingHeader({ user, onSignInClick, onLogout }: LandingHeaderPr
         <div className="absolute right-6 flex items-center space-x-3">
           {user ? (
             <>
-              {/* User Info */}
-              <div className="hidden sm:flex items-center space-x-2 px-3 py-2 rounded-lg bg-transparent">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#71b2ff] to-[#3cf152] flex items-center justify-center text-white text-sm font-medium">
-                  {user.displayName?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
-                </div>
-                <span className="text-sm font-medium text-gray-700">
-                  {user.displayName || user.email?.split('@')[0]}
-                </span>
-              </div>
-
               {/* Go to Dashboard Button */}
               <Button
                 onClick={() => router.push('/projects')}
@@ -58,16 +56,39 @@ export function LandingHeader({ user, onSignInClick, onLogout }: LandingHeaderPr
                 Go to Dashboard
               </Button>
 
-              {/* Logout Button */}
-              <Button
-                onClick={onLogout}
-                variant="ghost"
-                size="sm"
-                className="text-gray-500 hover:text-gray-700 hover:bg-[#f0f3f8]"
-                title="Sign out"
-              >
-                <LogOut className="h-4 w-4" />
-              </Button>
+              {/* User Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#71b2ff] to-[#3cf152] flex items-center justify-center text-white text-sm font-medium">
+                      {user.displayName?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
+                    </div>
+                    <span className="hidden sm:inline text-sm font-medium text-gray-700">
+                      {user.displayName || user.email?.split('@')[0]}
+                    </span>
+                    <ChevronDown className="h-4 w-4 text-gray-500" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem asChild>
+                    <Link href="/account" className="flex items-center cursor-pointer">
+                      <UserIcon className="mr-2 h-4 w-4" />
+                      Profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/account/billing" className="flex items-center cursor-pointer">
+                      <CreditCard className="mr-2 h-4 w-4" />
+                      Billing
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={onLogout} className="text-red-600 cursor-pointer">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           ) : (
             <Button
