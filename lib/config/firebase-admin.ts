@@ -57,30 +57,57 @@ function initializeFirebaseAdmin(): App {
     if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
       let serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
 
-      // Check if it's base64 encoded
+      console.log('[FIREBASE-ADMIN] Key length:', serviceAccountJson.length)
+      console.log('[FIREBASE-ADMIN] Key starts with:', serviceAccountJson.substring(0, 20))
+      console.log('[FIREBASE-ADMIN] Key ends with:', serviceAccountJson.substring(serviceAccountJson.length - 20))
+
+      // Check if it's base64 encoded (doesn't start with '{')
       if (!serviceAccountJson.trim().startsWith('{')) {
+        console.log('[FIREBASE-ADMIN] Detected base64 encoded key, decoding...')
         try {
           // Strip all whitespace (including newlines) from base64 before decoding
           // This handles cases where Railway or copy/paste introduces line breaks
           const cleanedBase64 = serviceAccountJson.replace(/\s/g, '')
+          console.log('[FIREBASE-ADMIN] Cleaned base64 length:', cleanedBase64.length)
           serviceAccountJson = Buffer.from(cleanedBase64, 'base64').toString('utf-8')
-        } catch (error) {
-          console.error('❌ [FIREBASE-ADMIN] Failed to decode base64:', error)
-          throw error
+          console.log('[FIREBASE-ADMIN] Decoded JSON length:', serviceAccountJson.length)
+          console.log('[FIREBASE-ADMIN] Decoded JSON starts with:', serviceAccountJson.substring(0, 50))
+        } catch (decodeError) {
+          console.error('❌ [FIREBASE-ADMIN] Failed to decode base64:', decodeError)
+          throw decodeError
         }
       }
 
-      // Fix literal newlines in the JSON string that should be escaped
-      // This handles the case where Railway or other platforms convert \n to actual newlines
-      serviceAccountJson = serviceAccountJson.replace(/\n/g, '\\n')
-
-      const serviceAccount = JSON.parse(serviceAccountJson)
-
-      // If private_key has escaped newlines, convert them back to actual newlines
-      if (serviceAccount.private_key) {
-        serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n')
+      // Parse the JSON
+      let serviceAccount
+      try {
+        serviceAccount = JSON.parse(serviceAccountJson)
+        console.log('[FIREBASE-ADMIN] JSON parsed successfully')
+        console.log('[FIREBASE-ADMIN] Project ID from key:', serviceAccount.project_id)
+        console.log('[FIREBASE-ADMIN] Client email:', serviceAccount.client_email)
+        console.log('[FIREBASE-ADMIN] Has private_key:', !!serviceAccount.private_key)
+        console.log('[FIREBASE-ADMIN] Private key starts with:', serviceAccount.private_key?.substring(0, 30))
+      } catch (parseError) {
+        console.error('❌ [FIREBASE-ADMIN] JSON parse failed:', parseError)
+        console.error('[FIREBASE-ADMIN] JSON string (first 200 chars):', serviceAccountJson.substring(0, 200))
+        throw parseError
       }
 
+      // Ensure private_key has actual newlines (not escaped \n)
+      if (serviceAccount.private_key) {
+        // If private_key contains literal \n (as two characters), convert to actual newlines
+        if (serviceAccount.private_key.includes('\\n')) {
+          console.log('[FIREBASE-ADMIN] Converting escaped newlines in private_key')
+          serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n')
+        }
+        // Verify private key format
+        if (!serviceAccount.private_key.includes('-----BEGIN')) {
+          console.error('❌ [FIREBASE-ADMIN] Private key does not appear to be in PEM format')
+          console.error('[FIREBASE-ADMIN] Private key preview:', serviceAccount.private_key.substring(0, 100))
+        }
+      }
+
+      console.log('[FIREBASE-ADMIN] Initializing Firebase Admin with credentials...')
       adminApp = initializeApp({
         credential: cert(serviceAccount),
         projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
