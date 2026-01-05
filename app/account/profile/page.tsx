@@ -12,6 +12,11 @@ import { useRouter } from 'next/navigation'
 export default function ProfilePage() {
   const { user, updateUserProfile, changePassword, isDebugMode } = useAuth()
   const [displayName, setDisplayName] = useState(user?.displayName || '')
+
+  // Check if user signed in with email/password (not Google/OAuth)
+  const hasPasswordProvider = user?.providerData?.some(
+    (provider) => provider.providerId === 'password'
+  )
   const [isUpdating, setIsUpdating] = useState(false)
   const [updateSuccess, setUpdateSuccess] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
@@ -147,77 +152,90 @@ export default function ProfilePage() {
           </div>
         </form>
 
-        {/* Password Change Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Change Password</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleUpdatePassword} className="space-y-4">
-              <div className="grid gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="currentPassword">Current Password</Label>
-                  <Input
-                    id="currentPassword"
-                    type="password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder="Enter current password"
-                    required
-                  />
+        {/* Password Change Section - Only show for email/password users */}
+        {hasPasswordProvider ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Change Password</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleUpdatePassword} className="space-y-4">
+                <div className="grid gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="currentPassword">Current Password</Label>
+                    <Input
+                      id="currentPassword"
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="Enter current password"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="newPassword">New Password</Label>
+                    <Input
+                      id="newPassword"
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Enter new password"
+                      required
+                      minLength={6}
+                    />
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Confirm new password"
+                      required
+                      minLength={6}
+                    />
+                  </div>
                 </div>
 
-                <div className="grid gap-2">
-                  <Label htmlFor="newPassword">New Password</Label>
-                  <Input
-                    id="newPassword"
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Enter new password"
-                    required
-                    minLength={6}
-                  />
-                </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                  <Input
-                    id="confirmPassword"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Confirm new password"
-                    required
-                    minLength={6}
-                  />
-                </div>
-              </div>
-
-              {passwordError && (
-                <div className="bg-red-50 border border-red-200 rounded-md p-3">
-                  <p className="text-sm text-red-600">{passwordError}</p>
-                </div>
-              )}
-
-              <Button type="submit" disabled={isUpdatingPassword}>
-                {isUpdatingPassword ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Updating Password...
-                  </>
-                ) : passwordUpdateSuccess ? (
-                  <>
-                    <Check className="mr-2 h-4 w-4" />
-                    Password Updated
-                  </>
-                ) : (
-                  'Update Password'
+                {passwordError && (
+                  <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                    <p className="text-sm text-red-600">{passwordError}</p>
+                  </div>
                 )}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+
+                <Button type="submit" disabled={isUpdatingPassword}>
+                  {isUpdatingPassword ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Updating Password...
+                    </>
+                  ) : passwordUpdateSuccess ? (
+                    <>
+                      <Check className="mr-2 h-4 w-4" />
+                      Password Updated
+                    </>
+                  ) : (
+                    'Update Password'
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Password</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600">
+                You signed in with Google. Password management is handled through your Google account.
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </CardContent>
     </div>
   )
