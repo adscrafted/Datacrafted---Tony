@@ -11,14 +11,17 @@ import {
 import { validateRequest, createProjectSchema } from '@/lib/utils/api-validation'
 import { databaseError } from '@/lib/utils/api-errors'
 
+const isDev = process.env.NODE_ENV === 'development'
+const log = (...args: unknown[]) => { if (isDev) console.log(...args) }
+
 const getHandler = withAuth(async (request, authUser) => {
   try {
-    console.log('[API PROJECTS] Fetching projects for user:', authUser.uid)
+    log('[API PROJECTS] Fetching projects for user:', authUser.uid)
 
     // Test database connection first
     try {
       await db.$queryRaw`SELECT 1`
-      console.log('[API PROJECTS] Database connection successful')
+      log('[API PROJECTS] Database connection successful')
     } catch (dbError: any) {
       console.error('[API PROJECTS] Database connection failed:', {
         message: dbError.message,
@@ -40,7 +43,7 @@ const getHandler = withAuth(async (request, authUser) => {
     })
 
     if (!dbUser) {
-      console.log('[API PROJECTS] User not found in database')
+      log('[API PROJECTS] User not found in database')
       return NextResponse.json({ projects: [] })
     }
 
@@ -85,7 +88,7 @@ const getHandler = withAuth(async (request, authUser) => {
         }
       })
 
-      console.log('[API PROJECTS] Found', projects.length, 'of', total, 'projects (page', paginationParams.page, ')')
+      log('[API PROJECTS] Found', projects.length, 'of', total, 'projects (page', paginationParams.page, ')')
 
       // Transform projects to match the frontend Project interface
       const transformedProjects = projects.map(project => {
@@ -144,7 +147,7 @@ const getHandler = withAuth(async (request, authUser) => {
       }
     })
 
-    console.log('[API PROJECTS] Found', projects.length, 'projects')
+    log('[API PROJECTS] Found', projects.length, 'projects')
 
     // Transform projects to match the frontend Project interface
     const transformedProjects = projects.map(project => {
@@ -207,12 +210,12 @@ export const GET = withRateLimit(RATE_LIMITS.SESSION, getHandler)
 
 const postHandler = withAuth(async (request, authUser) => {
   try {
-    console.log('[API PROJECTS] Creating project for user:', authUser.uid)
+    log('[API PROJECTS] Creating project for user:', authUser.uid)
 
     // Test database connection first
     try {
       await db.$queryRaw`SELECT 1`
-      console.log('[API PROJECTS] Database connection successful')
+      log('[API PROJECTS] Database connection successful')
     } catch (dbError: any) {
       console.error('[API PROJECTS] Database connection failed during project creation:', {
         message: dbError.message,
@@ -241,7 +244,7 @@ const postHandler = withAuth(async (request, authUser) => {
     })
 
     if (!dbUser) {
-      console.log('[API PROJECTS] User not found in database, creating...')
+      log('[API PROJECTS] User not found in database, creating...')
       dbUser = await db.user.create({
         data: {
           firebaseUid: authUser.uid,
@@ -266,7 +269,7 @@ const postHandler = withAuth(async (request, authUser) => {
       }
     })
 
-    console.log('[API PROJECTS] Project created:', project.id)
+    log('[API PROJECTS] Project created:', project.id)
 
     return NextResponse.json({
       project: {

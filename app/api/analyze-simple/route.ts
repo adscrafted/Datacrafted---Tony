@@ -31,13 +31,6 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
     const usageCheck = await canPerformAnalysis(authUser.uid)
 
     if (!usageCheck.allowed) {
-      console.log('[API-ANALYZE-SIMPLE] Paywall triggered:', {
-        requestId,
-        userId: authUser.uid,
-        used: usageCheck.used,
-        limit: usageCheck.limit
-      })
-
       return NextResponse.json(
         {
           error: 'Analysis limit reached',
@@ -74,10 +67,6 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
 
     const { data } = validation.data
 
-    console.log(`[API-ANALYZE-SIMPLE] Making simple ${aiProvider} call for analysis...`, {
-      requestId,
-      userId: authUser.uid
-    })
     const startTime = Date.now()
 
     // Very simple prompt
@@ -113,11 +102,6 @@ CRITICAL: Use EXACTLY "insights" (not "analysis"), "chartConfig" (not "charts"),
       )
     ])
 
-    const endTime = Date.now()
-    console.log(`[API-ANALYZE-SIMPLE] ${aiProvider} call completed in ${endTime - startTime}ms`, {
-      requestId
-    })
-
     if (!response) {
       throw new Error(`No response from ${aiProvider.toUpperCase()}`)
     }
@@ -126,12 +110,7 @@ CRITICAL: Use EXACTLY "insights" (not "analysis"), "chartConfig" (not "charts"),
     const result = normalizeAnalysisResponse(rawResult)
 
     // Increment analysis count after successful analysis
-    const newCount = await incrementAnalysisCount(authUser.uid)
-    console.log('[API-ANALYZE-SIMPLE] Analysis count incremented:', {
-      requestId,
-      userId: authUser.uid,
-      newCount
-    })
+    await incrementAnalysisCount(authUser.uid)
 
     return NextResponse.json(result)
 

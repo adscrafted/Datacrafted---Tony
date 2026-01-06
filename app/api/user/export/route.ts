@@ -3,6 +3,9 @@ import { withAuth } from '@/lib/middleware/auth'
 import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 import { db } from '@/lib/db'
 
+const isDev = process.env.NODE_ENV === 'development'
+const log = (...args: unknown[]) => { if (isDev) console.log(...args) }
+
 /**
  * Safe JSON parse with fallback
  * Prevents crashes on malformed JSON data
@@ -35,7 +38,7 @@ function safeJsonParse<T>(value: string | null | undefined, fallback: T): T {
  */
 const getHandler = withAuth(async (request: NextRequest, firebaseUser) => {
   try {
-    console.log('[API] Exporting user data:', firebaseUser.uid)
+    log('[API] Exporting user data:', firebaseUser.uid)
 
     // Get user with all related data
     const user = await db.user.findUnique({
@@ -321,7 +324,7 @@ const getHandler = withAuth(async (request: NextRequest, firebaseUser) => {
       })),
     }
 
-    console.log('[API] User data exported successfully:', firebaseUser.uid)
+    log('[API] User data exported successfully:', firebaseUser.uid)
 
     return NextResponse.json(exportData)
   } catch (error) {

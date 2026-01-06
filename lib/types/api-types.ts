@@ -7,6 +7,42 @@ import type { DataRow, ColumnSchema, DataSchema } from '@/lib/store'
 import type { SupportedChartType } from './route-types'
 
 /**
+ * Column role classification for data schema
+ * Defines the functional role of a column in data analysis
+ */
+export type ColumnRole = 'metric' | 'dimension' | 'timestamp' | 'identifier' | 'unknown'
+
+/**
+ * Semantic type classification for columns
+ * Provides more granular typing for business context
+ */
+export type SemanticType =
+  | 'currency'
+  | 'percentage'
+  | 'count'
+  | 'ratio'
+  | 'id'
+  | 'uuid'
+  | 'sku'
+  | 'email'
+  | 'url'
+  | 'phone'
+  | 'name'
+  | 'label'
+  | 'address'
+  | 'city'
+  | 'country'
+  | 'zip'
+  | 'category'
+  | 'status'
+  | 'score'
+  | 'duration'
+  | 'date'
+  | 'datetime'
+  | 'time'
+  | 'generic'
+
+/**
  * Logger interface with typed console methods
  */
 export interface Logger {
@@ -287,13 +323,31 @@ export interface ChartStats {
 }
 
 /**
+ * Column data type - the basic data classification
+ */
+export type ColumnDataType = 'string' | 'number' | 'boolean' | 'date' | 'categorical'
+
+/**
  * Corrected column schema from user feedback
+ * Captures user corrections and AI suggestions for column metadata
  */
 export interface CorrectedColumn {
+  /** Column name */
   name: string
+  /** Data type classification (string for backwards compatibility, use ColumnDataType for strict typing) */
   type: string
-  description: string
+  /** User-provided or AI-suggested description of column purpose */
+  description?: string
+  /** Whether this column was manually corrected by user */
   userCorrected: boolean
+  /** Functional role of the column (metric, dimension, timestamp, identifier) */
+  role?: ColumnRole
+  /** Semantic type for business context (currency, percentage, count, etc.) */
+  semanticType?: SemanticType
+  /** Whether this column requires a description for good analysis */
+  isRequired?: boolean
+  /** AI-generated description suggestion */
+  suggestedDescription?: string
 }
 
 /**

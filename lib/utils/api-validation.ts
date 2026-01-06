@@ -170,8 +170,16 @@ export const analyzeRequestSchema = z.object({
   correctedSchema: z.array(z.object({
     name: z.string(),
     type: z.string(),
-    description: z.string(),
+    description: z.string().optional(),
     userCorrected: z.boolean(),
+    role: z.enum(['metric', 'dimension', 'timestamp', 'identifier', 'unknown']).optional(),
+    semanticType: z.enum([
+      'currency', 'percentage', 'count', 'ratio', 'id', 'uuid', 'sku', 'email', 'url', 'phone',
+      'name', 'label', 'address', 'city', 'country', 'zip', 'category', 'status', 'score',
+      'duration', 'date', 'datetime', 'time', 'generic'
+    ]).optional(),
+    isRequired: z.boolean().optional(),
+    suggestedDescription: z.string().optional(),
   })).optional(),
   feedback: z.string().max(5000).optional(),
   fileName: z.string().max(500).optional(),
@@ -324,8 +332,16 @@ export const recommendationsRefreshRequestSchema = z.object({
   correctedSchema: z.array(z.object({
     name: z.string(),
     type: z.string(),
-    description: z.string(),
+    description: z.string().optional(),
     userCorrected: z.boolean().optional(),
+    role: z.enum(['metric', 'dimension', 'timestamp', 'identifier', 'unknown']).optional(),
+    semanticType: z.enum([
+      'currency', 'percentage', 'count', 'ratio', 'id', 'uuid', 'sku', 'email', 'url', 'phone',
+      'name', 'label', 'address', 'city', 'country', 'zip', 'category', 'status', 'score',
+      'duration', 'date', 'datetime', 'time', 'generic'
+    ]).optional(),
+    isRequired: z.boolean().optional(),
+    suggestedDescription: z.string().optional(),
   })).optional(),
   filters: z.array(z.object({
     chartType: z.string(),

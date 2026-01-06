@@ -4,6 +4,9 @@ import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 import { db } from '@/lib/db'
 import { userNotFound, projectNotFound, forbidden, databaseError } from '@/lib/utils/api-errors'
 
+const isDev = process.env.NODE_ENV === 'development'
+const log = (...args: unknown[]) => { if (isDev) console.log(...args) }
+
 /**
  * DELETE /api/projects/[id]
  * Delete a project and all associated data
@@ -12,7 +15,7 @@ const deleteHandler = withAuth(async (request, authUser, context) => {
   try {
     const { id: projectId } = await context!.params
 
-    console.log('[API PROJECT DELETE] Deleting project:', projectId, 'for user:', authUser.uid)
+    log('[API PROJECT DELETE] Deleting project:', projectId, 'for user:', authUser.uid)
 
     // Get database user
     const dbUser = await db.user.findUnique({
@@ -20,7 +23,7 @@ const deleteHandler = withAuth(async (request, authUser, context) => {
     })
 
     if (!dbUser) {
-      console.log('[API PROJECT DELETE] User not found in database')
+      log('[API PROJECT DELETE] User not found in database')
       return userNotFound()
     }
 
@@ -30,12 +33,12 @@ const deleteHandler = withAuth(async (request, authUser, context) => {
     })
 
     if (!project) {
-      console.log('[API PROJECT DELETE] Project not found:', projectId)
+      log('[API PROJECT DELETE] Project not found:', projectId)
       return projectNotFound()
     }
 
     if (project.userId !== dbUser.id) {
-      console.log('[API PROJECT DELETE] Authorization failed: User does not own project')
+      log('[API PROJECT DELETE] Authorization failed: User does not own project')
       return forbidden('You do not have access to this project')
     }
 
@@ -44,14 +47,14 @@ const deleteHandler = withAuth(async (request, authUser, context) => {
       where: { projectId }
     })
 
-    console.log('[API PROJECT DELETE] Deleted', deletedDataCount.count, 'project data records')
+    log('[API PROJECT DELETE] Deleted', deletedDataCount.count, 'project data records')
 
     // Delete the project
     await db.projects.delete({
       where: { id: projectId }
     })
 
-    console.log('[API PROJECT DELETE] Project deleted successfully')
+    log('[API PROJECT DELETE] Project deleted successfully')
 
     return NextResponse.json({
       success: true,

@@ -12,6 +12,9 @@ import { cookies } from 'next/headers'
 import { validateRequest, createAuthSessionSchema } from '@/lib/utils/api-validation'
 import { serverError, invalidToken } from '@/lib/utils/api-errors'
 
+const isDev = process.env.NODE_ENV === 'development'
+const log = (...args: unknown[]) => { if (isDev) console.log(...args) }
+
 export async function POST(request: NextRequest) {
   try {
     // Validate request body with Zod
@@ -24,7 +27,7 @@ export async function POST(request: NextRequest) {
 
     // In debug mode, accept any token and create debug session
     if (DEBUG_MODE) {
-      console.log('[SESSION-API] Debug mode - creating debug session')
+      log('[SESSION-API] Debug mode - creating debug session')
 
       const cookieStore = await cookies()
       cookieStore.set('__session', 'debug-session-token', {
@@ -62,7 +65,7 @@ export async function POST(request: NextRequest) {
       path: '/',
     })
 
-    console.log('[SESSION-API] Session cookie created for user:', decodedToken.uid)
+    log('[SESSION-API] Session cookie created for user:', decodedToken.uid)
 
     return NextResponse.json({
       success: true,
@@ -86,7 +89,7 @@ export async function DELETE(request: NextRequest) {
     const cookieStore = await cookies()
     cookieStore.delete('__session')
 
-    console.log('[SESSION-API] Session cookie cleared')
+    log('[SESSION-API] Session cookie cleared')
 
     return NextResponse.json({ success: true })
   } catch (error) {

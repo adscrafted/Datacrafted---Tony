@@ -9,6 +9,9 @@ import {
   type AIMessage
 } from '@/lib/services/ai/ai-provider'
 
+const isDev = process.env.NODE_ENV === 'development'
+const log = (...args: unknown[]) => { if (isDev) console.log(...args) }
+
 // Rate limiting (simple in-memory store for demo)
 const requestCounts = new Map<string, { count: number; resetTime: number }>()
 const RATE_LIMIT = 30 // requests per hour
@@ -177,7 +180,7 @@ export const POST = withAuth(async (request, authUser) => {
 
     const chatCheck = await canSendChatMessage(authUser.uid)
     if (!chatCheck.allowed) {
-      console.log('[CHAT API] Chat limit reached:', {
+      log('[CHAT API] Chat limit reached:', {
         userId: authUser.uid,
         used: chatCheck.used,
         limit: chatCheck.limit
@@ -343,7 +346,7 @@ Current conversation context: The user is asking about their uploaded dataset.`
     // Check if client wants streaming response
     const wantsStreaming = request.headers.get('accept')?.includes('text/event-stream')
 
-    console.log(`[CHAT API] Using ${aiProvider} provider, streaming: ${wantsStreaming}`)
+    log(`[CHAT API] Using ${aiProvider} provider, streaming: ${wantsStreaming}`)
 
     if (wantsStreaming) {
       // Increment chat count for streaming response (count at start since we can't await after streaming)

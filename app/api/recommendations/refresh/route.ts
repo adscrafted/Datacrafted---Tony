@@ -14,8 +14,10 @@ import {
   generateCompletionWithRetry,
   type AIMessage
 } from '@/lib/services/ai/ai-provider'
+import { withAuth } from '@/lib/middleware/auth'
+import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 
-// Rate limiting (shared with analyze endpoint)
+// Rate limiting (legacy - now using withRateLimit middleware)
 const requestCounts = new Map<string, { count: number; resetTime: number }>()
 const RATE_LIMIT = 10 // requests per hour
 const RATE_LIMIT_WINDOW = 60 * 60 * 1000 // 1 hour in milliseconds
@@ -180,9 +182,59 @@ function buildFocusedPrompt(
   if (correctedSchema && correctedSchema.length > 0) {
     prompt += `USER CORRECTIONS - TRUST THESE 100%:\n`
     correctedSchema.forEach(col => {
-      prompt += `• ${col.name}: ${col.type} - "${col.description}"\n`
+      prompt += `• ${col.name}: ${col.type}`
+      if (col.role) {
+        const roleHints: Record<string, string> = {
+          'metric': 'METRIC (use for aggregations like sum, avg)',
+          'dimension': 'DIMENSION (use for grouping, x-axis, legends)',
+          'timestamp': 'TIMESTAMP (use for time-series charts)',
+          'identifier': 'IDENTIFIER (do NOT aggregate, use for lookups)',
+          'unknown': 'UNKNOWN'
+        }
+        prompt += ` | Role: ${roleHints[col.role] || col.role}`
+      }
+      if (col.semanticType) {
+        const semanticHints: Record<string, string> = {
+          'currency': 'CURRENCY (format as money)',
+          'percentage': 'PERCENTAGE (format with %)',
+          'count': 'COUNT (integer values)',
+          'ratio': 'RATIO (decimal proportions)',
+          'score': 'SCORE (bounded values, good for gauges)',
+          'id': 'ID (do not aggregate)',
+          'uuid': 'UUID (do not aggregate)',
+          'sku': 'SKU (product identifier)',
+          'email': 'EMAIL (display only)',
+          'url': 'URL (display only)',
+          'phone': 'PHONE (display only)',
+          'name': 'NAME (use for labels)',
+          'label': 'LABEL (use for labels)',
+          'address': 'ADDRESS (display only)',
+          'city': 'CITY (geographic grouping)',
+          'country': 'COUNTRY (geographic grouping)',
+          'zip': 'ZIP (geographic grouping)',
+          'category': 'CATEGORY (use for grouping)',
+          'status': 'STATUS (use for segmentation)',
+          'duration': 'DURATION (time-based metric)',
+          'date': 'DATE (time-series x-axis)',
+          'datetime': 'DATETIME (time-series x-axis)',
+          'time': 'TIME (time-based grouping)',
+          'generic': 'GENERIC'
+        }
+        prompt += ` | Semantic: ${semanticHints[col.semanticType] || col.semanticType}`
+      }
+      if (col.description) {
+        prompt += ` - "${col.description}"`
+      }
+      prompt += `\n`
     })
     prompt += `\n`
+
+    // Add role-based guidance
+    prompt += `ROLE-BASED GUIDANCE:\n`
+    prompt += `- METRIC columns: suitable for Y-axis values, use aggregations (sum, avg, count)\n`
+    prompt += `- DIMENSION columns: suitable for X-axis categories, grouping, filtering\n`
+    prompt += `- TIMESTAMP columns: suitable for time-series line/area charts\n`
+    prompt += `- IDENTIFIER columns: DO NOT aggregate, only use for lookups\n\n`
   }
 
   // Add columns with confidence scores
@@ -378,14 +430,19 @@ interface RefreshRequest {
   activeFilters?: ActiveFilter[]
 }
 
-export async function POST(request: NextRequest) {
+// Handler with authentication
+const handler = withAuth(async (request: NextRequest, authUser) => {
   const requestStartTime = Date.now()
   const aiProvider = getAIProvider()
 
-  console.log('🔵 [API-REFRESH] POST request received:', {
-    timestamp: new Date().toISOString(),
-    provider: aiProvider
-  })
+  // Log only in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔵 [API-REFRESH] POST request received:', {
+      timestamp: new Date().toISOString(),
+      provider: aiProvider,
+      userId: authUser.uid
+    })
+  }
 
   try {
     // Check API key based on provider
@@ -400,19 +457,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get client IP for rate limiting
-    const clientIp = request.headers.get('x-forwarded-for') ||
-                     request.headers.get('x-real-ip') ||
-                     'unknown'
-
-    // Check rate limit
-    if (!checkRateLimit(clientIp)) {
-      console.log('❌ [API-REFRESH] Rate limit exceeded for client:', clientIp)
-      return NextResponse.json(
-        { error: 'Rate limit exceeded. Please try again later.' },
-        { status: 429 }
-      )
-    }
+    // Rate limiting is now handled by withRateLimit middleware
 
     // Validate request body with Zod
     const validation = await validateRequest(request, recommendationsRefreshRequestSchema)
@@ -432,32 +477,10 @@ export async function POST(request: NextRequest) {
       activeFilters
     } = validation.data
 
-    console.log('🔍 [API-REFRESH] Request parsed:', {
-      hasDataId: !!dataId,
-      hasData: !!data,
-      dataLength: data?.length,
-      hasSchema: !!schema,
-      correctedColumnsCount: correctedSchema?.length || 0,
-      dashboardFiltersCount: filters?.length || 0,
-      activeFiltersCount: activeFilters?.length || 0,
-      excludedTypes: excludedTypes || [],
-      focus,
-      limit
-    })
-
     // Analyze data structure
-    console.log('🔵 [API-REFRESH] Analyzing data structure...')
     const dataStructure = analyzeDataStructure((data || []) as DataRow[])
 
     // Build focused prompt
-    console.log('🔍 [API-REFRESH] Building focused prompt:', {
-      focus,
-      hasSchema: !!schema,
-      hasCorrectedSchema: !!correctedSchema,
-      excludedTypes: excludedTypes || [],
-      limit
-    })
-
     const prompt = buildFocusedPrompt(
       dataStructure,
       focus,
@@ -469,7 +492,6 @@ export async function POST(request: NextRequest) {
     )
 
     // Call AI API
-    console.log(`🚀 [API-REFRESH] Calling ${aiProvider.toUpperCase()} API...`)
     const startTime = Date.now()
 
     const messages: AIMessage[] = [
@@ -498,16 +520,12 @@ You MUST respond with valid JSON using the expected format with "recommendations
 
     const endTime = Date.now()
     const aiDuration = endTime - startTime
-    console.log(`✅ [API-REFRESH] ${aiProvider.toUpperCase()} API call completed:`, {
-      duration: aiDuration + 'ms'
-    })
 
     if (!response) {
       throw new Error(`No response from ${aiProvider.toUpperCase()}`)
     }
 
     // Parse AI response using robust JSON extraction
-    console.log('🔵 [API-REFRESH] Parsing AI response...')
     const aiAnalysis = parseJSONFromString<{
       recommendations: ChartRecommendation[]
       dataContext?: DataContext
@@ -580,17 +598,6 @@ You MUST respond with valid JSON using the expected format with "recommendations
       }
     }
 
-    const totalDuration = Date.now() - requestStartTime
-    console.log('✅ [API-REFRESH] Refresh completed successfully:', {
-      recommendationsReturned: recommendations.length,
-      averageQuality: result.summary.averageQuality,
-      focusArea: focus,
-      excludedCount,
-      totalDuration: totalDuration + 'ms',
-      aiDuration: aiDuration + 'ms',
-      provider: aiProvider
-    })
-
     return NextResponse.json(result)
 
   } catch (error) {
@@ -655,4 +662,7 @@ You MUST respond with valid JSON using the expected format with "recommendations
       { status: 500 }
     )
   }
-}
+})
+
+// Authentication required, rate limited
+export const POST = withRateLimit(RATE_LIMITS.ANALYSIS, handler)

@@ -2,9 +2,17 @@
  * Types for AI-generated chart suggestions
  */
 
+/**
+ * All supported chart types for suggestions
+ */
+export type SuggestionChartType =
+  | 'table' | 'bar' | 'line' | 'pie' | 'scatter' | 'area' | 'scorecard'
+  | 'combo' | 'waterfall' | 'heatmap' | 'gauge' | 'cohort' | 'bullet'
+  | 'treemap' | 'sparkline'
+
 export interface ChartSuggestion {
   id: string
-  type: 'table' | 'bar' | 'line' | 'pie' | 'scatter' | 'area' | 'scorecard'
+  type: SuggestionChartType
   title: string
   description: string
   

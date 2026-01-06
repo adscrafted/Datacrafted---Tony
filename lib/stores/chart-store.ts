@@ -171,6 +171,10 @@ interface ChartStore {
   batchUpdateChartCustomizations: (updates: Record<string, Partial<ChartCustomization>>) => void
   removeChartCustomization: (chartId: string) => void
 
+  // Smart invalidation actions
+  getChartColumns: (chartId: string) => string[]
+  invalidateChartsUsingColumns: (changedColumns: string[]) => string[]
+
   // Draft chart actions
   setDraftChart: (chart: { id: string; type: ChartType; title: string; description: string; dataKey?: any[]; dataMapping?: any } | null) => void
   commitDraftChart: () => void
@@ -501,12 +505,69 @@ export const useChartStore = create<ChartStore>()(
       },
 
       removeChartCustomization: (chartId) => {
-        logger.log('🗑️ [CHART_STORE] Removing chart customization', { chartId })
+        logger.log('[CHART_STORE] Removing chart customization', { chartId })
         set(state => {
           const { [chartId]: removed, ...rest } = state.chartCustomizations
           return { chartCustomizations: rest }
         })
         get().addToHistory('chart_customize_remove', { chartId })
+      },
+
+      // Smart invalidation - extracts all column names from a chart's dataMapping
+      getChartColumns: (chartId) => {
+        const columns: string[] = []
+        const customization = get().chartCustomizations[chartId]
+        if (!customization) return columns
+
+        const dataMapping = customization.dataMapping
+        if (!dataMapping) return columns
+
+        // Check all possible column reference fields
+        const fieldsToCheck = ['xAxis', 'yAxis', 'yAxis1', 'yAxis2', 'category', 'value',
+          'metric', 'size', 'color', 'groupBy', 'label', 'segment']
+
+        fieldsToCheck.forEach(field => {
+          if (dataMapping[field]) columns.push(dataMapping[field])
+        })
+
+        // Check arrays
+        if (Array.isArray(dataMapping.columns)) columns.push(...dataMapping.columns)
+        if (Array.isArray(dataMapping.values)) columns.push(...dataMapping.values)
+        if (Array.isArray(dataMapping.metrics)) columns.push(...dataMapping.metrics)
+        if (Array.isArray(dataMapping.series)) columns.push(...dataMapping.series)
+
+        // Check filters
+        if (customization.filters) {
+          customization.filters.forEach((f: ChartFilter) => {
+            if (f.column) columns.push(f.column)
+          })
+        }
+
+        // Check dataColumns from customization (used by some chart types)
+        if (Array.isArray(customization.dataColumns)) {
+          columns.push(...customization.dataColumns)
+        }
+
+        return [...new Set(columns)] // dedupe
+      },
+
+      // Smart invalidation - only removes charts using changed columns
+      invalidateChartsUsingColumns: (changedColumns) => {
+        const { chartCustomizations, removeChartCustomization, getChartColumns } = get()
+        const invalidated: string[] = []
+        const changedLower = changedColumns.map(c => c.toLowerCase())
+
+        Object.keys(chartCustomizations).forEach(chartId => {
+          const chartColumns = getChartColumns(chartId).map(c => c.toLowerCase())
+          const usesChangedColumn = chartColumns.some(col => changedLower.includes(col))
+
+          if (usesChangedColumn) {
+            removeChartCustomization(chartId)
+            invalidated.push(chartId)
+          }
+        })
+
+        return invalidated
       },
 
       // Draft chart actions

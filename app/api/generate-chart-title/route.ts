@@ -39,13 +39,6 @@ export async function POST(request: NextRequest) {
     // Build context for AI
     const context = buildPromptContext(chartType, dataMapping, sampleData, dataSchema)
 
-    console.log('🎯 [GENERATE-TITLE] Generating title and description for:', {
-      chartType,
-      dataMapping,
-      sampleDataRows: sampleData?.length || 0,
-      provider: aiProvider
-    })
-
     const messages: AIMessage[] = [
       {
         role: 'system',
@@ -85,8 +78,6 @@ You MUST respond with valid JSON using EXACTLY this format:
     // Validate and truncate if needed
     const title = result.title?.slice(0, 60) || 'Chart Title'
     const description = result.description?.slice(0, 150) || 'Chart description'
-
-    console.log('✅ [GENERATE-TITLE] Generated:', { title, description })
 
     return NextResponse.json({ title, description })
 

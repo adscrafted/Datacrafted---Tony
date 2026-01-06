@@ -38,6 +38,42 @@ export interface DataRow {
   [key: string]: string | number | boolean | Date | null
 }
 
+/**
+ * Column role classification for data schema
+ * Defines the functional role of a column in data analysis
+ */
+export type ColumnRole = 'metric' | 'dimension' | 'timestamp' | 'identifier' | 'unknown'
+
+/**
+ * Semantic type classification for columns
+ * Provides more granular typing for business context
+ */
+export type SemanticType =
+  | 'currency'
+  | 'percentage'
+  | 'count'
+  | 'ratio'
+  | 'id'
+  | 'uuid'
+  | 'sku'
+  | 'email'
+  | 'url'
+  | 'phone'
+  | 'name'
+  | 'label'
+  | 'address'
+  | 'city'
+  | 'country'
+  | 'zip'
+  | 'category'
+  | 'status'
+  | 'score'
+  | 'duration'
+  | 'date'
+  | 'datetime'
+  | 'time'
+  | 'generic'
+
 export interface ColumnSchema {
   name: string
   type: 'string' | 'number' | 'boolean' | 'date' | 'categorical'
@@ -56,6 +92,14 @@ export interface ColumnSchema {
   suggestedUsage?: string[]
   confidence?: number
   detectionReason?: string
+  /** Functional role of the column (metric, dimension, timestamp, identifier) */
+  role?: ColumnRole
+  /** Semantic type for business context (currency, percentage, count, etc.) */
+  semanticType?: SemanticType
+  /** Whether the type/role was inferred from column name patterns */
+  inferredFromName?: boolean
+  /** AI-generated description suggestion */
+  suggestedDescription?: string
 }
 
 export interface DataSchema {

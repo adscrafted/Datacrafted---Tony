@@ -3,6 +3,9 @@ import { withAuth } from '@/lib/middleware/auth'
 import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 import { syncUser } from '@/lib/api/user-service'
 
+const isDev = process.env.NODE_ENV === 'development'
+const log = (...args: unknown[]) => { if (isDev) console.log(...args) }
+
 /**
  * POST /api/user/sync
  * Synchronize Firebase user with Postgres database
@@ -23,7 +26,7 @@ import { syncUser } from '@/lib/api/user-service'
  */
 const handler = withAuth(async (request: NextRequest, firebaseUser) => {
   try {
-    console.log('[API] Syncing user:', firebaseUser.uid)
+    log('[API] Syncing user:', firebaseUser.uid)
 
     // Sync Firebase user to database
     const user = await syncUser({
@@ -33,7 +36,7 @@ const handler = withAuth(async (request: NextRequest, firebaseUser) => {
       photoURL: firebaseUser.photoURL,
     })
 
-    console.log('[API] User synced successfully:', user.id)
+    log('[API] User synced successfully:', user.id)
 
     return NextResponse.json({
       success: true,

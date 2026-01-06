@@ -6,8 +6,16 @@
  * - Column confidence levels (30 points)
  * - User correction boost (20 points)
  * - Clarity and simplicity (10 points)
+ * - Role-based scoring (+15 to -15 points based on column role alignment)
  *
- * Total possible score: 100 points
+ * Total possible score: 0-100 points (clamped)
+ *
+ * Role-based scoring ensures:
+ * - METRIC columns are used for Y-axis/aggregations
+ * - DIMENSION columns are used for X-axis/categories/grouping
+ * - TIMESTAMP columns are used for time-series charts
+ * - IDENTIFIER columns are NOT aggregated (penalized if misused)
+ * - Semantic types (currency, percentage, etc.) align with chart types
  */
 
 import type { ChartSuggestion } from '@/lib/types/chart-suggestion'
@@ -23,17 +31,61 @@ export interface ScoredRecommendation extends ChartSuggestion {
     columnConfidence: number
     userCorrectionBoost: number
     clarityScore: number
+    roleBasedScore?: number
   }
 }
 
 /**
+ * Column role types for enhanced schema
+ */
+export type ColumnRole = 'metric' | 'dimension' | 'timestamp' | 'identifier' | 'unknown'
+
+/**
+ * Semantic type classification for columns
+ */
+export type SemanticType =
+  | 'currency'
+  | 'percentage'
+  | 'count'
+  | 'ratio'
+  | 'id'
+  | 'uuid'
+  | 'sku'
+  | 'email'
+  | 'url'
+  | 'phone'
+  | 'name'
+  | 'label'
+  | 'address'
+  | 'city'
+  | 'country'
+  | 'zip'
+  | 'category'
+  | 'status'
+  | 'score'
+  | 'duration'
+  | 'date'
+  | 'datetime'
+  | 'time'
+  | 'generic'
+
+/**
  * User-corrected column information
+ * Aligned with api-types.ts CorrectedColumn interface
  */
 export interface CorrectedColumn {
   name: string
-  originalType: string
-  correctedType: string
-  confidence: number
+  type: string
+  description?: string
+  userCorrected: boolean
+  role?: ColumnRole
+  semanticType?: SemanticType
+  isRequired?: boolean
+  suggestedDescription?: string
+  // Legacy fields for backwards compatibility
+  originalType?: string
+  correctedType?: string
+  confidence?: number
 }
 
 /**
@@ -531,6 +583,139 @@ export function calculateClarityScore(recommendation: ChartSuggestion): number {
 }
 
 /**
+ * Calculates role-based score for chart recommendations (15 points maximum)
+ *
+ * Scoring logic:
+ * - METRIC columns used for Y-axis/values: +5 points
+ * - DIMENSION columns used for X-axis/categories: +5 points
+ * - TIMESTAMP columns used for time-series X-axis: +5 points
+ * - IDENTIFIER columns used for aggregation (Y-axis): -10 points (penalty)
+ * - Semantic type alignment (e.g., currency in financial charts): +3 points
+ *
+ * This ensures charts properly utilize column roles and semantic types.
+ *
+ * @example
+ * calculateRoleBasedScore(recommendation, correctedColumns) // 15 if roles align well
+ */
+export function calculateRoleBasedScore(
+  recommendation: ChartSuggestion,
+  correctedColumns?: CorrectedColumn[]
+): number {
+  if (!correctedColumns || correctedColumns.length === 0) {
+    return 0 // No role information available
+  }
+
+  // Create a lookup map for column roles and semantic types
+  const columnRoles = new Map<string, ColumnRole | undefined>()
+  const columnSemantics = new Map<string, SemanticType | undefined>()
+
+  correctedColumns.forEach(col => {
+    columnRoles.set(col.name.toLowerCase(), col.role)
+    columnSemantics.set(col.name.toLowerCase(), col.semanticType)
+  })
+
+  let score = 0
+  const chartType = recommendation.type
+
+  // Get columns used in different positions
+  const xAxisColumn = recommendation.chartConfig.x?.toLowerCase()
+  const yAxisColumns = recommendation.chartConfig.y
+    ? (Array.isArray(recommendation.chartConfig.y)
+        ? recommendation.chartConfig.y.map(c => c.toLowerCase())
+        : [recommendation.chartConfig.y.toLowerCase()])
+    : []
+  const colorColumn = recommendation.chartConfig.color?.toLowerCase()
+  const sizeColumn = recommendation.chartConfig.size?.toLowerCase()
+
+  // Check Y-axis columns (should be METRIC)
+  yAxisColumns.forEach(yCol => {
+    const role = columnRoles.get(yCol)
+    const semantic = columnSemantics.get(yCol)
+
+    if (role === 'metric') {
+      score += 5 // Correct usage of METRIC for Y-axis
+    } else if (role === 'identifier') {
+      score -= 10 // Penalty for aggregating IDENTIFIER columns
+    }
+
+    // Semantic type alignment bonuses
+    if (chartType === 'scorecard' || chartType === 'bar' || chartType === 'line') {
+      if (semantic === 'currency' || semantic === 'count' || semantic === 'percentage') {
+        score += 3 // Good semantic type for these chart types
+      }
+    }
+    if (chartType === 'gauge' || chartType === 'bullet') {
+      if (semantic === 'percentage' || semantic === 'score') {
+        score += 3 // Percentage/score is perfect for gauges
+      }
+    }
+  })
+
+  // Check X-axis column
+  if (xAxisColumn) {
+    const role = columnRoles.get(xAxisColumn)
+    const semantic = columnSemantics.get(xAxisColumn)
+
+    if (role === 'dimension') {
+      score += 5 // Correct usage of DIMENSION for X-axis/categories
+    } else if (role === 'timestamp') {
+      // TIMESTAMP is good for line/area charts
+      if (chartType === 'line' || chartType === 'area' || chartType === 'sparkline') {
+        score += 5
+      } else {
+        score += 2 // Still okay for other chart types
+      }
+    } else if (role === 'identifier') {
+      score -= 5 // Mild penalty for using IDENTIFIER as X-axis (unless it's a table)
+      if (chartType === 'table') {
+        score += 5 // Tables are fine with identifiers
+      }
+    }
+
+    // Semantic alignment for X-axis
+    if (semantic === 'category' || semantic === 'status') {
+      if (chartType === 'bar' || chartType === 'pie' || chartType === 'treemap') {
+        score += 2 // Good for categorical charts
+      }
+    }
+  }
+
+  // Check color/grouping column (should be DIMENSION)
+  if (colorColumn) {
+    const role = columnRoles.get(colorColumn)
+    if (role === 'dimension') {
+      score += 3 // Good usage for grouping
+    } else if (role === 'identifier') {
+      score -= 3 // Not great for color grouping
+    }
+  }
+
+  // Check size column in scatter plots (should be METRIC)
+  if (sizeColumn && chartType === 'scatter') {
+    const role = columnRoles.get(sizeColumn)
+    if (role === 'metric') {
+      score += 3 // Correct usage for bubble size
+    }
+  }
+
+  // Penalize charts that try to use non-chartable semantic types
+  const nonChartableTypes: SemanticType[] = ['email', 'url', 'phone', 'address', 'id']
+  const allUsedColumns = [xAxisColumn, ...yAxisColumns, colorColumn, sizeColumn].filter(Boolean)
+
+  allUsedColumns.forEach(col => {
+    if (col) {
+      const semantic = columnSemantics.get(col)
+      if (semantic && nonChartableTypes.includes(semantic) && chartType !== 'table') {
+        score -= 5 // Penalty for using non-chartable types in visualizations
+      }
+    }
+  })
+
+  // Cap the score between -15 and +15
+  return Math.max(-15, Math.min(score, 15))
+}
+
+/**
  * Main scoring function that calculates the total quality score for a recommendation
  *
  * @param recommendation - The chart recommendation to score
@@ -554,18 +739,21 @@ export function scoreRecommendation(
   const columnConfidence = calculateColumnConfidenceScore(recommendation, dataProfile.schema)
   const userCorrectionBoost = calculateUserCorrectionBoost(recommendation, correctedColumns)
   const clarityScore = calculateClarityScore(recommendation)
+  const roleBasedScore = calculateRoleBasedScore(recommendation, correctedColumns)
 
   // Calculate total quality score (max 100)
-  const qualityScore = dataTypeMatch + columnConfidence + userCorrectionBoost + clarityScore
+  // Role-based score can be negative (penalties) or positive (bonuses)
+  const qualityScore = dataTypeMatch + columnConfidence + userCorrectionBoost + clarityScore + roleBasedScore
 
   return {
     ...recommendation,
-    qualityScore: Math.min(qualityScore, 100), // Cap at 100
+    qualityScore: Math.max(0, Math.min(qualityScore, 100)), // Clamp between 0 and 100
     qualityFactors: {
       dataTypeMatch,
       columnConfidence,
       userCorrectionBoost,
-      clarityScore
+      clarityScore,
+      roleBasedScore
     }
   }
 }

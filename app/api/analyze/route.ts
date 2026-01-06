@@ -22,6 +22,8 @@ import type {
   DataMapping,
   CorrectedColumn,
   BusinessDomain,
+  ColumnRole,
+  SemanticType,
 } from '@/lib/types/api-types'
 
 // Security: Input validation limits
@@ -36,10 +38,10 @@ const logger: Logger = {
     if (isDevelopment) console.log(...args)
   },
   info: (...args: unknown[]) => {
-    console.log(...args)
+    if (isDevelopment) console.log(...args)
   },
   warn: (...args: unknown[]) => {
-    console.warn(...args)
+    if (isDevelopment) console.warn(...args)
   },
   error: (...args: unknown[]) => {
     console.error(...args)
@@ -62,8 +64,10 @@ interface AnalyzeRequest {
   correctedSchema?: Array<{
     name: string
     type: string
-    description: string
+    description?: string
     userCorrected: boolean
+    role?: ColumnRole
+    semanticType?: SemanticType
   }>
   feedback?: string // User feedback context
   fileName?: string
@@ -598,14 +602,96 @@ This dataset contains ${dataStructure.rowCount} rows and ${dataStructure.columnC
   // Add user corrections if present (CONTEXT: user intent)
   if (correctedSchema && correctedSchema.length > 0) {
     prompt += `\n\n<USER_CORRECTIONS>`
-    prompt += `\nThe user has MANUALLY corrected these column interpretations. These descriptions are CRITICAL - USE them in your chart titles, descriptions, and insights:`
+    prompt += `\nThe user has MANUALLY corrected these column interpretations. These are CRITICAL for analysis:`
+
+    // Build detailed column information with role and semantic type
     correctedSchema.forEach(col => {
-      prompt += `\n- ${col.name}: ${col.type} - "${col.description}"`
+      prompt += `\n\nColumn: ${col.name}`
+      prompt += `\n- Type: ${col.type}`
+      if (col.role) {
+        const roleHints: Record<string, string> = {
+          'metric': 'METRIC (use for aggregations like sum, avg)',
+          'dimension': 'DIMENSION (use for X-axis categories, grouping, filtering)',
+          'timestamp': 'TIMESTAMP (use for time-series charts, date filters)',
+          'identifier': 'IDENTIFIER (DO NOT aggregate, use for lookups only)',
+          'unknown': 'UNKNOWN'
+        }
+        prompt += `\n- Role: ${roleHints[col.role] || col.role}`
+      }
+      if (col.semanticType) {
+        const semanticHints: Record<string, string> = {
+          'currency': 'CURRENCY (format as money, use in financial charts)',
+          'percentage': 'PERCENTAGE (format with %, values typically 0-100 or 0-1)',
+          'count': 'COUNT (integer values, use bar charts for comparisons)',
+          'ratio': 'RATIO (decimal values representing proportions)',
+          'score': 'SCORE (typically bounded values, good for gauges)',
+          'email': 'EMAIL (don\'t use in charts, just for data display)',
+          'url': 'URL (don\'t use in charts, just for data display)',
+          'phone': 'PHONE (don\'t use in charts, just for data display)',
+          'name': 'NAME (categorical, use for labels)',
+          'label': 'LABEL (categorical text, use for labels and legends)',
+          'category': 'CATEGORY (use for grouping and segmentation)',
+          'status': 'STATUS (categorical, use for filtering and segmentation)',
+          'duration': 'DURATION (time-based metric)',
+          'id': 'ID (identifier, do not aggregate)',
+          'uuid': 'UUID (unique identifier, do not aggregate)',
+          'sku': 'SKU (product identifier, do not aggregate)',
+          'address': 'ADDRESS (don\'t use in charts, just for data display)',
+          'city': 'CITY (geographic dimension, use for maps or grouping)',
+          'country': 'COUNTRY (geographic dimension, use for maps or grouping)',
+          'zip': 'ZIP (geographic code, use for maps or grouping)',
+          'date': 'DATE (use for time-series x-axis)',
+          'datetime': 'DATETIME (use for time-series x-axis with time)',
+          'time': 'TIME (use for time-based grouping)',
+          'generic': 'GENERIC'
+        }
+        prompt += `\n- Semantic: ${semanticHints[col.semanticType] || col.semanticType}`
+      }
+      if (col.description) {
+        prompt += `\n- Description: "${col.description}"`
+      }
+      if (col.userCorrected) {
+        prompt += `\n- Confidence: 100% (user-corrected)`
+      }
     })
-    prompt += `\n\nIMPORTANT: Incorporate these user-provided descriptions into:`
-    prompt += `\n1. Chart titles (e.g., if user describes a column as "Monthly Revenue", use that in the title)`
-    prompt += `\n2. Chart descriptions (reference what the column represents based on user's description)`
-    prompt += `\n3. Business insights (use the business context from descriptions)`
+
+    // Add role-based chart type suggestions
+    prompt += `\n\n<ROLE_BASED_GUIDANCE>`
+    prompt += `\nWhen selecting chart types based on column roles:`
+    prompt += `\n- METRIC columns: suitable for Y-axis values, use aggregations (sum, avg, count, min, max)`
+    prompt += `\n- DIMENSION columns: suitable for X-axis categories, grouping, filtering, legend/color`
+    prompt += `\n- TIMESTAMP columns: suitable for time-series line/area charts, date range filters`
+    prompt += `\n- IDENTIFIER columns: DO NOT aggregate these, only use for lookups and detail tables`
+    prompt += `\n</ROLE_BASED_GUIDANCE>`
+
+    // Add semantic type formatting hints
+    prompt += `\n\n<SEMANTIC_TYPE_HINTS>`
+    prompt += `\nWhen semantic type is known, consider these formatting and visualization hints:`
+    prompt += `\n- currency: Format with $ and commas, use in financial charts (bar, line for trends, scorecards for totals)`
+    prompt += `\n- percentage: Format with %, values typically 0-100 or 0-1, great for gauges and comparison charts`
+    prompt += `\n- count: Integer values, use bar charts for comparisons, scorecards for totals`
+    prompt += `\n- score: Typically bounded values (e.g., 1-10, 0-100), good for gauges and bullet charts`
+    prompt += `\n- email/url/phone: Don't use in visualizations, only include in data tables for reference`
+    prompt += `\n- category/status: Perfect for X-axis, grouping, pie charts, treemaps`
+    prompt += `\n</SEMANTIC_TYPE_HINTS>`
+
+    // Collect columns with descriptions for emphasis
+    const columnsWithDescriptions = correctedSchema.filter(col => col.description)
+    if (columnsWithDescriptions.length > 0) {
+      prompt += `\n\n<REQUIRED_DESCRIPTIONS>`
+      prompt += `\nIMPORTANT: The following columns have user-provided descriptions that MUST be used in chart titles:`
+      columnsWithDescriptions.forEach(col => {
+        prompt += `\n- ${col.name}: "${col.description}"`
+      })
+      prompt += `\n\nUse these exact descriptions when naming charts and generating insights.`
+      prompt += `\n</REQUIRED_DESCRIPTIONS>`
+    }
+
+    prompt += `\n\nIMPORTANT: Incorporate these user-provided corrections into:`
+    prompt += `\n1. Chart titles (use column descriptions when available)`
+    prompt += `\n2. Chart type selection (respect column roles for axis placement)`
+    prompt += `\n3. Aggregation selection (only aggregate METRIC columns, never IDENTIFIER columns)`
+    prompt += `\n4. Data formatting (apply semantic type formatting hints)`
     if (feedback) prompt += `\n\nAdditional User Feedback: ${feedback}`
     prompt += `\n</USER_CORRECTIONS>`
   }
@@ -1068,9 +1154,6 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
     // No need for manual rate limit checks here
 
     // Validate request body with Zod
-    console.log('[API-ANALYZE] ===== REQUEST RECEIVED =====')
-    console.log('[API-ANALYZE] Starting to parse and validate request body...')
-
     const validation = await validateRequest(request, analyzeRequestSchema)
     if (!validation.success) {
       logger.error('[API-ANALYZE] Validation failed:', { requestId })
@@ -1087,15 +1170,6 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
         { status: 413, headers: corsHeaders() }
       )
     }
-
-    console.log('[API-ANALYZE] Request parsed and validated successfully:', {
-      dataLength: data?.length,
-      columnCount: data?.[0] ? Object.keys(data[0]).length : 0,
-      hasSchema: !!schema,
-      hasCorrectedSchema: !!correctedSchema,
-      correctedSchemaLength: correctedSchema?.length,
-      feedback: feedback?.substring(0, 50)
-    })
 
     logger.info('[API-ANALYZE] Request validated successfully:', {
       dataLength: data?.length,
@@ -1952,14 +2026,19 @@ CRITICAL FIELD NAMES - use EXACTLY these names:
         totalRows: dataStructure.rowCount
       }
 
-      // Convert correctedSchema to scorer format
+      // Convert correctedSchema to scorer format (including role and semanticType for enhanced scoring)
       const scorerCorrectedColumns: ScorerCorrectedColumn[] | undefined = correctedSchema?.map(col => {
         const originalCol = dataStructure.columns.find((c: any) => c.name === col.name)
         return {
           name: col.name,
+          type: col.type, // Required field
+          userCorrected: col.userCorrected ?? true, // Required field, default true for corrections
+          description: col.description,
           originalType: originalCol?.type || 'string',
           correctedType: col.type,
-          confidence: 100
+          confidence: 100,
+          role: col.role, // Pass role for role-based scoring
+          semanticType: col.semanticType // Pass semantic type for scoring alignment
         }
       })
 

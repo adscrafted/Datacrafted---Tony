@@ -61,6 +61,9 @@ import {
 //   type DataRow
 // } from '@/lib/utils/data-validation'
 
+const isDev = process.env.NODE_ENV === 'development'
+const log = (...args: unknown[]) => { if (isDev) console.log(...args) }
+
 // Inline implementations
 type DataRow = Record<string, any>
 
@@ -194,7 +197,7 @@ const getHandler = withAuth(async (request, authUser, context) => {
     const version = parseInt(searchParams.get('version') || '0')
     const sampleOnly = searchParams.get('sampleOnly') === 'true'
 
-    console.log('[API PROJECT DATA] GET request:', {
+    log('[API PROJECT DATA] GET request:', {
       projectId,
       version,
       sampleOnly,
@@ -211,7 +214,7 @@ const getHandler = withAuth(async (request, authUser, context) => {
     })
 
     if (!dbUser) {
-      console.log('[API PROJECT DATA] User not found in database')
+      log('[API PROJECT DATA] User not found in database')
       return NextResponse.json(
         { error: 'User not found' },
         { status: 404 }
@@ -224,7 +227,7 @@ const getHandler = withAuth(async (request, authUser, context) => {
     })
 
     if (!project) {
-      console.log('[API PROJECT DATA] Project not found:', projectId)
+      log('[API PROJECT DATA] Project not found:', projectId)
       return NextResponse.json(
         { error: 'Project not found' },
         { status: 404 }
@@ -232,7 +235,7 @@ const getHandler = withAuth(async (request, authUser, context) => {
     }
 
     if (project.userId !== dbUser.id) {
-      console.log('[API PROJECT DATA] Authorization failed: User does not own project')
+      log('[API PROJECT DATA] Authorization failed: User does not own project')
       return NextResponse.json(
         { error: 'Forbidden: You do not have access to this project' },
         { status: 403 }
@@ -268,7 +271,7 @@ const getHandler = withAuth(async (request, authUser, context) => {
         })
 
     if (!projectData) {
-      console.log('[API PROJECT DATA] No data found for project')
+      log('[API PROJECT DATA] No data found for project')
       return NextResponse.json(
         { error: 'No data found for this project' },
         { status: 404 }
@@ -286,10 +289,10 @@ const getHandler = withAuth(async (request, authUser, context) => {
       // Return cached sample data
       data = JSON.parse(projectData.sampleData)
       isSample = true
-      console.log('[API PROJECT DATA] Returning sample data:', data.length, 'rows')
+      log('[API PROJECT DATA] Returning sample data:', data.length, 'rows')
     } else {
       // Decompress and return full data
-      console.log('[API PROJECT DATA] Decompressing full data...')
+      log('[API PROJECT DATA] Decompressing full data...')
       const decompressStartTime = Date.now()
 
       // Ensure compressedData is a Buffer (Prisma Bytes type may not always be Buffer)
@@ -301,7 +304,7 @@ const getHandler = withAuth(async (request, authUser, context) => {
       data = decompressed.data
 
       const decompressTime = Date.now() - decompressStartTime
-      console.log('[API PROJECT DATA] Decompressed in', decompressTime, 'ms')
+      log('[API PROJECT DATA] Decompressed in', decompressTime, 'ms')
     }
 
     const response: ProjectDataRetrievalResponse = {
@@ -328,7 +331,7 @@ const getHandler = withAuth(async (request, authUser, context) => {
     }
 
     const totalTime = Date.now() - startTime
-    console.log('[API PROJECT DATA] GET completed in', totalTime, 'ms')
+    log('[API PROJECT DATA] GET completed in', totalTime, 'ms')
 
     return NextResponse.json(response)
   } catch (error) {
@@ -356,7 +359,7 @@ const postHandler = withAuth(async (request, authUser, context) => {
   try {
     const { id: projectId } = await context!.params
 
-    console.log('[API PROJECT DATA] POST request:', {
+    log('[API PROJECT DATA] POST request:', {
       projectId,
       userId: authUser.uid
     })
@@ -376,7 +379,7 @@ const postHandler = withAuth(async (request, authUser, context) => {
     // Step 2: Validate file metadata for security
     // ========================================================================
 
-    console.log('[API PROJECT DATA] Validating file metadata...')
+    log('[API PROJECT DATA] Validating file metadata...')
 
     // Calculate actual data size
     const jsonSize = JSON.stringify(data).length
@@ -411,7 +414,7 @@ const postHandler = withAuth(async (request, authUser, context) => {
 
     // Use sanitized filename
     const sanitizedFileName = fileValidationResult.sanitizedName!
-    console.log('[API PROJECT DATA] File metadata validated:', {
+    log('[API PROJECT DATA] File metadata validated:', {
       originalFileName: metadata.fileName,
       sanitizedFileName,
       size: formatBytes(metadata.fileSize || jsonSize),
@@ -428,7 +431,7 @@ const postHandler = withAuth(async (request, authUser, context) => {
     })
 
     if (!dbUser) {
-      console.log('[API PROJECT DATA] User not found in database')
+      log('[API PROJECT DATA] User not found in database')
       return NextResponse.json(
         { error: 'User not found' },
         { status: 404 }
@@ -441,7 +444,7 @@ const postHandler = withAuth(async (request, authUser, context) => {
     })
 
     if (!project) {
-      console.log('[API PROJECT DATA] Project not found:', projectId)
+      log('[API PROJECT DATA] Project not found:', projectId)
       return NextResponse.json(
         { error: 'Project not found' },
         { status: 404 }
@@ -449,7 +452,7 @@ const postHandler = withAuth(async (request, authUser, context) => {
     }
 
     if (project.userId !== dbUser.id) {
-      console.log('[API PROJECT DATA] Authorization failed: User does not own project')
+      log('[API PROJECT DATA] Authorization failed: User does not own project')
       return NextResponse.json(
         { error: 'Forbidden: You do not have access to this project' },
         { status: 403 }
@@ -460,7 +463,7 @@ const postHandler = withAuth(async (request, authUser, context) => {
     // Step 4: Validate data
     // ========================================================================
 
-    console.log('[API PROJECT DATA] Validating data...')
+    log('[API PROJECT DATA] Validating data...')
     const validationResult = validateData(data, MAX_ROWS, MAX_COLUMNS)
 
     if (!validationResult.valid) {
@@ -494,7 +497,7 @@ const postHandler = withAuth(async (request, authUser, context) => {
       )
     }
 
-    console.log('[API PROJECT DATA] Validation passed:', {
+    log('[API PROJECT DATA] Validation passed:', {
       rows: metrics.totalRows,
       columns: metrics.totalColumns,
       qualityScore: metrics.quality ? metrics.quality.toFixed(1) : '1.0',
@@ -511,13 +514,13 @@ const postHandler = withAuth(async (request, authUser, context) => {
     // Step 4: Compress data
     // ========================================================================
 
-    console.log('[API PROJECT DATA] Compressing data...')
+    log('[API PROJECT DATA] Compressing data...')
     const compressionStartTime = Date.now()
 
     const compressed = await compressData(data, COMPRESSION_LEVEL)
 
     const compressionTime = Date.now() - compressionStartTime
-    console.log('[API PROJECT DATA] Compressed in', compressionTime, 'ms:', {
+    log('[API PROJECT DATA] Compressed in', compressionTime, 'ms:', {
       original: formatBytes(compressed.originalSize),
       compressed: formatBytes(compressed.compressedSize),
       ratio: `${compressed.compressionRatio.toFixed(2)}x`
@@ -558,7 +561,7 @@ const postHandler = withAuth(async (request, authUser, context) => {
     // Step 8: Save to database
     // ========================================================================
 
-    console.log('[API PROJECT DATA] Saving to database...')
+    log('[API PROJECT DATA] Saving to database...')
     const dbStartTime = Date.now()
 
     const projectDataRecord = await db.projectData.create({
@@ -595,7 +598,7 @@ const postHandler = withAuth(async (request, authUser, context) => {
     })
 
     const dbTime = Date.now() - dbStartTime
-    console.log('[API PROJECT DATA] Saved to database in', dbTime, 'ms')
+    log('[API PROJECT DATA] Saved to database in', dbTime, 'ms')
 
     // ========================================================================
     // Step 9: Update project timestamp
@@ -627,7 +630,7 @@ const postHandler = withAuth(async (request, authUser, context) => {
     }
 
     const totalTime = Date.now() - startTime
-    console.log('[API PROJECT DATA] POST completed in', totalTime, 'ms')
+    log('[API PROJECT DATA] POST completed in', totalTime, 'ms')
 
     return NextResponse.json(response, { status: 201 })
   } catch (error) {
@@ -668,7 +671,7 @@ const deleteHandler = withAuth(async (request, authUser, context) => {
       )
     }
 
-    console.log('[API PROJECT DATA] DELETE request:', {
+    log('[API PROJECT DATA] DELETE request:', {
       projectId,
       version,
       userId: authUser.uid
@@ -718,7 +721,7 @@ const deleteHandler = withAuth(async (request, authUser, context) => {
       )
     }
 
-    console.log('[API PROJECT DATA] Soft deleted version', version)
+    log('[API PROJECT DATA] Soft deleted version', version)
 
     return NextResponse.json({
       success: true,

@@ -9,6 +9,9 @@ import { getAdminAuth } from '@/lib/config/firebase-admin'
 import { stripe, isStripeConfigured } from '@/lib/config/stripe'
 import { db } from '@/lib/db'
 
+const isDev = process.env.NODE_ENV === 'development'
+const log = (...args: unknown[]) => { if (isDev) console.log(...args) }
+
 /**
  * GET /api/user
  * Get the authenticated user's profile from the database
@@ -27,16 +30,16 @@ import { db } from '@/lib/db'
  */
 const getHandler = withAuth(async (request: NextRequest, firebaseUser) => {
   try {
-    console.log('[API] Getting user profile:', firebaseUser.uid)
+    log('[API] Getting user profile:', firebaseUser.uid)
 
     const user = await getUserByFirebaseUid(firebaseUser.uid)
 
     if (!user) {
-      console.log('[API] User not found in database:', firebaseUser.uid)
+      log('[API] User not found in database:', firebaseUser.uid)
       return userNotFound()
     }
 
-    console.log('[API] User profile retrieved:', user.id)
+    log('[API] User profile retrieved:', user.id)
 
     return NextResponse.json({
       user: {
@@ -83,13 +86,13 @@ export const GET = withRateLimit(RATE_LIMITS.AUTH, getHandler)
  */
 const patchHandler = withAuth(async (request: NextRequest, firebaseUser) => {
   try {
-    console.log('[API] Updating user profile:', firebaseUser.uid)
+    log('[API] Updating user profile:', firebaseUser.uid)
 
     // Get user from database
     const existingUser = await getUserByFirebaseUid(firebaseUser.uid)
 
     if (!existingUser) {
-      console.log('[API] User not found in database:', firebaseUser.uid)
+      log('[API] User not found in database:', firebaseUser.uid)
       return userNotFound()
     }
 
@@ -108,7 +111,7 @@ const patchHandler = withAuth(async (request: NextRequest, firebaseUser) => {
       ...(photoURL !== undefined && { photoURL }),
     })
 
-    console.log('[API] User profile updated:', updatedUser.id)
+    log('[API] User profile updated:', updatedUser.id)
 
     return NextResponse.json({
       success: true,
@@ -153,7 +156,7 @@ export const PATCH = withRateLimit(RATE_LIMITS.AUTH, patchHandler)
  */
 const deleteHandler = withAuth(async (request: NextRequest, firebaseUser) => {
   try {
-    console.log('[API] Deleting user account:', firebaseUser.uid)
+    log('[API] Deleting user account:', firebaseUser.uid)
 
     // Get user from database with full data for cleanup
     const user = await db.user.findUnique({
@@ -175,7 +178,7 @@ const deleteHandler = withAuth(async (request: NextRequest, firebaseUser) => {
     })
 
     if (!user) {
-      console.log('[API] User not found in database:', firebaseUser.uid)
+      log('[API] User not found in database:', firebaseUser.uid)
       return userNotFound()
     }
 
@@ -185,7 +188,7 @@ const deleteHandler = withAuth(async (request: NextRequest, firebaseUser) => {
       if (user.subscriptionId) {
         try {
           await stripe.subscriptions.cancel(user.subscriptionId)
-          console.log('[API] Stripe subscription canceled:', user.subscriptionId)
+          log('[API] Stripe subscription canceled:', user.subscriptionId)
         } catch (stripeError: any) {
           // Log but don't fail - subscription may already be canceled
           console.error('[API] Warning: Failed to cancel Stripe subscription:', stripeError.message)
@@ -196,7 +199,7 @@ const deleteHandler = withAuth(async (request: NextRequest, firebaseUser) => {
       if (user.stripeCustomerId) {
         try {
           await stripe.customers.del(user.stripeCustomerId)
-          console.log('[API] Stripe customer deleted:', user.stripeCustomerId)
+          log('[API] Stripe customer deleted:', user.stripeCustomerId)
         } catch (stripeError: any) {
           // Log but don't fail - continue with deletion
           console.error('[API] Warning: Failed to delete Stripe customer:', stripeError.message)
@@ -219,7 +222,7 @@ const deleteHandler = withAuth(async (request: NextRequest, firebaseUser) => {
       }
     }
     if (filesDeleted > 0) {
-      console.log('[API] Physical files deleted:', filesDeleted)
+      log('[API] Physical files deleted:', filesDeleted)
     }
 
     // Step 3: Delete user from database (cascades to sessions, projects, etc.)
@@ -229,13 +232,13 @@ const deleteHandler = withAuth(async (request: NextRequest, firebaseUser) => {
       throw new Error('Failed to delete user from database')
     }
 
-    console.log('[API] User database record deleted:', user.id)
+    log('[API] User database record deleted:', user.id)
 
     // Step 4: Delete Firebase Auth account
     try {
       const adminAuth = getAdminAuth()
       await adminAuth.deleteUser(firebaseUser.uid)
-      console.log('[API] Firebase Auth account deleted:', firebaseUser.uid)
+      log('[API] Firebase Auth account deleted:', firebaseUser.uid)
     } catch (firebaseError: any) {
       // Log but don't fail - database deletion already succeeded
       // User can manually delete Firebase account or it will be orphaned
