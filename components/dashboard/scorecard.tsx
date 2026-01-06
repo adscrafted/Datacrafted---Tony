@@ -19,22 +19,23 @@ interface ScorecardProps {
 
 /**
  * Get semantic color based on scorecard title/metric name
+ * Uses contextual sub-categories for visual variety
  */
 function getSemanticBorderColor(title: string): string {
   const lowerTitle = title.toLowerCase()
 
   // Positive/Revenue metrics - Green
-  if (/revenue|income|profit|gain|growth|sales|earnings|return|roi|roas|retention|conversion|success|win/i.test(lowerTitle)) {
+  if (/revenue|income|profit|gain|growth|sales|earnings|return|roi|roas|retention|success|win/i.test(lowerTitle)) {
     return SEMANTIC_PALETTES.positive.primary
   }
 
   // Negative/Cost metrics - Red
-  if (/cost|expense|loss|spend|churn|decline|decrease|refund|discount|debt|liability|bounce|fail|error|cpc|cpa|cpm/i.test(lowerTitle)) {
+  if (/cost|expense|loss|spend|churn|decline|decrease|refund|discount|debt|liability|fail|error|cpc|cpa|cpm/i.test(lowerTitle)) {
     return SEMANTIC_PALETTES.negative.primary
   }
 
   // Monetary/Budget - Emerald
-  if (/price|amount|budget|fee|salary|money|dollar|euro|pound|value|payment|balance/i.test(lowerTitle)) {
+  if (/price|amount|budget|fee|salary|money|dollar|euro|pound|payment|balance/i.test(lowerTitle)) {
     return SEMANTIC_PALETTES.monetary.primary
   }
 
@@ -43,10 +44,41 @@ function getSemanticBorderColor(title: string): string {
     return SEMANTIC_PALETTES.temporal.primary
   }
 
-  // Counts/Quantities - Amber
-  if (/count|qty|quantity|num|number|units|orders|items|visits|clicks|views|sessions|users|impressions|total|sum/i.test(lowerTitle)) {
+  // ============================================================================
+  // CONTEXTUAL SUB-CATEGORIES for variety
+  // ============================================================================
+
+  // Traffic/Reach metrics - Cyan
+  if (/impression|reach|view|pageview|visit\b/i.test(lowerTitle)) {
+    return SEMANTIC_PALETTES.traffic.primary
+  }
+
+  // Engagement/Interaction metrics - Violet
+  if (/click|session|interaction|engagement|bounce/i.test(lowerTitle)) {
+    return SEMANTIC_PALETTES.engagement.primary
+  }
+
+  // Transaction/Order metrics - Amber
+  if (/order|purchase|transaction|conversion|checkout|cart/i.test(lowerTitle)) {
+    return SEMANTIC_PALETTES.transactions.primary
+  }
+
+  // User/People metrics - Teal
+  if (/user|customer|subscriber|member|visitor|audience|follower/i.test(lowerTitle)) {
+    return SEMANTIC_PALETTES.users.primary
+  }
+
+  // Campaign/Marketing metrics - Indigo
+  if (/campaign|ad\b|ads\b|adset|marketing|promo/i.test(lowerTitle)) {
+    return SEMANTIC_PALETTES.campaign.primary
+  }
+
+  // Generic quantity/count - Lime
+  if (/count|qty|quantity|num|number|units|items|total|sum/i.test(lowerTitle)) {
     return SEMANTIC_PALETTES.quantity.primary
   }
+
+  // ============================================================================
 
   // Percentages/Rates - Cyan
   if (/percent|pct|rate|ratio|share|portion|ctr|cvr/i.test(lowerTitle)) {
@@ -68,17 +100,17 @@ function getSemanticBorderColor(title: string): string {
     return SEMANTIC_PALETTES.score.primary
   }
 
-  // Distinct/Unique - Teal
+  // Distinct/Unique
   if (/distinct|unique|different/i.test(lowerTitle)) {
-    return SEMANTIC_PALETTES.percentage.primary
+    return SEMANTIC_PALETTES.users.primary
   }
 
-  // Campaigns/Categories - Purple
-  if (/campaign|category|type|status|region|country|city|segment|group/i.test(lowerTitle)) {
+  // Categories - Purple
+  if (/category|type|status|region|country|city|segment|group/i.test(lowerTitle)) {
     return SEMANTIC_PALETTES.categorical.primary
   }
 
-  // Default - use a nice neutral accent
+  // Default - use lime green
   return SEMANTIC_PALETTES.quantity.primary
 }
 

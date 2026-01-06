@@ -4,6 +4,7 @@
  * Provides intelligent color assignment based on column semantic types and roles.
  * Colors are designed to be:
  * - Semantically meaningful (green = positive, red = negative, etc.)
+ * - Context-aware (different metrics get different colors)
  * - Aesthetically harmonious
  * - Accessible (sufficient contrast)
  * - Consistent across the dashboard
@@ -55,13 +56,6 @@ export const SEMANTIC_PALETTES = {
     description: 'Category, type, status, region'
   },
 
-  // Quantity/Count - Ambers/Oranges
-  quantity: {
-    primary: '#f59e0b',
-    shades: ['#f59e0b', '#fbbf24', '#fcd34d', '#d97706', '#b45309'],
-    description: 'Count, quantity, units, orders'
-  },
-
   // Percentage/Rate - Cyans
   percentage: {
     primary: '#06b6d4',
@@ -88,6 +82,52 @@ export const SEMANTIC_PALETTES = {
     primary: '#10b981',
     shades: ['#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#ef4444'],
     description: 'Default for undetected types'
+  },
+
+  // ============================================================================
+  // CONTEXTUAL SUB-CATEGORIES (for variety within similar metric types)
+  // ============================================================================
+
+  // Traffic/Reach metrics - Cyan/Teal
+  traffic: {
+    primary: '#06b6d4',
+    shades: ['#06b6d4', '#22d3ee', '#67e8f9', '#0891b2', '#0e7490'],
+    description: 'Impressions, reach, views, visits'
+  },
+
+  // Engagement/Interaction metrics - Violet/Purple
+  engagement: {
+    primary: '#8b5cf6',
+    shades: ['#8b5cf6', '#a78bfa', '#c4b5fd', '#7c3aed', '#6d28d9'],
+    description: 'Clicks, sessions, interactions'
+  },
+
+  // Transaction/Order metrics - Amber/Orange
+  transactions: {
+    primary: '#f59e0b',
+    shades: ['#f59e0b', '#fbbf24', '#fcd34d', '#d97706', '#b45309'],
+    description: 'Orders, purchases, conversions'
+  },
+
+  // User/People metrics - Teal
+  users: {
+    primary: '#14b8a6',
+    shades: ['#14b8a6', '#2dd4bf', '#5eead4', '#0d9488', '#0f766e'],
+    description: 'Users, customers, subscribers'
+  },
+
+  // Campaign/Marketing - Indigo
+  campaign: {
+    primary: '#6366f1',
+    shades: ['#6366f1', '#818cf8', '#a5b4fc', '#4f46e5', '#4338ca'],
+    description: 'Campaigns, ads, marketing'
+  },
+
+  // Quantity/Generic count - Lime green
+  quantity: {
+    primary: '#84cc16',
+    shades: ['#84cc16', '#a3e635', '#bef264', '#65a30d', '#4d7c0f'],
+    description: 'Count, quantity, units, items'
   }
 } as const
 
@@ -225,7 +265,8 @@ const colorAssignmentCache = new Map<string, string>()
 
 /**
  * Get the color category for a column based on its metadata
- * Uses comprehensive name pattern matching as the primary method
+ * Uses comprehensive name pattern matching with contextual sub-categories
+ * for maximum visual variety while maintaining semantic meaning
  */
 export function getColorCategory(column: ColumnSchema): ColorCategory {
   const columnName = column.name.toLowerCase()
@@ -242,13 +283,47 @@ export function getColorCategory(column: ColumnSchema): ColorCategory {
   if (/date|time|month|year|day|week|quarter|period/i.test(columnName)) {
     return 'temporal'
   }
-  if (/price|cost|amount|revenue|fee|salary|budget|money|dollar|euro|pound/i.test(columnName)) {
+  if (/price|amount|fee|salary|budget|money|dollar|euro|pound/i.test(columnName)) {
     return 'monetary'
   }
-  if (/count|qty|quantity|num|number|units|orders|items|visits|clicks|views|sessions|users|impressions/i.test(columnName)) {
+
+  // ============================================================================
+  // CONTEXTUAL SUB-CATEGORIES for quantity/count metrics (provides variety)
+  // ============================================================================
+
+  // Traffic/Reach metrics - Cyan
+  if (/impression|reach|view|pageview|visit\b/i.test(columnName)) {
+    return 'traffic'
+  }
+
+  // Engagement/Interaction metrics - Violet
+  if (/click|session|interaction|engagement|bounce/i.test(columnName)) {
+    return 'engagement'
+  }
+
+  // Transaction/Order metrics - Amber
+  if (/order|purchase|transaction|conversion|checkout|cart/i.test(columnName)) {
+    return 'transactions'
+  }
+
+  // User/People metrics - Teal
+  if (/user|customer|subscriber|member|visitor|audience|follower/i.test(columnName)) {
+    return 'users'
+  }
+
+  // Campaign/Marketing metrics - Indigo
+  if (/campaign|ad\b|ads\b|adset|marketing|promo/i.test(columnName)) {
+    return 'campaign'
+  }
+
+  // Generic quantity/count - Lime
+  if (/count|qty|quantity|num|number|units|items|total|sum/i.test(columnName)) {
     return 'quantity'
   }
-  if (/percent|pct|rate|ratio|share|portion/i.test(columnName)) {
+
+  // ============================================================================
+
+  if (/percent|pct|rate|ratio|share|portion|ctr|cvr/i.test(columnName)) {
     return 'percentage'
   }
   if (/score|rating|rank|grade|level|points/i.test(columnName)) {
@@ -260,7 +335,7 @@ export function getColorCategory(column: ColumnSchema): ColorCategory {
   if (/category|type|status|region|country|city|state|name|label|group|segment/i.test(columnName)) {
     return 'categorical'
   }
-  if (/total|sum|avg|average|mean|median|max|min|value/i.test(columnName)) {
+  if (/avg|average|mean|median|max|min|value/i.test(columnName)) {
     return 'quantity'
   }
 
@@ -385,11 +460,33 @@ export function getColorsForColumnNames(
       color = SEMANTIC_PALETTES.negative.primary
     } else if (/date|time|month|year|day|week|quarter|period/i.test(name)) {
       color = SEMANTIC_PALETTES.temporal.primary
-    } else if (/price|cost|amount|revenue|fee|salary|budget|money|dollar|euro|pound|value/i.test(name)) {
+    } else if (/price|amount|fee|salary|budget|money|dollar|euro|pound/i.test(name)) {
       color = SEMANTIC_PALETTES.monetary.primary
-    } else if (/count|qty|quantity|num|number|units|orders|items|visits|clicks|views|sessions|users|impressions/i.test(name)) {
+    }
+    // ============================================================================
+    // CONTEXTUAL SUB-CATEGORIES for variety
+    // ============================================================================
+    else if (/impression|reach|view|pageview|visit\b/i.test(name)) {
+      // Traffic/Reach metrics - Cyan
+      color = SEMANTIC_PALETTES.traffic.primary
+    } else if (/click|session|interaction|engagement|bounce/i.test(name)) {
+      // Engagement metrics - Violet
+      color = SEMANTIC_PALETTES.engagement.primary
+    } else if (/order|purchase|transaction|conversion|checkout|cart/i.test(name)) {
+      // Transaction metrics - Amber
+      color = SEMANTIC_PALETTES.transactions.primary
+    } else if (/user|customer|subscriber|member|visitor|audience|follower/i.test(name)) {
+      // User/People metrics - Teal
+      color = SEMANTIC_PALETTES.users.primary
+    } else if (/campaign|ad\b|ads\b|adset|marketing|promo/i.test(name)) {
+      // Campaign metrics - Indigo
+      color = SEMANTIC_PALETTES.campaign.primary
+    } else if (/count|qty|quantity|num|number|units|items|total|sum/i.test(name)) {
+      // Generic quantity - Lime
       color = SEMANTIC_PALETTES.quantity.primary
-    } else if (/percent|pct|rate|ratio|share|portion/i.test(name)) {
+    }
+    // ============================================================================
+    else if (/percent|pct|rate|ratio|share|portion|ctr|cvr/i.test(name)) {
       color = SEMANTIC_PALETTES.percentage.primary
     } else if (/score|rating|rank|grade|level|points/i.test(name)) {
       color = SEMANTIC_PALETTES.score.primary
@@ -397,8 +494,7 @@ export function getColorsForColumnNames(
       color = SEMANTIC_PALETTES.identifier.primary
     } else if (/category|type|status|region|country|city|state|name|label|group|segment/i.test(name)) {
       color = SEMANTIC_PALETTES.categorical.primary
-    } else if (/total|sum|avg|average|mean|median|max|min/i.test(name)) {
-      // Aggregated metrics - use quantity colors
+    } else if (/avg|average|mean|median|max|min|value/i.test(name)) {
       color = SEMANTIC_PALETTES.quantity.primary
     } else {
       // Use default palette for unknowns, cycling through varied colors
