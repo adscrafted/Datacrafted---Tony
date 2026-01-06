@@ -6,7 +6,7 @@ import React, { useEffect, useState, Suspense } from 'react'
 // Note: Metadata export only works in Server Components
 // For this Client Component, metadata should be set via layout or page wrapper
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Clock, ChevronRight, Plus, FileText, Trash2 } from 'lucide-react'
+import { Clock, ChevronRight, Plus, FileText, Trash2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/lib/contexts/auth-context'
 import { AuthGateModal } from '@/components/auth/auth-gate-modal'
@@ -42,6 +42,7 @@ function ProjectsContent() {
   const [showUpload, setShowUpload] = useState(false)
   const [hoveredProject, setHoveredProject] = useState<string | null>(null)
   const [highlightedProject, setHighlightedProject] = useState<string | null>(newProjectId)
+  const [openingProjectId, setOpeningProjectId] = useState<string | null>(null)
 
   useEffect(() => {
     loadProjects(user?.uid || 'anonymous')
@@ -116,29 +117,38 @@ function ProjectsContent() {
   }
 
   const handleOpenProject = async (projectId: string) => {
+    // Prevent multiple clicks
+    if (openingProjectId) return
+
+    setOpeningProjectId(projectId)
     setCurrentProject(projectId)
 
-    // Try to load project data (sync first, then async)
-    let projectData = useProjectStore.getState().getProjectData(projectId)
+    try {
+      // Try to load project data (sync first, then async)
+      let projectData = useProjectStore.getState().getProjectData(projectId)
 
-    // If not found in memory, try loading from IndexedDB
-    if (!projectData || !projectData.rawData) {
-      projectData = await useProjectStore.getState().loadProjectDataAsync(projectId)
-    }
-
-    if (projectData && projectData.rawData) {
-      setRawData(projectData.rawData)
-      if (projectData.analysis) {
-        setAnalysis(projectData.analysis)
+      // If not found in memory, try loading from IndexedDB
+      if (!projectData || !projectData.rawData) {
+        projectData = await useProjectStore.getState().loadProjectDataAsync(projectId)
       }
-      if (projectData.dataSchema) {
-        setDataSchema(projectData.dataSchema)
-      }
-      setFileName(projectData.dataSchema?.fileName || 'Project Data')
-    }
 
-    // Navigate to simple dashboard
-    router.push(`/dashboard?id=${projectId}`)
+      if (projectData && projectData.rawData) {
+        setRawData(projectData.rawData)
+        if (projectData.analysis) {
+          setAnalysis(projectData.analysis)
+        }
+        if (projectData.dataSchema) {
+          setDataSchema(projectData.dataSchema)
+        }
+        setFileName(projectData.dataSchema?.fileName || 'Project Data')
+      }
+
+      // Navigate to simple dashboard
+      router.push(`/dashboard?id=${projectId}`)
+    } catch (error) {
+      console.error('Error opening project:', error)
+      setOpeningProjectId(null)
+    }
   }
 
   const activeProjects = projects.filter(p =>
@@ -199,46 +209,65 @@ function ProjectsContent() {
             </div>
 
             {/* Project List Items */}
-            {activeProjects.map((project) => (
-              <div
-                key={project.id}
-                className={`group flex items-center justify-between px-4 py-3 hover:bg-gray-50 cursor-pointer rounded-lg transition-all duration-300 ${
-                  highlightedProject === project.id ? 'bg-blue-50 border-2 border-blue-400 shadow-md' : ''
-                }`}
-                onClick={() => handleOpenProject(project.id)}
-                onMouseEnter={() => setHoveredProject(project.id)}
-                onMouseLeave={() => setHoveredProject(null)}
-              >
-                <div className="flex items-center space-x-3 flex-1 min-w-0">
-                  <FileText className="w-5 h-5 text-blue-500 flex-shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {project.name}
-                    </p>
-                    <p className="text-xs text-gray-500 flex items-center mt-0.5">
-                      <Clock className="w-3 h-3 mr-1" />
-                      {formatDistanceToNow(new Date(project.lastAccessedAt), { addSuffix: true })}
-                    </p>
+            {activeProjects.map((project) => {
+              const isOpening = openingProjectId === project.id
+              const isDisabled = openingProjectId !== null && openingProjectId !== project.id
+
+              return (
+                <div
+                  key={project.id}
+                  className={`group flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-300 ${
+                    isOpening
+                      ? 'bg-blue-50 border border-blue-200'
+                      : highlightedProject === project.id
+                      ? 'bg-blue-50 border-2 border-blue-400 shadow-md'
+                      : isDisabled
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'hover:bg-gray-50 cursor-pointer'
+                  }`}
+                  onClick={() => !isDisabled && handleOpenProject(project.id)}
+                  onMouseEnter={() => !isDisabled && setHoveredProject(project.id)}
+                  onMouseLeave={() => setHoveredProject(null)}
+                >
+                  <div className="flex items-center space-x-3 flex-1 min-w-0">
+                    {isOpening ? (
+                      <Loader2 className="w-5 h-5 text-blue-500 flex-shrink-0 animate-spin" />
+                    ) : (
+                      <FileText className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {isOpening ? `Opening ${project.name}...` : project.name}
+                      </p>
+                      <p className="text-xs text-gray-500 flex items-center mt-0.5">
+                        <Clock className="w-3 h-3 mr-1" />
+                        {formatDistanceToNow(new Date(project.lastAccessedAt), { addSuffix: true })}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    {/* Delete Button - Only visible on hover, hidden when opening */}
+                    {hoveredProject === project.id && !isOpening && !isDisabled && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => handleDeleteProject(project.id, e)}
+                        className="h-8 w-8 p-0 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
+
+                    {isOpening ? (
+                      <span className="text-xs text-blue-600 font-medium">Loading...</span>
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                    )}
                   </div>
                 </div>
-
-                <div className="flex items-center space-x-2">
-                  {/* Delete Button - Only visible on hover */}
-                  {hoveredProject === project.id && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => handleDeleteProject(project.id, e)}
-                      className="h-8 w-8 p-0 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  )}
-
-                  <ChevronRight className="w-4 h-4 text-gray-400" />
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </main>
