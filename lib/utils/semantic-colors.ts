@@ -225,6 +225,7 @@ const colorAssignmentCache = new Map<string, string>()
 
 /**
  * Get the color category for a column based on its metadata
+ * Uses comprehensive name pattern matching as the primary method
  */
 export function getColorCategory(column: ColumnSchema): ColorCategory {
   const columnName = column.name.toLowerCase()
@@ -237,7 +238,33 @@ export function getColorCategory(column: ColumnSchema): ColorCategory {
     return 'negative'
   }
 
-  // Then check semantic type
+  // Check name patterns for all categories (most reliable)
+  if (/date|time|month|year|day|week|quarter|period/i.test(columnName)) {
+    return 'temporal'
+  }
+  if (/price|cost|amount|revenue|fee|salary|budget|money|dollar|euro|pound/i.test(columnName)) {
+    return 'monetary'
+  }
+  if (/count|qty|quantity|num|number|units|orders|items|visits|clicks|views|sessions|users|impressions/i.test(columnName)) {
+    return 'quantity'
+  }
+  if (/percent|pct|rate|ratio|share|portion/i.test(columnName)) {
+    return 'percentage'
+  }
+  if (/score|rating|rank|grade|level|points/i.test(columnName)) {
+    return 'score'
+  }
+  if (/id$|_id|key|code|sku|uuid|ref/i.test(columnName)) {
+    return 'identifier'
+  }
+  if (/category|type|status|region|country|city|state|name|label|group|segment/i.test(columnName)) {
+    return 'categorical'
+  }
+  if (/total|sum|avg|average|mean|median|max|min|value/i.test(columnName)) {
+    return 'quantity'
+  }
+
+  // Then check semantic type from schema
   if (column.semanticType && column.semanticType !== 'generic') {
     return SEMANTIC_TYPE_TO_CATEGORY[column.semanticType]
   }
