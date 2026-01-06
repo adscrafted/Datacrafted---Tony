@@ -4,6 +4,20 @@ import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 import { db } from '@/lib/db'
 
 /**
+ * Safe JSON parse with fallback
+ * Prevents crashes on malformed JSON data
+ */
+function safeJsonParse<T>(value: string | null | undefined, fallback: T): T {
+  if (!value) return fallback
+  try {
+    return JSON.parse(value) as T
+  } catch (error) {
+    console.warn('[API] Failed to parse JSON:', error)
+    return fallback
+  }
+}
+
+/**
  * GET /api/user/export
  * Export all user data for GDPR compliance
  *
@@ -39,8 +53,12 @@ const getHandler = withAuth(async (request: NextRequest, firebaseUser) => {
                 rowCount: true,
                 columnCount: true,
                 columnNames: true,
+                columnTypes: true,
                 hasAnalysis: true,
+                analysisData: true,
+                chartCustomizations: true,
                 status: true,
+                dataQualityScore: true,
               },
             },
             chatConversations: {
@@ -51,20 +69,95 @@ const getHandler = withAuth(async (request: NextRequest, firebaseUser) => {
                     createdAt: true,
                     role: true,
                     content: true,
+                    metadata: true,
                   },
                   orderBy: { createdAt: 'asc' },
                 },
               },
             },
+            dashboard_configs: {
+              select: {
+                id: true,
+                createdAt: true,
+                chartCustomizations: true,
+                currentTheme: true,
+                currentLayout: true,
+                dashboardFilters: true,
+                dateRange: true,
+                granularity: true,
+              },
+            },
           },
         },
+        // Include sessions with all nested data (UploadedFiles, Analyses, Charts, ChatMessages)
         sessions: {
+          include: {
+            uploadedFiles: {
+              select: {
+                id: true,
+                createdAt: true,
+                fileName: true,
+                originalName: true,
+                fileSize: true,
+                mimeType: true,
+                fileHash: true,
+                filePath: true,
+                parsedData: true,
+                dataSchema: true,
+              },
+            },
+            analyses: {
+              include: {
+                charts: {
+                  select: {
+                    id: true,
+                    createdAt: true,
+                    type: true,
+                    title: true,
+                    description: true,
+                    dataKeys: true,
+                    config: true,
+                    position: true,
+                    isVisible: true,
+                  },
+                },
+              },
+            },
+            chatMessages: {
+              select: {
+                id: true,
+                createdAt: true,
+                role: true,
+                content: true,
+                metadata: true,
+              },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+        },
+        dashboard_configs: {
           select: {
             id: true,
             createdAt: true,
-            name: true,
-            description: true,
-            isActive: true,
+            chartCustomizations: true,
+            currentTheme: true,
+            currentLayout: true,
+            dashboardFilters: true,
+          },
+        },
+        // Include user's direct chat conversations (via userId field)
+        chatConversations: {
+          include: {
+            messages: {
+              select: {
+                id: true,
+                createdAt: true,
+                role: true,
+                content: true,
+                metadata: true,
+              },
+              orderBy: { createdAt: 'asc' },
+            },
           },
         },
       },
@@ -80,7 +173,7 @@ const getHandler = withAuth(async (request: NextRequest, firebaseUser) => {
     // Format the export data
     const exportData = {
       exportedAt: new Date().toISOString(),
-      exportVersion: '1.0',
+      exportVersion: '2.0',
       account: {
         id: user.id,
         email: user.email,
@@ -89,6 +182,7 @@ const getHandler = withAuth(async (request: NextRequest, firebaseUser) => {
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
       },
+      preferences: safeJsonParse(user.preferences, null),
       subscription: {
         tier: user.subscriptionTier,
         status: user.subscriptionStatus,
@@ -114,8 +208,12 @@ const getHandler = withAuth(async (request: NextRequest, firebaseUser) => {
           mimeType: data.mimeType,
           rowCount: data.rowCount,
           columnCount: data.columnCount,
-          columns: JSON.parse(data.columnNames || '[]'),
+          columns: safeJsonParse(data.columnNames, []),
+          columnTypes: safeJsonParse(data.columnTypes, null),
           hasAnalysis: data.hasAnalysis,
+          analysisData: safeJsonParse(data.analysisData, null),
+          chartCustomizations: safeJsonParse(data.chartCustomizations, null),
+          dataQualityScore: data.dataQualityScore,
           status: data.status,
           createdAt: data.createdAt,
         })),
@@ -125,18 +223,104 @@ const getHandler = withAuth(async (request: NextRequest, firebaseUser) => {
           messageCount: conv.messageCount,
           createdAt: conv.createdAt,
           messages: conv.messages.map((msg) => ({
+            id: msg.id,
             role: msg.role,
             content: msg.content,
+            metadata: safeJsonParse(msg.metadata, null),
             createdAt: msg.createdAt,
           })),
         })),
+        dashboardConfigs: project.dashboard_configs.map((config) => ({
+          id: config.id,
+          theme: config.currentTheme,
+          layout: config.currentLayout,
+          filters: safeJsonParse(config.dashboardFilters, null),
+          dateRange: config.dateRange,
+          granularity: config.granularity,
+          createdAt: config.createdAt,
+        })),
       })),
+      // Sessions with full nested data (UploadedFiles, Analyses, Charts, ChatMessages)
       sessions: user.sessions.map((session) => ({
         id: session.id,
         name: session.name,
         description: session.description,
         isActive: session.isActive,
         createdAt: session.createdAt,
+        // UploadedFile records with parsedData and dataSchema
+        uploadedFiles: session.uploadedFiles.map((file) => ({
+          id: file.id,
+          fileName: file.fileName,
+          originalName: file.originalName,
+          fileSize: file.fileSize,
+          mimeType: file.mimeType,
+          fileHash: file.fileHash,
+          filePath: file.filePath,
+          parsedData: safeJsonParse(file.parsedData, null),
+          dataSchema: safeJsonParse(file.dataSchema, null),
+          createdAt: file.createdAt,
+        })),
+        // Analysis records with insights, summary, keyFindings, recommendations
+        analyses: session.analyses.map((analysis) => ({
+          id: analysis.id,
+          name: analysis.name,
+          description: analysis.description,
+          insights: safeJsonParse(analysis.insights, null),
+          summary: analysis.summary,
+          keyFindings: safeJsonParse(analysis.keyFindings, null),
+          recommendations: safeJsonParse(analysis.recommendations, null),
+          businessContext: analysis.businessContext,
+          fileId: analysis.fileId,
+          createdAt: analysis.createdAt,
+          // Chart records with configurations
+          charts: analysis.charts.map((chart) => ({
+            id: chart.id,
+            type: chart.type,
+            title: chart.title,
+            description: chart.description,
+            dataKeys: safeJsonParse(chart.dataKeys, null),
+            config: safeJsonParse(chart.config, null),
+            position: chart.position,
+            isVisible: chart.isVisible,
+            createdAt: chart.createdAt,
+          })),
+        })),
+        // Session-based ChatMessage records
+        chatMessages: session.chatMessages.map((msg) => ({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+          metadata: safeJsonParse(msg.metadata, null),
+          createdAt: msg.createdAt,
+        })),
+      })),
+      // User-level dashboard configs
+      dashboardConfigs: user.dashboard_configs.map((config) => ({
+        id: config.id,
+        theme: config.currentTheme,
+        layout: config.currentLayout,
+        filters: safeJsonParse(config.dashboardFilters, null),
+        createdAt: config.createdAt,
+      })),
+      // User's direct ChatConversations (via userId field)
+      chatConversations: user.chatConversations.map((conv) => ({
+        id: conv.id,
+        name: conv.name,
+        projectId: conv.projectId,
+        messageCount: conv.messageCount,
+        isPinned: conv.isPinned,
+        isActive: conv.isActive,
+        lastMessageAt: conv.lastMessageAt,
+        lastMessagePreview: conv.lastMessagePreview,
+        createdAt: conv.createdAt,
+        updatedAt: conv.updatedAt,
+        messages: conv.messages.map((msg) => ({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+          metadata: safeJsonParse(msg.metadata, null),
+          createdAt: msg.createdAt,
+        })),
       })),
     }
 

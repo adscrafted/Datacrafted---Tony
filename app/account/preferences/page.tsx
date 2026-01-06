@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
-import { Loader2, Check, Sun, Moon } from 'lucide-react'
+import { Loader2, Check, Sun, Moon, Clock } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import {
   Select,
   SelectContent,
@@ -33,20 +34,12 @@ const timezones = [
   { value: 'UTC', label: 'UTC' },
 ]
 
-type ThemeMode = 'light' | 'dark'
-
 interface Preferences {
-  theme: ThemeMode
   timezone: string
-  emailNotifications: boolean
-  weeklyDigest: boolean
 }
 
 const defaultPreferences: Preferences = {
-  theme: 'light',
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York',
-  emailNotifications: true,
-  weeklyDigest: false,
 }
 
 export default function PreferencesPage() {
@@ -69,9 +62,6 @@ export default function PreferencesPage() {
     }
     setIsLoaded(true)
   }, [])
-
-  // Note: Theme is applied only in dashboard context via ThemeProvider
-  // This preference is saved and used when viewing charts/dashboards
 
   const handleSavePreferences = async () => {
     setIsSaving(true)
@@ -127,42 +117,40 @@ export default function PreferencesPage() {
         )}
 
         {/* Appearance */}
-        <Card>
+        <Card className="relative">
           <CardHeader>
-            <CardTitle className="text-lg">Appearance</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-lg">Appearance</CardTitle>
+              <Badge variant="secondary" className="text-xs font-normal">
+                <Clock className="h-3 w-3 mr-1" />
+                Coming Soon
+              </Badge>
+            </div>
             <CardDescription>
               Choose how DataCrafted looks to you
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-3">
-              <Label>Theme</Label>
+              <Label className="text-muted-foreground">Theme</Label>
               <div className="grid grid-cols-2 gap-3">
                 <button
-                  onClick={() => updatePreference('theme', 'light')}
-                  className={`flex flex-col items-center p-4 rounded-lg border-2 transition-all ${
-                    preferences.theme === 'light'
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
+                  disabled
+                  className="flex flex-col items-center p-4 rounded-lg border-2 border-gray-200 opacity-60 cursor-not-allowed"
                 >
-                  <Sun className="h-6 w-6 mb-2 text-yellow-500" />
-                  <span className="text-sm font-medium">Light</span>
+                  <Sun className="h-6 w-6 mb-2 text-gray-400" />
+                  <span className="text-sm font-medium text-gray-400">Light</span>
                 </button>
                 <button
-                  onClick={() => updatePreference('theme', 'dark')}
-                  className={`flex flex-col items-center p-4 rounded-lg border-2 transition-all ${
-                    preferences.theme === 'dark'
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
+                  disabled
+                  className="flex flex-col items-center p-4 rounded-lg border-2 border-gray-200 opacity-60 cursor-not-allowed"
                 >
-                  <Moon className="h-6 w-6 mb-2 text-indigo-500" />
-                  <span className="text-sm font-medium">Dark</span>
+                  <Moon className="h-6 w-6 mb-2 text-gray-400" />
+                  <span className="text-sm font-medium text-gray-400">Dark</span>
                 </button>
               </div>
-              <p className="text-xs text-gray-500">
-                Theme applies to your dashboard and charts
+              <p className="text-xs text-amber-600">
+                Theme preference will be applied in a future update
               </p>
             </div>
           </CardContent>
@@ -202,40 +190,49 @@ export default function PreferencesPage() {
         </Card>
 
         {/* Notifications */}
-        <Card>
+        <Card className="relative overflow-hidden">
           <CardHeader>
-            <CardTitle className="text-lg">Notifications</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-lg">Notifications</CardTitle>
+              <Badge variant="secondary" className="text-xs font-normal">
+                <Clock className="h-3 w-3 mr-1" />
+                Coming Soon
+              </Badge>
+            </div>
             <CardDescription>
               Manage how you receive updates
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between opacity-50">
               <div className="space-y-0.5">
-                <Label htmlFor="email-notifications">Email notifications</Label>
+                <Label htmlFor="email-notifications" className="text-muted-foreground">Email notifications</Label>
                 <p className="text-xs text-gray-500">
                   Receive important updates about your account
                 </p>
               </div>
               <Switch
                 id="email-notifications"
-                checked={preferences.emailNotifications}
-                onCheckedChange={(checked) => updatePreference('emailNotifications', checked)}
+                checked={false}
+                disabled
               />
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between opacity-50">
               <div className="space-y-0.5">
-                <Label htmlFor="weekly-digest">Weekly digest</Label>
+                <Label htmlFor="weekly-digest" className="text-muted-foreground">Weekly digest</Label>
                 <p className="text-xs text-gray-500">
                   Get a summary of your data insights every week
                 </p>
               </div>
               <Switch
                 id="weekly-digest"
-                checked={preferences.weeklyDigest}
-                onCheckedChange={(checked) => updatePreference('weeklyDigest', checked)}
+                checked={false}
+                disabled
               />
             </div>
+            <p className="text-xs text-amber-600">
+              Notification preferences will be available in a future update
+            </p>
           </CardContent>
         </Card>
 

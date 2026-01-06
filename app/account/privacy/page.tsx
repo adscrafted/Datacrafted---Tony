@@ -23,6 +23,7 @@ export default function PrivacyPage() {
   const router = useRouter()
   const [isExporting, setIsExporting] = useState(false)
   const [exportSuccess, setExportSuccess] = useState(false)
+  const [exportError, setExportError] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [deleteError, setDeleteError] = useState('')
@@ -31,6 +32,7 @@ export default function PrivacyPage() {
   const handleExportData = async () => {
     setIsExporting(true)
     setExportSuccess(false)
+    setExportError('')
 
     try {
       if (isDebugMode) {
@@ -87,6 +89,8 @@ export default function PrivacyPage() {
       }
     } catch (error) {
       console.error('Failed to export data:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to export data'
+      setExportError(errorMessage)
     } finally {
       setIsExporting(false)
     }
@@ -126,9 +130,10 @@ export default function PrivacyPage() {
         await logout()
         router.push('/')
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to delete account:', error)
-      setDeleteError(error.message || 'Failed to delete account')
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete account'
+      setDeleteError(errorMessage)
     } finally {
       setIsDeleting(false)
     }
@@ -228,6 +233,11 @@ export default function PrivacyPage() {
                 </>
               )}
             </Button>
+            {exportError && (
+              <div className="mt-4 bg-red-50 border border-red-200 rounded-md p-3">
+                <p className="text-sm text-red-600">{exportError}</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 

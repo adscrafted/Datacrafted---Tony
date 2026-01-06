@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { promises as fs } from 'fs'
 import { withAuth } from '@/lib/middleware/auth'
 import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 import { getUserByFirebaseUid, updateUser, deleteUser } from '@/lib/api/user-service'
 import { validateRequest, updateUserSchema } from '@/lib/utils/api-validation'
 import { userNotFound, databaseError } from '@/lib/utils/api-errors'
 import { getAdminAuth } from '@/lib/config/firebase-admin'
+import { stripe, isStripeConfigured } from '@/lib/config/stripe'
+import { db } from '@/lib/db'
 
 /**
  * GET /api/user
@@ -152,15 +155,74 @@ const deleteHandler = withAuth(async (request: NextRequest, firebaseUser) => {
   try {
     console.log('[API] Deleting user account:', firebaseUser.uid)
 
-    // Get user from database
-    const user = await getUserByFirebaseUid(firebaseUser.uid)
+    // Get user from database with full data for cleanup
+    const user = await db.user.findUnique({
+      where: { firebaseUid: firebaseUser.uid },
+      select: {
+        id: true,
+        stripeCustomerId: true,
+        subscriptionId: true,
+        sessions: {
+          select: {
+            uploadedFiles: {
+              select: {
+                filePath: true,
+              },
+            },
+          },
+        },
+      },
+    })
 
     if (!user) {
       console.log('[API] User not found in database:', firebaseUser.uid)
       return userNotFound()
     }
 
-    // Step 1: Delete user from database (cascades to sessions, projects, etc.)
+    // Step 1: Cancel Stripe subscription and delete customer if exists
+    if (isStripeConfigured() && stripe) {
+      // Cancel subscription first (before deleting customer)
+      if (user.subscriptionId) {
+        try {
+          await stripe.subscriptions.cancel(user.subscriptionId)
+          console.log('[API] Stripe subscription canceled:', user.subscriptionId)
+        } catch (stripeError: any) {
+          // Log but don't fail - subscription may already be canceled
+          console.error('[API] Warning: Failed to cancel Stripe subscription:', stripeError.message)
+        }
+      }
+
+      // Then delete the customer
+      if (user.stripeCustomerId) {
+        try {
+          await stripe.customers.del(user.stripeCustomerId)
+          console.log('[API] Stripe customer deleted:', user.stripeCustomerId)
+        } catch (stripeError: any) {
+          // Log but don't fail - continue with deletion
+          console.error('[API] Warning: Failed to delete Stripe customer:', stripeError.message)
+        }
+      }
+    }
+
+    // Step 2: Delete physical files from disk (before database cascade)
+    const filePaths = user.sessions.flatMap(s => s.uploadedFiles.map(f => f.filePath))
+    let filesDeleted = 0
+    for (const filePath of filePaths) {
+      try {
+        await fs.unlink(filePath)
+        filesDeleted++
+      } catch (err: any) {
+        // File might not exist or already deleted, continue
+        if (err.code !== 'ENOENT') {
+          console.error('[API] Warning: Failed to delete file:', filePath, err.message)
+        }
+      }
+    }
+    if (filesDeleted > 0) {
+      console.log('[API] Physical files deleted:', filesDeleted)
+    }
+
+    // Step 3: Delete user from database (cascades to sessions, projects, etc.)
     const success = await deleteUser(user.id)
 
     if (!success) {
@@ -169,7 +231,7 @@ const deleteHandler = withAuth(async (request: NextRequest, firebaseUser) => {
 
     console.log('[API] User database record deleted:', user.id)
 
-    // Step 2: Delete Firebase Auth account
+    // Step 4: Delete Firebase Auth account
     try {
       const adminAuth = getAdminAuth()
       await adminAuth.deleteUser(firebaseUser.uid)

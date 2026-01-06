@@ -1,17 +1,24 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/lib/contexts/auth-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Loader2, Check } from 'lucide-react'
-import { useRouter } from 'next/navigation'
 
 export default function ProfilePage() {
-  const { user, updateUserProfile, changePassword, isDebugMode } = useAuth()
-  const [displayName, setDisplayName] = useState(user?.displayName || '')
+  const { user, updateUserProfile, changePassword, isDebugMode, loading } = useAuth()
+  const [displayName, setDisplayName] = useState('')
+  const [profileError, setProfileError] = useState('')
+
+  // Sync displayName with user data when it loads
+  useEffect(() => {
+    if (user?.displayName) {
+      setDisplayName(user.displayName)
+    }
+  }, [user?.displayName])
 
   // Check if user signed in with email/password (not Google/OAuth)
   const hasPasswordProvider = user?.providerData?.some(
@@ -30,13 +37,15 @@ export default function ProfilePage() {
     e.preventDefault()
     setIsUpdating(true)
     setUpdateSuccess(false)
-    
+    setProfileError('')
+
     try {
       await updateUserProfile(displayName)
       setUpdateSuccess(true)
       setTimeout(() => setUpdateSuccess(false), 3000)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update profile:', error)
+      setProfileError(error.message || 'Failed to update profile')
     } finally {
       setIsUpdating(false)
     }
@@ -86,6 +95,15 @@ export default function ProfilePage() {
     }
   }
 
+  // Show loader while auth is loading
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    )
+  }
+
   return (
     <div>
       <CardHeader>
@@ -132,6 +150,12 @@ export default function ProfilePage() {
               />
             </div>
           </div>
+
+          {profileError && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-3">
+              <p className="text-sm text-red-600">{profileError}</p>
+            </div>
+          )}
 
           <div className="flex items-center space-x-4">
             <Button type="submit" disabled={isUpdating}>

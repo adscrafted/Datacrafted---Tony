@@ -35,15 +35,13 @@ function AccountLayoutContent({ children }: { children: React.ReactNode }) {
 
     // Cleanup: restore previous theme when leaving account pages
     return () => {
-      if (previousTheme) {
+      if (previousTheme !== null) {
         root.setAttribute('data-theme', previousTheme)
+      } else {
+        root.removeAttribute('data-theme')
       }
-      if (previousBg) {
-        body.style.backgroundColor = previousBg
-      }
-      if (previousColor) {
-        body.style.color = previousColor
-      }
+      body.style.backgroundColor = previousBg
+      body.style.color = previousColor
     }
   }, [])
 

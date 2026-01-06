@@ -1,12 +1,13 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/contexts/auth-context'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Check, CreditCard, Zap, Building, Crown, Loader2, ExternalLink, AlertCircle } from 'lucide-react'
+import { Check, CreditCard, Zap, Building, Crown, Loader2, ExternalLink, AlertCircle, CheckCircle, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
 interface UsageData {
@@ -44,6 +45,7 @@ const plans = [
     description: 'For professionals and power users',
     price: '$29',
     priceMonthly: 29,
+    priceId: process.env.NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID || '',
     features: [
       'Unlimited AI analyses',
       'Unlimited chat messages',
@@ -80,13 +82,18 @@ const plans = [
 ]
 
 export default function BillingPage() {
-  const { user, isDebugMode } = useAuth()
+  const { user, loading: authLoading, isDebugMode } = useAuth()
+  const searchParams = useSearchParams()
   const [selectedPlan, setSelectedPlan] = useState('pro')
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingUsage, setIsLoadingUsage] = useState(true)
   const [isLoadingPortal, setIsLoadingPortal] = useState(false)
   const [usage, setUsage] = useState<UsageData | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Handle Stripe checkout success/cancel URL parameters
+  const checkoutSuccess = searchParams.get('success') === 'true'
+  const checkoutCanceled = searchParams.get('canceled') === 'true'
 
   // Fetch usage data
   useEffect(() => {
@@ -135,6 +142,10 @@ export default function BillingPage() {
       return
     }
 
+    // Find the plan to get the priceId
+    const plan = plans.find(p => p.id === planId)
+    const priceId = plan && 'priceId' in plan ? plan.priceId : undefined
+
     setIsLoading(true)
     setError(null)
 
@@ -146,6 +157,7 @@ export default function BillingPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
+        body: JSON.stringify({ priceId }),
       })
 
       const data = await response.json()
@@ -209,6 +221,15 @@ export default function BillingPage() {
     ? Math.min(100, (usage.chat.used / chatLimit) * 100)
     : 0
 
+  // Show loading state while auth is loading
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    )
+  }
+
   return (
     <div>
       <CardHeader>
@@ -218,6 +239,28 @@ export default function BillingPage() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Checkout Success Message */}
+        {checkoutSuccess && (
+          <div className="bg-green-50 border border-green-200 rounded-md p-4 flex items-start gap-3">
+            <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-green-800">Payment successful!</p>
+              <p className="text-sm text-green-700">Thank you for upgrading. Your subscription is now active.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Checkout Canceled Message */}
+        {checkoutCanceled && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 flex items-start gap-3">
+            <XCircle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-yellow-800">Checkout canceled</p>
+              <p className="text-sm text-yellow-700">Your payment was not processed. You can try again when you are ready.</p>
+            </div>
+          </div>
+        )}
+
         {/* Debug Mode Notice */}
         {isDebugMode && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
