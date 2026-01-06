@@ -2,9 +2,17 @@
 
 import React, { useEffect, useState, Suspense, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Loader2, X, BarChart3, Share2, PanelLeftClose, PanelLeft, LogOut, Plus, RotateCcw } from 'lucide-react'
+import { ArrowLeft, Loader2, X, BarChart3, Share2, PanelLeftClose, PanelLeft, LogOut, Plus, RotateCcw, ChevronDown, User, CreditCard } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import Link from 'next/link'
 import { useDataStore } from '@/lib/stores/data-store'
 import { useUIStore } from '@/lib/stores/ui-store'
 import { useChartStore, type ChartType } from '@/lib/stores/chart-store'
@@ -1087,18 +1095,6 @@ function DashboardContent() {
               {/* Save Dashboard Button */}
               <SaveDashboardButton />
 
-              {/* User Management */}
-              {user && (
-                <div className="hidden sm:flex items-center space-x-2 px-3 py-2 rounded-lg bg-gray-50 mr-2">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-green-500 flex items-center justify-center text-white text-sm font-medium">
-                    {user.displayName?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
-                  </div>
-                  <span className="text-sm font-medium text-gray-700">
-                    {user.displayName || user.email?.split('@')[0]}
-                  </span>
-                </div>
-              )}
-
               <Button
                 variant="ghost"
                 size="sm"
@@ -1118,17 +1114,40 @@ function DashboardContent() {
                 <Share2 className="h-4 w-4" aria-hidden="true" />
               </Button>
 
-              {/* Logout Button */}
+              {/* User Management Dropdown */}
               {user && (
-                <Button
-                  onClick={logout}
-                  variant="ghost"
-                  size="sm"
-                  className="text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-                  aria-label="Sign out"
-                >
-                  <LogOut className="h-4 w-4" aria-hidden="true" />
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="hidden sm:flex items-center space-x-2 px-3 py-2 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-green-500 flex items-center justify-center text-white text-sm font-medium">
+                        {user.displayName?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
+                      </div>
+                      <span className="text-sm font-medium text-gray-700">
+                        {user.displayName || user.email?.split('@')[0]}
+                      </span>
+                      <ChevronDown className="h-4 w-4 text-gray-500" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem asChild>
+                      <Link href="/account/profile" className="flex items-center cursor-pointer">
+                        <User className="mr-2 h-4 w-4" />
+                        Profile
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/account/billing" className="flex items-center cursor-pointer">
+                        <CreditCard className="mr-2 h-4 w-4" />
+                        Billing
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={logout} className="text-red-600 cursor-pointer">
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Sign out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
             </div>
           </div>
