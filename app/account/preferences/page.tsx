@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
-import { Loader2, Check, Sun, Moon, Monitor } from 'lucide-react'
+import { Loader2, Check, Sun, Moon } from 'lucide-react'
 import {
   Select,
   SelectContent,
@@ -33,7 +33,7 @@ const timezones = [
   { value: 'UTC', label: 'UTC' },
 ]
 
-type ThemeMode = 'light' | 'dark' | 'system'
+type ThemeMode = 'light' | 'dark'
 
 interface Preferences {
   theme: ThemeMode
@@ -43,7 +43,7 @@ interface Preferences {
 }
 
 const defaultPreferences: Preferences = {
-  theme: 'system',
+  theme: 'light',
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York',
   emailNotifications: true,
   weeklyDigest: false,
@@ -70,22 +70,8 @@ export default function PreferencesPage() {
     setIsLoaded(true)
   }, [])
 
-  // Apply theme when preferences change
-  useEffect(() => {
-    if (!isLoaded) return
-
-    const root = document.documentElement
-    let effectiveTheme: 'light' | 'dark' = 'light'
-
-    if (preferences.theme === 'system') {
-      effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-    } else {
-      effectiveTheme = preferences.theme
-    }
-
-    root.classList.remove('light', 'dark')
-    root.classList.add(effectiveTheme)
-  }, [preferences.theme, isLoaded])
+  // Note: Theme is applied only in dashboard context via ThemeProvider
+  // This preference is saved and used when viewing charts/dashboards
 
   const handleSavePreferences = async () => {
     setIsSaving(true)
@@ -151,7 +137,7 @@ export default function PreferencesPage() {
           <CardContent className="space-y-4">
             <div className="space-y-3">
               <Label>Theme</Label>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => updatePreference('theme', 'light')}
                   className={`flex flex-col items-center p-4 rounded-lg border-2 transition-all ${
@@ -174,18 +160,10 @@ export default function PreferencesPage() {
                   <Moon className="h-6 w-6 mb-2 text-indigo-500" />
                   <span className="text-sm font-medium">Dark</span>
                 </button>
-                <button
-                  onClick={() => updatePreference('theme', 'system')}
-                  className={`flex flex-col items-center p-4 rounded-lg border-2 transition-all ${
-                    preferences.theme === 'system'
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <Monitor className="h-6 w-6 mb-2 text-gray-500" />
-                  <span className="text-sm font-medium">System</span>
-                </button>
               </div>
+              <p className="text-xs text-gray-500">
+                Theme applies to your dashboard and charts
+              </p>
             </div>
           </CardContent>
         </Card>

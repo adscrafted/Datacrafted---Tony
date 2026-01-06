@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { User, CreditCard, Settings, Shield } from 'lucide-react'
@@ -17,6 +17,35 @@ const navigation = [
 
 function AccountLayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+
+  // Force light mode for account settings pages
+  useEffect(() => {
+    const root = document.documentElement
+    const body = document.body
+
+    // Store current theme to restore later
+    const previousTheme = root.getAttribute('data-theme')
+    const previousBg = body.style.backgroundColor
+    const previousColor = body.style.color
+
+    // Force light mode
+    root.setAttribute('data-theme', 'light')
+    body.style.backgroundColor = '#ffffff'
+    body.style.color = '#0f172a'
+
+    // Cleanup: restore previous theme when leaving account pages
+    return () => {
+      if (previousTheme) {
+        root.setAttribute('data-theme', previousTheme)
+      }
+      if (previousBg) {
+        body.style.backgroundColor = previousBg
+      }
+      if (previousColor) {
+        body.style.color = previousColor
+      }
+    }
+  }, [])
 
   return (
     <div className="min-h-screen bg-white">

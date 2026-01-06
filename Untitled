@@ -1,0 +1,108 @@
+Starting Container
+   ▲ Next.js 15.5.9
+   - Local:        http://localhost:8080
+   - Network:      http://0.0.0.0:8080
+ ✓ Starting...
+ ✓ Ready in 109ms
+[CORS] Blocked request with null Origin header
+[Prisma] Connection attempt 1/3 failed: Can't reach database server at `db.qiponlrcswhqdlljzdol.supabase.co:5432`
+Please make sure your database server is running at `db.qiponlrcswhqdlljzdol.supabase.co:5432`.
+[Prisma] Check if your database server is running and accessible
+[Prisma] Verify DATABASE_URL in your environment variables
+[Prisma] Connection attempt 2/3 failed: Can't reach database server at `db.qiponlrcswhqdlljzdol.supabase.co:5432`
+Please make sure your database server is running at `db.qiponlrcswhqdlljzdol.supabase.co:5432`.
+[Prisma] Check if your database server is running and accessible
+[Prisma] Verify DATABASE_URL in your environment variables
+[Prisma] Connection attempt 3/3 failed: Can't reach database server at `db.qiponlrcswhqdlljzdol.supabase.co:5432`
+Please make sure your database server is running at `db.qiponlrcswhqdlljzdol.supabase.co:5432`.
+[Prisma] Check if your database server is running and accessible
+[Prisma] Verify DATABASE_URL in your environment variables
+[Prisma] ⚠️ App started WITHOUT database connection after all retry attempts
+[Prisma] Database features will be unavailable until connection is restored
+Can't reach database server at `db.qiponlrcswhqdlljzdol.supabase.co:5432`
+Please make sure your database server is running at `db.qiponlrcswhqdlljzdol.supabase.co:5432`.
+[CORS] Blocked request with null Origin header
+[CORS] Blocked request with null Origin header
+[USER-SERVICE] Database connection may be unhealthy, attempting operation anyway...
+[Prisma] syncUser upsert attempt 1/3 failed: 
+Invalid `prisma.user.upsert()` invocation:
+Can't reach database server at `db.qiponlrcswhqdlljzdol.supabase.co:5432`
+Please make sure your database server is running at `db.qiponlrcswhqdlljzdol.supabase.co:5432`.
+[Prisma] syncUser upsert attempt 2/3 failed: 
+Invalid `prisma.user.upsert()` invocation:
+    at async (.next/server/app/api/user/sync/route.js:1:6638)
+    at async (.next/server/chunks/4894.js:27:1197)
+Invalid `prisma.user.upsert()` invocation:
+[Prisma] syncUser upsert attempt 3/3 failed: 
+Can't reach database server at `db.qiponlrcswhqdlljzdol.supabase.co:5432`
+Please make sure your database server is running at `db.qiponlrcswhqdlljzdol.supabase.co:5432`.
+[USER-SERVICE] Error syncing user: Error [PrismaClientInitializationError]: 
+Invalid `prisma.user.upsert()` invocation:
+Can't reach database server at `db.qiponlrcswhqdlljzdol.supabase.co:5432`
+Please make sure your database server is running at `db.qiponlrcswhqdlljzdol.supabase.co:5432`.
+    at async retries (.next/server/chunks/8968.js:1:308)
+    at async h (.next/server/chunks/7143.js:1:2195)
+    at async e (.next/server/chunks/8968.js:1:284)
+    at hE.request (.next/server/chunks/7143.js:114:6593)
+    at hE.handleRequestError (.next/server/chunks/7143.js:114:8125)
+    at hE.handleAndLogRequestError (.next/server/chunks/7143.js:114:6886)
+    at async e (.next/server/chunks/7143.js:126:7513)
+    at async c (.next/server/app/api/analyze-simple/route.js:15:3387)
+    at async k (.next/server/app/api/user/sync/route.js:1:3811)
+    at async (.next/server/app/api/analyze-simple/route.js:15:3551) {
+    at async g (.next/server/app/api/user/sync/route.js:1:4814)
+  clientVersion: '6.16.2',
+  errorCode: undefined
+}
+[API] Error syncing user: Error: Failed to sync user to database
+    at e (.next/server/chunks/8968.js:1:1048)
+    at async (.next/server/app/api/user/sync/route.js:1:6638)
+    at async (.next/server/chunks/4894.js:27:1197)
+    at async (.next/server/app/api/analyze-simple/route.js:15:3551)
+  code: undefined
+}
+    '\n' +
+    "Can't reach database server at `db.qiponlrcswhqdlljzdol.supabase.co:5432`\n" +
+    '\n' +
+[API PROJECTS] Database connection failed during project creation: {
+  message: '\n' +
+    'Please make sure your database server is running at `db.qiponlrcswhqdlljzdol.supabase.co:5432`.',
+    'Invalid `prisma.$queryRaw()` invocation:\n' +
+    '\n' +
+[API PROJECT DATA] Error uploading data: Error [PrismaClientInitializationError]: 
+Invalid `prisma.user.findUnique()` invocation:
+Can't reach database server at `db.qiponlrcswhqdlljzdol.supabase.co:5432`
+Please make sure your database server is running at `db.qiponlrcswhqdlljzdol.supabase.co:5432`.
+    at hE.handleRequestError (.next/server/chunks/7143.js:114:8125)
+    at hE.handleAndLogRequestError (.next/server/chunks/7143.js:114:6886)
+    at hE.request (.next/server/chunks/7143.js:114:6593)
+    at async e (.next/server/chunks/7143.js:126:7513)
+    at async (.next/server/app/api/projects/[id]/data/route.js:1:3419)
+    at async (.next/server/chunks/4894.js:27:1197)
+    at async (.next/server/app/api/analyze-simple/route.js:15:3551)
+    at async c (.next/server/app/api/analyze-simple/route.js:15:3387) {
+  clientVersion: '6.16.2',
+  errorCode: undefined
+}
+[CORS] Blocked request with null Origin header
+    at async e (.next/server/chunks/7143.js:126:7513)
+    at async (.next/server/app/api/projects/[id]/data/route.js:1:3419)
+[API PROJECT DATA] Error uploading data: Error [PrismaClientInitializationError]: 
+    at async (.next/server/chunks/4894.js:27:1197)
+Invalid `prisma.user.findUnique()` invocation:
+    at async (.next/server/app/api/analyze-simple/route.js:15:3551)
+    at async c (.next/server/app/api/analyze-simple/route.js:15:3387) {
+  clientVersion: '6.16.2',
+Can't reach database server at `db.qiponlrcswhqdlljzdol.supabase.co:5432`
+  errorCode: undefined
+}
+Please make sure your database server is running at `db.qiponlrcswhqdlljzdol.supabase.co:5432`.
+    at hE.handleRequestError (.next/server/chunks/7143.js:114:8125)
+    at hE.handleAndLogRequestError (.next/server/chunks/7143.js:114:6886)
+    at hE.request (.next/server/chunks/7143.js:114:6593)
+Please make sure your database server is running at `db.qiponlrcswhqdlljzdol.supabase.co:5432`.
+  errorCode: undefined
+}
+    at hE.handleRequestError (.next/server/chunks/7143.js:114:8125)
+    at hE.handleAndLogRequestError (.next/server/chunks/7143.js:114:6886)
+    at async (.next/server/app/api/analyze-simple/route.js:15:3551)
