@@ -110,7 +110,7 @@ export default function PrivacyPage() {
       } else {
         // Production: Call API to delete account
         const token = await user?.getIdToken()
-        const response = await fetch('/api/user/delete', {
+        const response = await fetch('/api/user', {
           method: 'DELETE',
           headers: {
             Authorization: `Bearer ${token}`,
