@@ -400,17 +400,19 @@ export default function BillingPage() {
                   key={plan.id}
                   className={cn(
                     "relative cursor-pointer transition-all",
-                    plan.popular && "ring-2 ring-primary",
+                    plan.popular && "ring-2 ring-blue-500",
                     selectedPlan === plan.id && "border-primary"
                   )}
                   onClick={() => setSelectedPlan(plan.id)}
                 >
                   {plan.popular && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                      <Badge className="bg-primary text-white">Most Popular</Badge>
+                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10">
+                      <Badge className="bg-gradient-to-r from-blue-500 to-emerald-500 text-white border-0 px-4 py-1 text-sm font-medium shadow-md">
+                        Most Popular
+                      </Badge>
                     </div>
                   )}
-                  <CardHeader>
+                  <CardHeader className={cn(plan.popular && "pt-8")}>
                     <div className="flex items-center justify-between mb-2">
                       <Icon className="h-6 w-6 text-primary" />
                       {isCurrent && <Badge variant="outline">Current</Badge>}

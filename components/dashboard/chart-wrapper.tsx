@@ -35,6 +35,7 @@ import { renderCollapsibleLegend } from './collapsible-legend'
 import { processChartData, type ChartDataMapping } from '@/lib/utils/chart-data-processor'
 import type { AggregationType } from '@/lib/utils/data-calculations'
 import { ChartErrorBoundary } from '@/components/error-boundary'
+import { getColorsForColumnNames, DEFAULT_CHART_PALETTE } from '@/lib/utils/semantic-colors'
 
 // Lazy load table and waterfall components for better performance
 const TableChartLazy = lazy(() => import('./charts/table-chart').then(m => ({ default: m.TableChart })))
@@ -90,7 +91,8 @@ interface ChartWrapperProps {
   }
 }
 
-const DEFAULT_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D']
+// Legacy default colors - now using semantic colors from semantic-colors.ts
+const DEFAULT_COLORS = DEFAULT_CHART_PALETTE
 
 // Chart Skeleton for Suspense fallback
 const ChartSkeleton = () => (
@@ -149,18 +151,6 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
     (state) => state.chartCustomizations[chartId]
   )
 
-  // DEBUG: Log when customization changes (especially for gauge charts)
-  useEffect(() => {
-    if (type === 'gauge') {
-      console.log('🎯 [ChartWrapper] Customization updated for gauge:', {
-        chartId,
-        customization,
-        dataMapping: customization?.dataMapping,
-        max: customization?.dataMapping?.max
-      })
-    }
-  }, [customization, type, chartId])
-
   const currentTheme = useChartStore((state) => state.currentTheme)
   const updateChartCustomization = useChartStore((state) => state.updateChartCustomization)
   const setFullScreen = useUIStore((state) => state.setFullScreen)
@@ -171,6 +161,7 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
   const setShowChartSettings = useUIStore((state) => state.setShowChartSettings)
   const analysis = useDataStore((state) => state.analysis)
   const setAnalysis = useDataStore((state) => state.setAnalysis)
+  const dataSchema = useDataStore((state) => state.dataSchema)
 
   // CRITICAL: Get filter data separately to control re-renders
   const rawData = useDataStore((state) => state.rawData)
@@ -182,9 +173,7 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
   // PERFORMANCE OPTIMIZATION: Compute filtered data only when filter dependencies change
   // This ensures we re-render on date changes but NOT on unrelated store changes
   const filteredData = useMemo(() => {
-    const result = getFilteredData()
-    console.log('🔄 [ChartWrapper] Filtered data for', title, ':', result.length, 'rows')
-    return result
+    return getFilteredData()
   }, [title]) // getFilteredData reads from stores internally
 
   // PERFORMANCE OPTIMIZATION: Memoize chart data processing with stable reference
@@ -198,11 +187,29 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
   const displayTitle = customization?.customTitle || title
   const displayDescription = customization?.customDescription || description
   const chartType = customization?.chartType || type
-  const colors = customization?.colors || currentTheme.chartColors || DEFAULT_COLORS
   const showLegend = customization?.showLegend ?? true
   const showGrid = customization?.showGrid ?? true
   const isVisible = customization?.isVisible ?? true
   const axisLabels = customization?.axisLabels || {}
+
+  // Compute semantic colors based on column names and schema
+  // This assigns colors based on the semantic meaning of columns (revenue=green, cost=red, etc.)
+  const colors = useMemo(() => {
+    // If custom colors are specified, use those
+    if (customization?.colors && customization.colors.length > 0) {
+      return customization.colors
+    }
+    // If theme specifies colors, use those
+    if (currentTheme.chartColors && currentTheme.chartColors.length > 0) {
+      return currentTheme.chartColors
+    }
+    // Use semantic colors based on column names
+    const columnsToColor = dataKey.slice(1) // Skip x-axis, color the y-axis columns
+    if (columnsToColor.length > 0) {
+      return getColorsForColumnNames(columnsToColor, dataSchema?.columns)
+    }
+    return DEFAULT_COLORS
+  }, [customization?.colors, currentTheme.chartColors, dataKey, dataSchema?.columns])
 
   const chartData = useMemo(() => {
     try {
@@ -252,9 +259,6 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
           // Use the chart data processor for advanced calculations
           const processed = processChartData(sanitizedData, chartType, mapping)
           sanitizedData = processed.data
-
-          // Log calculation metadata for debugging
-          console.log(`[ChartWrapper] Applied calculations:`, processed.metadata)
         } else {
           // Apply legacy bar chart sorting and limiting (backward compatibility)
           if (chartType === 'bar') {
@@ -498,7 +502,7 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
                   key={key}
                   type="monotone"
                   dataKey={key}
-                  stroke={DEFAULT_COLORS[index % DEFAULT_COLORS.length]}
+                  stroke={colors[index % colors.length]}
                   strokeWidth={2}
                   dot={{ r: 3 }}
                 />
@@ -581,8 +585,8 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
                   key={key}
                   dataKey={key}
                   stackId={barPercentageMode ? "stack" : undefined}
-                  fill={DEFAULT_COLORS[index % DEFAULT_COLORS.length]}
-                  fillOpacity={0.6}
+                  fill={colors[index % colors.length]}
+                  fillOpacity={0.8}
                   radius={[4, 4, 0, 0]}
                 />
               ))}
@@ -604,8 +608,8 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
                 fill="#8884d8"
                 dataKey="value"
               >
-                {pieData.map((_entry, index) => (
-                  <Cell key={`cell-${index}`} fill={DEFAULT_COLORS[index % DEFAULT_COLORS.length]} />
+                {pieData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
                 ))}
               </Pie>
               <Tooltip />
@@ -685,8 +689,8 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
                   type="monotone"
                   dataKey={key}
                   stackId={areaPercentageMode ? "stack" : "1"}
-                  stroke={DEFAULT_COLORS[index % DEFAULT_COLORS.length]}
-                  fill={DEFAULT_COLORS[index % DEFAULT_COLORS.length]}
+                  stroke={colors[index % colors.length]}
+                  fill={colors[index % colors.length]}
                   fillOpacity={0.6}
                 />
               ))}
@@ -713,7 +717,7 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
               />
               <YAxis dataKey={safeDataKey[1]} tick={{ fontSize: 12 }} />
               <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-              <Scatter name="Data" data={chartData} fill={DEFAULT_COLORS[0]} />
+              <Scatter name="Data" data={chartData} fill={colors[0]} />
             </ScatterChart>
           </ResponsiveContainer>
         )
@@ -770,23 +774,6 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
         )
 
       case 'gauge':
-        // DEBUG: Log what we're passing to the gauge
-        console.log('🎯 [ChartWrapper] Passing to GaugeChart:', {
-          dataMapping: customization?.dataMapping,
-          extractedMin: customization?.dataMapping?.min,
-          extractedMax: customization?.dataMapping?.max,
-          willUseMin: customization?.dataMapping?.min ?? 0,
-          willUseMax: customization?.dataMapping?.max ?? 100
-        });
-
-        // CRITICAL: Log exact inline values
-        console.log('🎯 [ChartWrapper] EXACT GAUGE VALUES:',
-          'customization?.dataMapping?.max =', customization?.dataMapping?.max,
-          'customization?.dataMapping?.min =', customization?.dataMapping?.min,
-          'Fallback max will be:', customization?.dataMapping?.max ?? 100,
-          'Fallback min will be:', customization?.dataMapping?.min ?? 0
-        );
-
         return (
           <React.Suspense fallback={<ChartSkeleton />}>
             <GaugeChart
