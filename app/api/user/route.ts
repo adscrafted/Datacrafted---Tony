@@ -4,6 +4,7 @@ import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 import { getUserByFirebaseUid, updateUser, deleteUser } from '@/lib/api/user-service'
 import { validateRequest, updateUserSchema } from '@/lib/utils/api-validation'
 import { userNotFound, databaseError } from '@/lib/utils/api-errors'
+import { getAdminAuth } from '@/lib/config/firebase-admin'
 
 /**
  * GET /api/user
@@ -159,14 +160,25 @@ const deleteHandler = withAuth(async (request: NextRequest, firebaseUser) => {
       return userNotFound()
     }
 
-    // Delete user (cascades to sessions, etc.)
+    // Step 1: Delete user from database (cascades to sessions, projects, etc.)
     const success = await deleteUser(user.id)
 
     if (!success) {
-      throw new Error('Failed to delete user')
+      throw new Error('Failed to delete user from database')
     }
 
-    console.log('[API] User account deleted:', user.id)
+    console.log('[API] User database record deleted:', user.id)
+
+    // Step 2: Delete Firebase Auth account
+    try {
+      const adminAuth = getAdminAuth()
+      await adminAuth.deleteUser(firebaseUser.uid)
+      console.log('[API] Firebase Auth account deleted:', firebaseUser.uid)
+    } catch (firebaseError: any) {
+      // Log but don't fail - database deletion already succeeded
+      // User can manually delete Firebase account or it will be orphaned
+      console.error('[API] Warning: Failed to delete Firebase Auth account:', firebaseError.message)
+    }
 
     return NextResponse.json({
       success: true,
