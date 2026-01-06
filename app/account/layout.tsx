@@ -3,7 +3,7 @@
 import React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { User, CreditCard, Users } from 'lucide-react'
+import { User, CreditCard, Settings, Shield } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { ProtectedRoute } from '@/components/auth/protected-route'
 import { MinimalHeader } from '@/components/ui/minimal-header'
@@ -11,7 +11,8 @@ import { MinimalHeader } from '@/components/ui/minimal-header'
 const navigation = [
   { name: 'Profile', href: '/account/profile', icon: User },
   { name: 'Billing', href: '/account/billing', icon: CreditCard },
-  { name: 'Team', href: '/account/team', icon: Users },
+  { name: 'Preferences', href: '/account/preferences', icon: Settings },
+  { name: 'Privacy', href: '/account/privacy', icon: Shield },
 ]
 
 function AccountLayoutContent({ children }: { children: React.ReactNode }) {
