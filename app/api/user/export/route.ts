@@ -100,8 +100,7 @@ const getHandler = withAuth(async (request: NextRequest, firebaseUser) => {
                 originalName: true,
                 fileSize: true,
                 mimeType: true,
-                fileHash: true,
-                filePath: true,
+                // Note: fileHash and filePath intentionally excluded (internal server data)
                 parsedData: true,
                 dataSchema: true,
               },
@@ -254,8 +253,6 @@ const getHandler = withAuth(async (request: NextRequest, firebaseUser) => {
           originalName: file.originalName,
           fileSize: file.fileSize,
           mimeType: file.mimeType,
-          fileHash: file.fileHash,
-          filePath: file.filePath,
           parsedData: safeJsonParse(file.parsedData, null),
           dataSchema: safeJsonParse(file.dataSchema, null),
           createdAt: file.createdAt,
