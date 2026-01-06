@@ -34,13 +34,8 @@ export function LandingHeader({ user, onSignInClick, onLogout }: LandingHeaderPr
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-center relative" style={{ backgroundColor: 'transparent' }}>
         {/* Logo - Centered */}
         <div className="flex items-center space-x-3">
-          <BarChart3 className="h-6 w-6 text-[rgb(11,40,212)]" />
-          <h1
-            className="text-xl font-semibold tracking-tight text-[#1f1f1f]"
-            style={{ fontFamily: "'Google Sans Text', Helvetica, Arial, sans-serif" }}
-          >
-            DataCrafted
-          </h1>
+          <BarChart3 className="h-7 w-7 text-gray-900" />
+          <span className="text-2xl font-light text-gray-900">DataCrafted</span>
         </div>
 
         {/* Auth Actions - Absolute positioned on right */}
