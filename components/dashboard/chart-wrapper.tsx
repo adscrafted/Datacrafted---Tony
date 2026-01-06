@@ -195,21 +195,18 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
   // Compute semantic colors based on column names and schema
   // This assigns colors based on the semantic meaning of columns (revenue=green, cost=red, etc.)
   const colors = useMemo(() => {
-    // If custom colors are specified, use those
+    // If custom colors are explicitly specified for this chart, use those
     if (customization?.colors && customization.colors.length > 0) {
       return customization.colors
     }
-    // If theme specifies colors, use those
-    if (currentTheme.chartColors && currentTheme.chartColors.length > 0) {
-      return currentTheme.chartColors
-    }
-    // Use semantic colors based on column names
+    // Use semantic colors based on column names (primary default)
     const columnsToColor = dataKey.slice(1) // Skip x-axis, color the y-axis columns
     if (columnsToColor.length > 0) {
       return getColorsForColumnNames(columnsToColor, dataSchema?.columns)
     }
+    // Fallback to default palette
     return DEFAULT_COLORS
-  }, [customization?.colors, currentTheme.chartColors, dataKey, dataSchema?.columns])
+  }, [customization?.colors, dataKey, dataSchema?.columns])
 
   const chartData = useMemo(() => {
     try {
