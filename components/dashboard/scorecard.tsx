@@ -1,7 +1,8 @@
 'use client'
 
-import React from 'react'
+import React, { useMemo } from 'react'
 import { cn } from '@/lib/utils/cn'
+import { SEMANTIC_PALETTES } from '@/lib/utils/semantic-colors'
 
 interface ScorecardProps {
   title: string
@@ -16,15 +17,78 @@ interface ScorecardProps {
   aggregationType?: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct' | 'median' | 'mode' | 'std' | 'variance' | 'percentile'
 }
 
+/**
+ * Get semantic color based on scorecard title/metric name
+ */
+function getSemanticBorderColor(title: string): string {
+  const lowerTitle = title.toLowerCase()
+
+  // Positive/Revenue metrics - Green
+  if (/revenue|income|profit|gain|growth|sales|earnings|return|roi|roas|retention|conversion|success|win/i.test(lowerTitle)) {
+    return SEMANTIC_PALETTES.positive.primary
+  }
+
+  // Negative/Cost metrics - Red
+  if (/cost|expense|loss|spend|churn|decline|decrease|refund|discount|debt|liability|bounce|fail|error|cpc|cpa|cpm/i.test(lowerTitle)) {
+    return SEMANTIC_PALETTES.negative.primary
+  }
+
+  // Monetary/Budget - Emerald
+  if (/price|amount|budget|fee|salary|money|dollar|euro|pound|value|payment|balance/i.test(lowerTitle)) {
+    return SEMANTIC_PALETTES.monetary.primary
+  }
+
+  // Time/Date - Blue
+  if (/date|time|month|year|day|week|quarter|period|duration|start|end/i.test(lowerTitle)) {
+    return SEMANTIC_PALETTES.temporal.primary
+  }
+
+  // Counts/Quantities - Amber
+  if (/count|qty|quantity|num|number|units|orders|items|visits|clicks|views|sessions|users|impressions|total|sum/i.test(lowerTitle)) {
+    return SEMANTIC_PALETTES.quantity.primary
+  }
+
+  // Percentages/Rates - Cyan
+  if (/percent|pct|rate|ratio|share|portion|ctr|cvr/i.test(lowerTitle)) {
+    return SEMANTIC_PALETTES.percentage.primary
+  }
+
+  // Scores/Ratings - Pink
+  if (/score|rating|rank|grade|level|points|quality/i.test(lowerTitle)) {
+    return SEMANTIC_PALETTES.score.primary
+  }
+
+  // Averages - Purple (distinct from totals)
+  if (/average|avg|mean|median/i.test(lowerTitle)) {
+    return SEMANTIC_PALETTES.categorical.primary
+  }
+
+  // Min/Max - special treatment
+  if (/minimum|min\b|maximum|max\b/i.test(lowerTitle)) {
+    return SEMANTIC_PALETTES.score.primary
+  }
+
+  // Distinct/Unique - Teal
+  if (/distinct|unique|different/i.test(lowerTitle)) {
+    return SEMANTIC_PALETTES.percentage.primary
+  }
+
+  // Campaigns/Categories - Purple
+  if (/campaign|category|type|status|region|country|city|segment|group/i.test(lowerTitle)) {
+    return SEMANTIC_PALETTES.categorical.primary
+  }
+
+  // Default - use a nice neutral accent
+  return SEMANTIC_PALETTES.quantity.primary
+}
+
 export function Scorecard({
   title,
   value,
   aggregationType,
   className
 }: ScorecardProps) {
-  const getBorderColor = () => {
-    return 'border-gray-200'
-  }
+  const borderColor = useMemo(() => getSemanticBorderColor(title), [title])
 
   const getAggregationLabel = () => {
     if (!aggregationType) return null
@@ -116,9 +180,9 @@ export function Scorecard({
     <div
       className={cn(
         "h-full w-full flex flex-col justify-center items-center bg-white rounded-lg border-l-4 p-6",
-        getBorderColor(),
         className
       )}
+      style={{ borderLeftColor: borderColor }}
     >
       {/* Title */}
       <h3 className="text-sm font-semibold text-gray-900 mb-4">
