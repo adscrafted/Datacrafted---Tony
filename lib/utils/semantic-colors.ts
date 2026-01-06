@@ -83,29 +83,30 @@ export const SEMANTIC_PALETTES = {
     description: 'ID, key, code, reference'
   },
 
-  // Neutral/Default - Slate Blue
+  // Neutral/Default - Use varied colors for undetected types
   neutral: {
-    primary: '#6366f1',
-    shades: ['#6366f1', '#818cf8', '#a5b4fc', '#4f46e5', '#4338ca'],
+    primary: '#10b981',
+    shades: ['#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#ef4444'],
     description: 'Default for undetected types'
   }
 } as const
 
 /**
  * Multi-series default palette for charts with many series
- * Harmonious colors that work well together
+ * Diverse, vibrant colors that work well together
+ * Intentionally varied - no two adjacent colors are similar
  */
 export const DEFAULT_CHART_PALETTE = [
-  '#6366f1', // Indigo
-  '#10b981', // Emerald
-  '#f59e0b', // Amber
+  '#10b981', // Emerald (green)
+  '#f59e0b', // Amber (orange)
+  '#8b5cf6', // Violet (purple)
+  '#06b6d4', // Cyan (teal)
+  '#ef4444', // Red
+  '#84cc16', // Lime (yellow-green)
   '#ec4899', // Pink
-  '#06b6d4', // Cyan
-  '#8b5cf6', // Violet
   '#f97316', // Orange
   '#14b8a6', // Teal
-  '#ef4444', // Red
-  '#84cc16', // Lime
+  '#a855f7', // Purple
 ]
 
 // ============================================================================
@@ -355,22 +356,25 @@ export function getColorsForColumnNames(
       color = SEMANTIC_PALETTES.positive.primary
     } else if (isNegativeColumn(name)) {
       color = SEMANTIC_PALETTES.negative.primary
-    } else if (/date|time|month|year|day|week|quarter/i.test(name)) {
+    } else if (/date|time|month|year|day|week|quarter|period/i.test(name)) {
       color = SEMANTIC_PALETTES.temporal.primary
-    } else if (/price|cost|amount|revenue|total|fee|salary|budget/i.test(name)) {
+    } else if (/price|cost|amount|revenue|fee|salary|budget|money|dollar|euro|pound|value/i.test(name)) {
       color = SEMANTIC_PALETTES.monetary.primary
-    } else if (/count|qty|quantity|num|number|total/i.test(name)) {
+    } else if (/count|qty|quantity|num|number|units|orders|items|visits|clicks|views|sessions|users/i.test(name)) {
       color = SEMANTIC_PALETTES.quantity.primary
-    } else if (/percent|pct|rate|ratio/i.test(name)) {
+    } else if (/percent|pct|rate|ratio|share|portion/i.test(name)) {
       color = SEMANTIC_PALETTES.percentage.primary
-    } else if (/score|rating|rank/i.test(name)) {
+    } else if (/score|rating|rank|grade|level|points/i.test(name)) {
       color = SEMANTIC_PALETTES.score.primary
-    } else if (/id$|_id|key|code|sku|uuid/i.test(name)) {
+    } else if (/id$|_id|key|code|sku|uuid|ref/i.test(name)) {
       color = SEMANTIC_PALETTES.identifier.primary
-    } else if (/category|type|status|region|country|city/i.test(name)) {
+    } else if (/category|type|status|region|country|city|state|name|label|group|segment/i.test(name)) {
       color = SEMANTIC_PALETTES.categorical.primary
+    } else if (/total|sum|avg|average|mean|median|max|min/i.test(name)) {
+      // Aggregated metrics - use quantity colors
+      color = SEMANTIC_PALETTES.quantity.primary
     } else {
-      // Use default palette for unknowns, cycling through
+      // Use default palette for unknowns, cycling through varied colors
       color = DEFAULT_CHART_PALETTE[defaultIndex % DEFAULT_CHART_PALETTE.length]
       defaultIndex++
     }
