@@ -387,7 +387,7 @@ export function getColorsForColumnNames(
       color = SEMANTIC_PALETTES.temporal.primary
     } else if (/price|cost|amount|revenue|fee|salary|budget|money|dollar|euro|pound|value/i.test(name)) {
       color = SEMANTIC_PALETTES.monetary.primary
-    } else if (/count|qty|quantity|num|number|units|orders|items|visits|clicks|views|sessions|users/i.test(name)) {
+    } else if (/count|qty|quantity|num|number|units|orders|items|visits|clicks|views|sessions|users|impressions/i.test(name)) {
       color = SEMANTIC_PALETTES.quantity.primary
     } else if (/percent|pct|rate|ratio|share|portion/i.test(name)) {
       color = SEMANTIC_PALETTES.percentage.primary

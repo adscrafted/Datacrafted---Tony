@@ -1,3 +1,5 @@
+import { DEFAULT_CHART_PALETTE } from '@/lib/utils/semantic-colors'
+
 // Enhanced chart minimum dimensions and aspect ratios for better content visibility
 export const CHART_MINIMUMS = {
   bar: { width: 300, height: 250, aspectRatio: 4/3 },
@@ -17,8 +19,8 @@ export const RESPONSIVE_BREAKPOINTS = {
   small: 250    // Minimum for basic functionality
 } as const
 
-// Default color palette for charts
-export const COLORS = ['#2563eb', '#dc2626', '#ca8a04', '#16a34a', '#9333ea', '#c2410c']
+// Default color palette for charts - uses semantic color system
+export const COLORS = DEFAULT_CHART_PALETTE
 
 // Combo chart color palettes for left and right axes
 export const COMBO_COLORS = {

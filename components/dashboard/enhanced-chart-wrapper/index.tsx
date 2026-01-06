@@ -40,6 +40,7 @@ import type { EnhancedChartWrapperProps, ScatterData } from './types'
 
 // Import constants
 import { COLORS } from './constants'
+import { getColorsForColumnNames } from '@/lib/utils/semantic-colors'
 
 // Import hooks
 import { useChartData } from './hooks/useChartData'
@@ -291,11 +292,20 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
     dualAxisConfig
   })
 
-  // Pie chart data processing - stabilize colors to prevent unnecessary re-renders
-  const colors = React.useMemo(() =>
-    customization?.colors || COLORS,
-    [customization?.colors]
-  )
+  // Chart colors - use semantic colors based on column names
+  const colors = React.useMemo(() => {
+    // If custom colors are explicitly specified, use those
+    if (customization?.colors && customization.colors.length > 0) {
+      return customization.colors
+    }
+    // Use semantic colors based on column names (skip x-axis, color the y-axis columns)
+    const columnsToColor = safeDataKey.slice(1)
+    if (columnsToColor.length > 0) {
+      return getColorsForColumnNames(columnsToColor, schema?.columns)
+    }
+    // Fallback to default palette
+    return COLORS
+  }, [customization?.colors, safeDataKey, schema?.columns])
 
   // Scatter chart data processing - MUST be at component level to comply with React hooks rules
   const scatterData = React.useMemo<ScatterData>(() => {

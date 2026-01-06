@@ -985,7 +985,8 @@ export const ChartWrapper = React.memo<ChartWrapperProps>(function ChartWrapper(
     displayTitle,
     displayDescription,
     showGrid,
-    showLegend
+    showLegend,
+    colors
   ])
 
   // Handle delete confirmation
