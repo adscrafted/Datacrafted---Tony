@@ -943,6 +943,7 @@ export const FlexibleDashboardLayout: React.FC<FlexibleDashboardLayoutProps> = (
                     qualityScore={qualityScores[chartId]}
                     className="h-full cursor-move"
                     initialTab={newlyAddedChartId === chartId ? 'data' : undefined}
+                    chartIndex={index}
                   />
                 </div>
               )

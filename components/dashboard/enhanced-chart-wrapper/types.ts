@@ -18,6 +18,7 @@ export interface EnhancedChartWrapperProps {
   qualityScore?: number
   initialTab?: 'general' | 'data' | 'style' | 'axes' | 'actions' // Tab to open in customization panel
   onDataPointClick?: (dataPoint: any) => void // Callback when a data point is clicked
+  chartIndex?: number // Index of the chart in the dashboard (for color cycling)
 }
 
 // Feature flags based on container width

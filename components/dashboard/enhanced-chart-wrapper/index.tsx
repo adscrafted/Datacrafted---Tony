@@ -40,7 +40,7 @@ import type { EnhancedChartWrapperProps, ScatterData } from './types'
 
 // Import constants
 import { COLORS } from './constants'
-import { getColorsForColumnNames } from '@/lib/utils/semantic-colors'
+import { getChartColorsByIndex } from '@/lib/utils/semantic-colors'
 
 // Import hooks
 import { useChartData } from './hooks/useChartData'
@@ -87,7 +87,8 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
   className,
   qualityScore,
   initialTab,
-  onDataPointClick
+  onDataPointClick,
+  chartIndex = 0
 }) {
   // Debug logging for click handler
   React.useEffect(() => {
@@ -292,20 +293,16 @@ export const EnhancedChartWrapper = React.memo<EnhancedChartWrapperProps>(functi
     dualAxisConfig
   })
 
-  // Chart colors - use semantic colors based on column names
+  // Chart colors - use index-based cycling for visual variety
   const colors = React.useMemo(() => {
     // If custom colors are explicitly specified, use those
     if (customization?.colors && customization.colors.length > 0) {
       return customization.colors
     }
-    // Use semantic colors based on column names (skip x-axis, color the y-axis columns)
-    const columnsToColor = safeDataKey.slice(1)
-    if (columnsToColor.length > 0) {
-      return getColorsForColumnNames(columnsToColor, schema?.columns)
-    }
-    // Fallback to default palette
-    return COLORS
-  }, [customization?.colors, safeDataKey, schema?.columns])
+    // Use index-based colors - each chart gets a different color from the palette
+    const seriesCount = Math.max(1, safeDataKey.length - 1) // Number of Y-axis columns
+    return getChartColorsByIndex(chartIndex, seriesCount)
+  }, [customization?.colors, chartIndex, safeDataKey.length])
 
   // Scatter chart data processing - MUST be at component level to comply with React hooks rules
   const scatterData = React.useMemo<ScatterData>(() => {

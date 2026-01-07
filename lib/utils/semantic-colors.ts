@@ -149,6 +149,57 @@ export const DEFAULT_CHART_PALETTE = [
   '#a855f7', // Purple
 ]
 
+/**
+ * Extended chart palette for index-based cycling
+ * 12 visually distinct colors optimized for dashboards
+ * Each color is maximally different from adjacent colors
+ */
+export const CHART_INDEX_PALETTE = [
+  '#10b981', // Emerald green
+  '#6366f1', // Indigo
+  '#f59e0b', // Amber
+  '#ec4899', // Pink
+  '#06b6d4', // Cyan
+  '#84cc16', // Lime
+  '#f97316', // Orange
+  '#8b5cf6', // Violet
+  '#14b8a6', // Teal
+  '#ef4444', // Red
+  '#a855f7', // Purple
+  '#eab308', // Yellow
+]
+
+/**
+ * Get color by chart index - ensures each chart gets a different color
+ * This is the recommended approach for single-series charts
+ * @param chartIndex - The index of the chart (0, 1, 2, ...)
+ * @returns A color from the palette
+ */
+export function getColorByChartIndex(chartIndex: number): string {
+  return CHART_INDEX_PALETTE[chartIndex % CHART_INDEX_PALETTE.length]
+}
+
+/**
+ * Get colors for a chart by its index
+ * Returns an array with the primary color and shades for multi-series
+ * @param chartIndex - The index of the chart
+ * @param seriesCount - Number of series in the chart (default 1)
+ */
+export function getChartColorsByIndex(chartIndex: number, seriesCount: number = 1): string[] {
+  const primaryColor = CHART_INDEX_PALETTE[chartIndex % CHART_INDEX_PALETTE.length]
+
+  if (seriesCount <= 1) {
+    return [primaryColor]
+  }
+
+  // For multi-series, return adjacent colors from palette
+  const colors: string[] = []
+  for (let i = 0; i < seriesCount; i++) {
+    colors.push(CHART_INDEX_PALETTE[(chartIndex + i) % CHART_INDEX_PALETTE.length])
+  }
+  return colors
+}
+
 // ============================================================================
 // SEMANTIC TYPE TO COLOR CATEGORY MAPPING
 // ============================================================================
