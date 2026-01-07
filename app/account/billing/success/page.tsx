@@ -1,19 +1,35 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { CheckCircle, Loader2, ArrowRight, Sparkles } from 'lucide-react'
+import { CheckCircle, Loader2, ArrowRight, Sparkles, BarChart3 } from 'lucide-react'
 
-export default function CheckoutSuccessPage() {
+// Key for storing return URL in localStorage across page redirects
+const PENDING_RETURN_URL_KEY = 'datacrafted_pending_return_url'
+
+function CheckoutSuccessContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const sessionId = searchParams.get('session_id')
+  const returnToParam = searchParams.get('returnTo')
+
   const [isVerifying, setIsVerifying] = useState(true)
   const [verified, setVerified] = useState(false)
+  const [returnUrl, setReturnUrl] = useState<string | null>(null)
+  const [autoRedirectCountdown, setAutoRedirectCountdown] = useState(5)
 
   useEffect(() => {
+    // Check for return URL from query param first, then localStorage
+    const pendingReturnUrl = returnToParam || localStorage.getItem(PENDING_RETURN_URL_KEY)
+
+    if (pendingReturnUrl) {
+      console.log('[BILLING SUCCESS] Found pending return URL:', pendingReturnUrl)
+      setReturnUrl(pendingReturnUrl)
+      // Clean up localStorage
+      localStorage.removeItem(PENDING_RETURN_URL_KEY)
+    }
+
     // Simple verification delay to allow webhook to process
     const timer = setTimeout(() => {
       setIsVerifying(false)
@@ -21,7 +37,33 @@ export default function CheckoutSuccessPage() {
     }, 2000)
 
     return () => clearTimeout(timer)
-  }, [sessionId])
+  }, [returnToParam])
+
+  // Auto-redirect countdown when there's a return URL
+  useEffect(() => {
+    if (!verified || !returnUrl) return
+
+    const countdownInterval = setInterval(() => {
+      setAutoRedirectCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(countdownInterval)
+          router.push(returnUrl)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(countdownInterval)
+  }, [verified, returnUrl, router])
+
+  const handleContinue = () => {
+    if (returnUrl) {
+      router.push(returnUrl)
+    } else {
+      router.push('/dashboard')
+    }
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-green-50 to-white p-4">
@@ -79,14 +121,40 @@ export default function CheckoutSuccessPage() {
                 </ul>
               </div>
 
+              {/* Return to analysis notification */}
+              {returnUrl && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-blue-100 rounded-full">
+                      <BarChart3 className="h-4 w-4 text-blue-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-medium text-blue-900">Ready to continue!</h4>
+                      <p className="text-sm text-blue-700 mt-1">
+                        Your analysis is waiting. Redirecting in {autoRedirectCountdown}s...
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Actions */}
               <div className="space-y-3">
                 <Button
                   className="w-full"
-                  onClick={() => router.push('/dashboard')}
+                  onClick={handleContinue}
                 >
-                  Go to Dashboard
-                  <ArrowRight className="h-4 w-4 ml-2" />
+                  {returnUrl ? (
+                    <>
+                      Continue to Your Analysis
+                      <ArrowRight className="h-4 w-4 ml-2" />
+                    </>
+                  ) : (
+                    <>
+                      Go to Dashboard
+                      <ArrowRight className="h-4 w-4 ml-2" />
+                    </>
+                  )}
                 </Button>
                 <Button
                   variant="outline"
@@ -105,5 +173,26 @@ export default function CheckoutSuccessPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function CheckoutSuccessPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-green-50 to-white p-4">
+          <Card className="max-w-md w-full">
+            <CardHeader className="text-center">
+              <div className="mx-auto mb-4 p-3 bg-blue-100 rounded-full w-fit">
+                <Loader2 className="h-8 w-8 text-blue-600 animate-spin" />
+              </div>
+              <CardTitle className="text-2xl">Loading...</CardTitle>
+            </CardHeader>
+          </Card>
+        </div>
+      }
+    >
+      <CheckoutSuccessContent />
+    </Suspense>
   )
 }

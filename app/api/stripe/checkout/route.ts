@@ -28,15 +28,17 @@ const postHandler = withAuth(async (request: NextRequest, authUser) => {
   try {
     // Parse request body
     let priceId: string | undefined
+    let returnTo: string | undefined
     try {
       const body = await request.json()
       priceId = body.priceId
+      returnTo = body.returnTo
     } catch {
       // No body or invalid JSON, use default price
     }
 
-    // Create checkout session
-    const result = await createCheckoutSession(authUser.uid, priceId)
+    // Create checkout session with optional return URL
+    const result = await createCheckoutSession(authUser.uid, priceId, returnTo)
 
     if ('error' in result) {
       return NextResponse.json({ error: result.error }, { status: 400 })

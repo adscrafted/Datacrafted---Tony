@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/contexts/auth-context'
 import { useUIStore } from '@/lib/stores/ui-store'
 import {
@@ -15,6 +16,9 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Check, Sparkles, Zap, MessageSquare, BarChart3 } from 'lucide-react'
 
+// Key for storing return URL in localStorage across page redirects
+const PENDING_RETURN_URL_KEY = 'datacrafted_pending_return_url'
+
 const PRO_FEATURES = [
   'Unlimited AI analyses',
   'Unlimited chat messages',
@@ -28,6 +32,8 @@ export function UpgradeModal() {
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
 
   const showPaywallModal = useUIStore((state) => state.showPaywallModal)
   const paywallType = useUIStore((state) => state.paywallType)
@@ -44,6 +50,16 @@ export function UpgradeModal() {
     setError(null)
 
     try {
+      // Store the current URL so we can return after payment
+      // Include query params to preserve any project/session context
+      const currentUrl = searchParams.toString()
+        ? `${pathname}?${searchParams.toString()}`
+        : pathname
+
+      // Save to localStorage (persists across redirects)
+      localStorage.setItem(PENDING_RETURN_URL_KEY, currentUrl)
+      console.log('[PAYWALL] Saved return URL:', currentUrl)
+
       const token = await user.getIdToken()
       const response = await fetch('/api/stripe/checkout', {
         method: 'POST',
@@ -51,6 +67,9 @@ export function UpgradeModal() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
+        body: JSON.stringify({
+          returnTo: currentUrl, // Also pass to backend for success URL
+        }),
       })
 
       const data = await response.json()

@@ -315,10 +315,15 @@ export async function getOrCreateStripeCustomer(firebaseUid: string): Promise<st
 
 /**
  * Create Stripe checkout session for subscription
+ *
+ * @param firebaseUid - User's Firebase UID
+ * @param priceId - Optional Stripe price ID (defaults to PRO_MONTHLY)
+ * @param returnTo - Optional URL to redirect to after successful payment
  */
 export async function createCheckoutSession(
   firebaseUid: string,
-  priceId?: string
+  priceId?: string,
+  returnTo?: string
 ): Promise<{ url: string } | { error: string }> {
   if (!isStripeConfigured() || !stripe) {
     return { error: 'Payment system is not configured' }
@@ -340,6 +345,12 @@ export async function createCheckoutSession(
     return { error: 'Price ID is not configured' }
   }
 
+  // Build success URL with optional returnTo parameter
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  const successUrl = returnTo
+    ? `${baseUrl}/account/billing/success?returnTo=${encodeURIComponent(returnTo)}`
+    : `${baseUrl}/account/billing/success`
+
   try {
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -351,11 +362,12 @@ export async function createCheckoutSession(
           quantity: 1,
         },
       ],
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/account/billing?success=true`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/account/billing?canceled=true`,
+      success_url: successUrl,
+      cancel_url: `${baseUrl}/account/billing?canceled=true`,
       metadata: {
         firebaseUid,
         userId: user.id,
+        returnTo: returnTo || '', // Store for potential webhook use
       },
       subscription_data: {
         metadata: {

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
+import { Suspense } from 'react'
 import './globals.css'
 import { AuthProvider } from '@/lib/contexts/auth-context'
 import { ToastContainer } from '@/components/ui/toast'
@@ -130,7 +131,9 @@ export default function RootLayout({
         <AuthProvider>
           {children}
           <ToastContainer />
-          <UpgradeModal />
+          <Suspense fallback={null}>
+            <UpgradeModal />
+          </Suspense>
         </AuthProvider>
       </body>
     </html>
