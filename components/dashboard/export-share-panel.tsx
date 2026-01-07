@@ -5,7 +5,8 @@ import { Download, Share2, Link, Copy, FileImage, FileText, Database, QrCode, Ma
 import { cn } from '@/lib/utils/cn'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useDataStore } from '@/lib/store'
+import { useDataStore } from '@/lib/stores/data-store'
+import { useDataStore as useLegacyStore } from '@/lib/store' // For export functions (to be migrated)
 import { useChartStore } from '@/lib/stores/chart-store'
 import { useSessionStore } from '@/lib/stores/session-store'
 
@@ -97,9 +98,9 @@ export function ExportSharePanel({ className }: ExportSharePanelProps) {
   const dashboardFilters = useChartStore((state) => state.dashboardFilters)
 
   // Functions still in monolithic store (to be migrated later)
-  const exportDashboard = useDataStore((state) => state.exportDashboard)
-  const exportSession = useDataStore((state) => state.exportSession)
-  const generateShareableLink = useDataStore((state) => state.generateShareableLink)
+  const exportDashboard = useLegacyStore((state) => state.exportDashboard)
+  const exportSession = useLegacyStore((state) => state.exportSession)
+  const generateShareableLink = useLegacyStore((state) => state.generateShareableLink)
 
   const [isOpen, setIsOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'export' | 'share'>('export')

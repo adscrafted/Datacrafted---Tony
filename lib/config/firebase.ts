@@ -1,7 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
-import { getStorage } from 'firebase/storage'
 
 /**
  * Client-side Firebase Configuration
@@ -12,6 +10,10 @@ import { getStorage } from 'firebase/storage'
  * SECURITY NOTE: This file no longer exports DEBUG_MODE.
  * Debug mode for authentication bypass is server-side only.
  * For client-side debug logging, use lib/debug.ts instead.
+ *
+ * OPTIMIZATION NOTE: Only auth is imported here. Firestore and Storage
+ * were removed as the app uses Prisma for database operations.
+ * Add them back only if needed to reduce bundle size (~50-100KB each).
  */
 
 /**
@@ -54,9 +56,7 @@ const firebaseConfig = {
 // Initialize Firebase only on client side
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp()
 
-// Firebase services
+// Firebase services - Only auth is exported (Prisma handles database)
 export const auth = getAuth(app)
-export const db = getFirestore(app)
-export const storage = getStorage(app)
 
 export default app

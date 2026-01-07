@@ -6,14 +6,17 @@
  *
  * POST /api/stripe/portal
  * Returns: { url: string } | { error: string }
+ *
+ * Rate limited: 10 requests per minute to prevent abuse
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/lib/middleware/auth'
+import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 import { createPortalSession } from '@/lib/services/subscription-service'
 import { isStripeConfigured } from '@/lib/config/stripe'
 
-export const POST = withAuth(async (request: NextRequest, authUser) => {
+const postHandler = withAuth(async (request: NextRequest, authUser) => {
   // Check if Stripe is configured
   if (!isStripeConfigured()) {
     return NextResponse.json(
@@ -39,3 +42,5 @@ export const POST = withAuth(async (request: NextRequest, authUser) => {
     )
   }
 })
+
+export const POST = withRateLimit(RATE_LIMITS.AUTH, postHandler)

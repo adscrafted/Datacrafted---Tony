@@ -1,4 +1,6 @@
 // IndexedDB storage for large datasets
+import type { DataRow } from '@/lib/stores/data-store'
+
 const DB_NAME = 'DatacraftedDB'
 const DB_VERSION = 1
 const STORE_NAME = 'datasets'
@@ -6,7 +8,7 @@ const STORE_NAME = 'datasets'
 interface StoredDataset {
   id: string
   fileName: string
-  data: any[]
+  data: DataRow[]
   timestamp: number
 }
 
@@ -34,7 +36,7 @@ class DataStorage {
     })
   }
 
-  async saveData(fileName: string, data: any[]): Promise<string> {
+  async saveData(fileName: string, data: DataRow[]): Promise<string> {
     if (!this.db) await this.init()
     
     const id = `${fileName}_${Date.now()}`
@@ -55,7 +57,7 @@ class DataStorage {
     })
   }
 
-  async loadData(id: string): Promise<any[] | null> {
+  async loadData(id: string): Promise<DataRow[] | null> {
     if (!this.db) await this.init()
 
     return new Promise((resolve, reject) => {
@@ -71,7 +73,7 @@ class DataStorage {
     })
   }
 
-  async loadLatestData(fileName: string): Promise<any[] | null> {
+  async loadLatestData(fileName: string): Promise<DataRow[] | null> {
     if (!this.db) await this.init()
 
     return new Promise((resolve, reject) => {

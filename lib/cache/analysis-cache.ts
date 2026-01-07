@@ -135,8 +135,11 @@ export async function getCachedAnalysis<T = any>(dataHash: string): Promise<T | 
         // Update hit counter (fire and forget)
         cached.hits++
         cacheStats.hits++
-        redisClient.set(dataHash, cached, { ex: CACHE_TTL_SECONDS }).catch(() => {
-          // Silently fail hit counter update
+        redisClient.set(dataHash, cached, { ex: CACHE_TTL_SECONDS }).catch((err) => {
+          // Log in development, silent in production (non-critical operation)
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[CACHE] Failed to update hit counter:', err.message)
+          }
         })
 
         const age = Date.now() - cached.timestamp

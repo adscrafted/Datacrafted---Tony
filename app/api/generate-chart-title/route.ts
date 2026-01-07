@@ -1,19 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { parseJSONFromString } from '@/lib/utils/json-extractor'
 import { validateRequest, generateChartTitleRequestSchema } from '@/lib/utils/api-validation'
+import { withAuth } from '@/lib/middleware/auth'
+import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 import {
   getAIProvider,
   generateCompletionWithRetry,
   type AIMessage
 } from '@/lib/services/ai/ai-provider'
 
+const isDev = process.env.NODE_ENV === 'development'
+const log = (...args: unknown[]) => { if (isDev) console.log(...args) }
+
 interface GenerateTitleResponse {
   title: string
   description: string
 }
 
-export async function POST(request: NextRequest) {
+/**
+ * POST /api/generate-chart-title
+ * Generate AI-powered chart title and description
+ *
+ * PROTECTED: Requires authentication
+ *
+ * Rate limit: ANALYSIS rate limit (5 requests per minute)
+ *
+ * Request headers:
+ * - Authorization: Bearer <firebase-token>
+ *
+ * Request body:
+ * - chartType: string (required)
+ * - dataMapping: object (optional)
+ * - sampleData: array (optional)
+ * - dataSchema: array (optional)
+ *
+ * Response:
+ * - 200: { title, description }
+ * - 400: Invalid request body
+ * - 401: Unauthorized
+ * - 429: Too Many Requests
+ * - 500: Internal server error
+ */
+const postHandler = withAuth(async (request: NextRequest, firebaseUser) => {
   try {
+    log('[API] Generating chart title for user:', firebaseUser.uid)
+
     // Validate request body with Zod
     const validation = await validateRequest(request, generateChartTitleRequestSchema)
     if (!validation.success) {
@@ -79,6 +110,7 @@ You MUST respond with valid JSON using EXACTLY this format:
     const title = result.title?.slice(0, 60) || 'Chart Title'
     const description = result.description?.slice(0, 150) || 'Chart description'
 
+    log('[API] Generated chart title:', title)
     return NextResponse.json({ title, description })
 
   } catch (error) {
@@ -96,7 +128,9 @@ You MUST respond with valid JSON using EXACTLY this format:
       { status: 500 }
     )
   }
-}
+})
+
+export const POST = withRateLimit(RATE_LIMITS.ANALYSIS, postHandler)
 
 function buildPromptContext(
   chartType: string,

@@ -1,14 +1,30 @@
 'use client'
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
+import dynamic from 'next/dynamic'
 import { Responsive, WidthProvider, type Layout as GridLayout } from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
-import { Plus, Layout, Calendar, X } from 'lucide-react'
+import { Plus, Layout, Calendar, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EnhancedChartWrapper } from './enhanced-chart-wrapper'
-import { ChartTemplateGallery } from './chart-template-gallery'
 import { ChartCustomizationPanel } from './chart-customization-panel'
+
+// Dynamic import for ChartTemplateGallery - only loaded when needed (modal component)
+const ChartTemplateGallery = dynamic(
+  () => import('./chart-template-gallery').then(mod => ({ default: mod.ChartTemplateGallery })),
+  {
+    loading: () => (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="bg-white rounded-lg p-8 flex items-center gap-3">
+          <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+          <span className="text-gray-700">Loading chart templates...</span>
+        </div>
+      </div>
+    ),
+    ssr: false
+  }
+)
 import { DateRangeSelector } from './date-range-selector'
 import { AdvancedFilterSystem } from './advanced-filter-system'
 import { useDataStore } from '@/lib/stores/data-store'

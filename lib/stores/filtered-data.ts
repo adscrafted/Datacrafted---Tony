@@ -14,6 +14,7 @@
  * const filteredData = getFilteredData()
  */
 
+import { useShallow } from 'zustand/react/shallow'
 import { useDataStore, type DataRow } from './data-store'
 import { useChartStore } from './chart-store'
 import { useUIStore } from './ui-store'
@@ -292,15 +293,20 @@ export function invalidateFilteredDataCache() {
 /**
  * React hook version of getFilteredData
  * This subscribes to changes in all relevant stores
+ *
+ * PERFORMANCE: Uses useShallow to prevent unnecessary re-renders
+ * when selecting multiple properties from the chart store.
  */
 export function useFilteredData(): DataRow[] {
-  // Subscribe to all relevant stores
+  // Subscribe to all relevant stores with shallow comparison
   const rawData = useDataStore((state) => state.rawData)
-  const { dashboardFilters, dateRange, granularity } = useChartStore((state) => ({
-    dashboardFilters: state.dashboardFilters,
-    dateRange: state.dateRange,
-    granularity: state.granularity
-  }))
+  const { dashboardFilters, dateRange, granularity } = useChartStore(
+    useShallow((state) => ({
+      dashboardFilters: state.dashboardFilters,
+      dateRange: state.dateRange,
+      granularity: state.granularity
+    }))
+  )
   const selectedDateColumn = useUIStore((state) => state.selectedDateColumn)
 
   // Recalculate when any dependency changes

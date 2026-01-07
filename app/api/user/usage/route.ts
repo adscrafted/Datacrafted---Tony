@@ -11,13 +11,16 @@
  *   analyses: { used: number, limit: number, remaining: number },
  *   chat: { used: number, limit: number, remaining: number, resetsAt: string | null }
  * }
+ *
+ * Rate limited: 30 requests per minute (allows polling but prevents abuse)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/lib/middleware/auth'
+import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 import { getUserUsage } from '@/lib/services/subscription-service'
 
-export const GET = withAuth(async (request: NextRequest, authUser) => {
+const getHandler = withAuth(async (request: NextRequest, authUser) => {
   try {
     const usage = await getUserUsage(authUser.uid)
 
@@ -55,3 +58,5 @@ export const GET = withAuth(async (request: NextRequest, authUser) => {
     )
   }
 })
+
+export const GET = withRateLimit(RATE_LIMITS.SESSION, getHandler)

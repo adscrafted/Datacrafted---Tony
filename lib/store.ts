@@ -767,6 +767,18 @@ const getCurrentStateForAction = (action: string, state: DataStore): Record<stri
   }
 }
 
+/**
+ * @deprecated LEGACY STORE - Use modular stores from @/lib/stores/ instead
+ *
+ * This monolithic store is being phased out in favor of smaller, focused stores:
+ * - useDataStore from @/lib/stores/data-store (data operations)
+ * - useUIStore from @/lib/stores/ui-store (UI state)
+ * - useChartStore from @/lib/stores/chart-store (chart customizations)
+ * - useSessionStore from @/lib/stores/session-store (sessions)
+ * - useChatStore from @/lib/stores/chat-store (chat messages)
+ *
+ * Import types from @/lib/stores/ barrel export instead.
+ */
 export const useDataStore = create<DataStore>()(
   persist(
     (set, get) => ({
