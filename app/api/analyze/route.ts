@@ -2635,11 +2635,11 @@ export async function OPTIONS() {
 export const maxDuration = 300 // 5 minutes timeout
 export const runtime = 'nodejs' // Node.js runtime for full API support
 
-// Security: Request body size limit
+// Security: Request body size limit (50MB for large datasets)
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: '10mb'
+      sizeLimit: '50mb'
     }
   }
 }

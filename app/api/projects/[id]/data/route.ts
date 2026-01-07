@@ -39,6 +39,10 @@
  * ```
  */
 
+// Route segment config - increase body size limit for large data uploads
+export const runtime = 'nodejs'
+export const maxDuration = 60 // 60 seconds for large file processing
+
 import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/lib/middleware/auth'
 import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
@@ -737,3 +741,12 @@ const deleteHandler = withAuth(async (request, authUser, context) => {
 })
 
 export const DELETE = withRateLimit(RATE_LIMITS.SESSION, deleteHandler)
+
+// Next.js Route Segment Config - increase body size limit for large data uploads
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '50mb'
+    }
+  }
+}

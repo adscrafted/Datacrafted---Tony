@@ -12,10 +12,20 @@ const nextConfig = {
     } : false,
   },
 
+  // API body size limit for pages/api routes (Pages Router legacy support)
+  api: {
+    bodyParser: {
+      sizeLimit: '50mb',
+    },
+    responseLimit: '50mb',
+  },
+
   experimental: {
     serverActions: {
       bodySizeLimit: '50mb',
     },
+    // Increase body size limit for middleware (prevents 10MB truncation on large uploads)
+    middlewareClientMaxBodySize: '50mb',
     // PERFORMANCE OPTIMIZATION: Optimize package imports for tree-shaking
     // Automatically transforms imports to use tree-shakable paths
     optimizePackageImports: [
