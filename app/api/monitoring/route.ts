@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { validateRequest, monitoringDataSchema } from '@/lib/utils/api-validation'
-import { badRequest, rateLimitExceeded, serverError } from '@/lib/utils/api-errors'
+import { badRequest, serverError } from '@/lib/utils/api-errors'
+import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 
-export async function POST(request: NextRequest) {
+const postHandler = async (request: NextRequest) => {
   try {
-    // Rate limiting check
-    const clientIP = request.headers.get('x-forwarded-for') || 'unknown'
-    if (await isRateLimited(clientIP)) {
-      return rateLimitExceeded(60)
-    }
-
     // Validate request body with Zod
     const validation = await validateRequest(request, monitoringDataSchema)
     if (!validation.success) {
@@ -39,6 +34,9 @@ export async function POST(request: NextRequest) {
     return serverError('Failed to process monitoring data', error as Error)
   }
 }
+
+// Use centralized rate limiting with secure IP detection
+export const POST = withRateLimit(RATE_LIMITS.PUBLIC, postHandler)
 
 async function processErrorData(data: any) {
   // Log to console in development
@@ -121,39 +119,3 @@ async function processEventData(data: any) {
   // Similar to performance data but for user interactions
 }
 
-// Simple in-memory rate limiting (use Redis in production)
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>()
-
-async function isRateLimited(clientIP: string): Promise<boolean> {
-  const now = Date.now()
-  const windowMs = 60 * 1000 // 1 minute
-  const maxRequests = 100 // Max 100 requests per minute per IP
-  
-  const clientData = rateLimitMap.get(clientIP)
-  
-  if (!clientData || now > clientData.resetTime) {
-    rateLimitMap.set(clientIP, {
-      count: 1,
-      resetTime: now + windowMs
-    })
-    return false
-  }
-  
-  if (clientData.count >= maxRequests) {
-    return true
-  }
-  
-  clientData.count++
-  return false
-}
-
-// Clean up old rate limit entries periodically
-setInterval(() => {
-  const now = Date.now()
-  const entries = Array.from(rateLimitMap.entries())
-  for (const [ip, data] of entries) {
-    if (now > data.resetTime) {
-      rateLimitMap.delete(ip)
-    }
-  }
-}, 5 * 60 * 1000) // Clean up every 5 minutes

@@ -153,33 +153,77 @@ function getUpstashRateLimiter(config: RateLimitConfig): Ratelimit | null {
 
 /**
  * Get client identifier from request
- * Uses x-forwarded-for or x-real-ip headers from proxy/load balancer
+ *
+ * SECURITY: Uses a single authoritative IP source to prevent bypass:
+ * 1. For authenticated requests: Uses user ID (unspoofable)
+ * 2. For unauthenticated: Uses trusted proxy headers in priority order
+ *
+ * IMPORTANT: Does NOT use User-Agent because it can be easily rotated
+ * to bypass rate limits. Uses IP-only identification for unauthenticated requests.
  *
  * @param request - Next.js request object
- * @returns Client IP address or 'unknown'
+ * @param userId - Optional user ID from authentication (preferred)
+ * @returns Client identifier string
  */
-function getClientIdentifier(request: NextRequest): string {
-  // Try x-forwarded-for first (standard proxy header)
-  const forwardedFor = request.headers.get('x-forwarded-for')
-  if (forwardedFor) {
-    // x-forwarded-for can contain multiple IPs (client, proxy1, proxy2, ...)
-    // Use the first one (original client)
-    return forwardedFor.split(',')[0].trim()
+function getClientIdentifier(request: NextRequest, userId?: string): string {
+  // BEST: Use user ID for authenticated requests (cannot be spoofed)
+  if (userId) {
+    return `user:${userId}`
   }
 
-  // Try x-real-ip (alternative proxy header)
+  // Priority 1: Cloudflare's trusted header (cannot be spoofed when using Cloudflare)
+  const cfConnectingIp = request.headers.get('cf-connecting-ip')
+  if (cfConnectingIp) {
+    return `ip:${cfConnectingIp.trim()}`
+  }
+
+  // Priority 2: Railway/Render/Vercel trusted header
   const realIp = request.headers.get('x-real-ip')
   if (realIp) {
-    return realIp.trim()
+    return `ip:${realIp.trim()}`
   }
 
-  // Fallback to unknown (should rarely happen in production)
-  if (process.env.NODE_ENV === 'development') {
-    console.debug('[RATE-LIMIT] Using fallback IP in development mode')
-  } else {
-    console.warn('[RATE-LIMIT] Could not determine client IP, using fallback')
+  // Priority 3: x-forwarded-for - use LAST IP (closest to infrastructure, harder to spoof)
+  // Note: First IP can be easily spoofed, last IP is typically from the load balancer
+  const forwardedFor = request.headers.get('x-forwarded-for')
+  if (forwardedFor) {
+    const ips = forwardedFor.split(',').map(ip => ip.trim())
+    const lastIp = ips[ips.length - 1]
+    if (lastIp) {
+      return `ip:${lastIp}`
+    }
+  }
+
+  // Fallback: Use 'unknown' with stricter limits implied
+  // This should rarely happen in production behind a proper proxy
+  if (process.env.NODE_ENV !== 'development') {
+    console.warn('[RATE-LIMIT] Could not determine client IP - using restrictive fallback')
   }
   return 'unknown'
+}
+
+/**
+ * Extract user ID from Authorization header if present
+ * This is used for more accurate rate limiting on authenticated routes
+ */
+async function extractUserIdFromRequest(request: NextRequest): Promise<string | undefined> {
+  const authHeader = request.headers.get('authorization')
+
+  if (!authHeader?.startsWith('Bearer ')) {
+    return undefined
+  }
+
+  try {
+    // Dynamically import to avoid circular dependencies
+    const { getAdminAuth } = await import('@/lib/config/firebase-admin')
+    const adminAuth = getAdminAuth()
+    const token = authHeader.slice(7)
+    const decodedToken = await adminAuth.verifyIdToken(token)
+    return decodedToken.uid
+  } catch {
+    // Token invalid or expired - treat as unauthenticated
+    return undefined
+  }
 }
 
 /**
@@ -382,8 +426,11 @@ export function createRateLimiter(config: RateLimitConfig) {
     request: NextRequest,
     handler: () => Promise<NextResponse>
   ): Promise<NextResponse> {
-    // Get client identifier (IP address)
-    const clientId = getClientIdentifier(request)
+    // Try to extract user ID for authenticated requests (more accurate rate limiting)
+    const userId = await extractUserIdFromRequest(request)
+
+    // Get client identifier (user ID preferred, falls back to IP + fingerprint)
+    const clientId = getClientIdentifier(request, userId)
 
     // Check rate limit (Redis or in-memory)
     const rateLimitResult = await checkRateLimit(clientId, config)

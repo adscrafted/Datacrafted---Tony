@@ -17,27 +17,7 @@ import {
 import { withAuth } from '@/lib/middleware/auth'
 import { withRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 
-// Rate limiting (legacy - now using withRateLimit middleware)
-const requestCounts = new Map<string, { count: number; resetTime: number }>()
-const RATE_LIMIT = 10 // requests per hour
-const RATE_LIMIT_WINDOW = 60 * 60 * 1000 // 1 hour in milliseconds
-
-function checkRateLimit(clientId: string): boolean {
-  const now = Date.now()
-  const clientData = requestCounts.get(clientId)
-
-  if (!clientData || now > clientData.resetTime) {
-    requestCounts.set(clientId, { count: 1, resetTime: now + RATE_LIMIT_WINDOW })
-    return true
-  }
-
-  if (clientData.count >= RATE_LIMIT) {
-    return false
-  }
-
-  clientData.count++
-  return true
-}
+// Note: Rate limiting is handled by withRateLimit middleware (see bottom of file)
 
 // Get data sample for AI analysis
 function getDataSample(data: DataRow[], maxRows: number = 3): DataRow[] {
@@ -445,6 +425,20 @@ const handler = withAuth(async (request: NextRequest, authUser) => {
   }
 
   try {
+    // Paywall check - this endpoint uses AI tokens (up to 4000 per request)
+    const { canPerformAnalysis } = await import('@/lib/services/subscription-service')
+    const usageCheck = await canPerformAnalysis(authUser.uid)
+    if (!usageCheck.allowed) {
+      return NextResponse.json({
+        error: 'Analysis limit reached',
+        code: 'PAYWALL_REQUIRED',
+        type: 'paywall',
+        message: usageCheck.message,
+        usage: { used: usageCheck.used, limit: usageCheck.limit },
+        upgradeUrl: '/account/billing'
+      }, { status: 402 })
+    }
+
     // Check API key based on provider
     const hasApiKey = aiProvider === 'gemini'
       ? !!process.env.GOOGLE_GEMINI_API_KEY
@@ -597,6 +591,10 @@ You MUST respond with valid JSON using the expected format with "recommendations
         timeTaken: Date.now() - requestStartTime
       }
     }
+
+    // Increment analysis count after successful AI operation (4000 tokens used)
+    const { incrementAnalysisCount } = await import('@/lib/services/subscription-service')
+    await incrementAnalysisCount(authUser.uid)
 
     return NextResponse.json(result)
 

@@ -25,7 +25,12 @@ export const stripe = STRIPE_SECRET_KEY
   : null
 
 // Feature flag for paywall
-export const PAYWALL_ENABLED = process.env.PAYWALL_ENABLED === 'true'
+// SECURITY: Default to TRUE in production to prevent accidental free access
+// Only disable paywall if explicitly set to 'false' in development
+const isProduction = process.env.NODE_ENV === 'production'
+export const PAYWALL_ENABLED = isProduction
+  ? process.env.PAYWALL_ENABLED !== 'false' // Default TRUE in production
+  : process.env.PAYWALL_ENABLED === 'true'  // Default FALSE in development
 
 // Plan definitions with limits
 export const PLAN_LIMITS = {
@@ -77,7 +82,7 @@ export function getPlanLimits(tier: PlanTier) {
 }
 
 // Development mode check
-export const isDevelopment = process.env.NODE_ENV === 'development'
+export const isDevelopment = !isProduction
 
 // Log configuration status in development
 if (isDevelopment) {

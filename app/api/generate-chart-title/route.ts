@@ -45,6 +45,9 @@ const postHandler = withAuth(async (request: NextRequest, firebaseUser) => {
   try {
     log('[API] Generating chart title for user:', firebaseUser.uid)
 
+    // Note: No paywall check for this endpoint - it's a lightweight helper (200 tokens)
+    // that's part of normal chart creation workflow. Full analyses are gated elsewhere.
+
     // Validate request body with Zod
     const validation = await validateRequest(request, generateChartTitleRequestSchema)
     if (!validation.success) {

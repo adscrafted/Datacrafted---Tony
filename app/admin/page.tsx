@@ -1,9 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/lib/contexts/auth-context'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Trash2, Database, RefreshCw, BarChart3 } from 'lucide-react'
+import { Trash2, Database, RefreshCw, BarChart3, ShieldAlert, Loader2 } from 'lucide-react'
+import { isAdmin } from '@/lib/config/admin'
 
 interface DatabaseStats {
   sessions: {
@@ -30,17 +33,53 @@ interface CleanupStats {
 }
 
 export default function AdminPage() {
+  const { user, loading: authLoading } = useAuth()
+  const router = useRouter()
   const [stats, setStats] = useState<DatabaseStats | null>(null)
   const [cleanupStats, setCleanupStats] = useState<CleanupStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isRunningCleanup, setIsRunningCleanup] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isAuthorized, setIsAuthorized] = useState(false)
+
+  // Check admin authorization
+  useEffect(() => {
+    if (authLoading) return
+
+    if (!user) {
+      router.push('/auth/signin?redirect=/admin')
+      return
+    }
+
+    if (!isAdmin(user.email)) {
+      console.warn('[ADMIN] Unauthorized access attempt:', user.email)
+      router.push('/dashboard')
+      return
+    }
+
+    setIsAuthorized(true)
+  }, [user, authLoading, router])
+
+  const getAuthToken = async () => {
+    if (!user) return null
+    return user.getIdToken()
+  }
 
   const loadStats = async () => {
     try {
       setError(null)
-      const response = await fetch('/api/admin/cleanup')
+      const token = await getAuthToken()
+      if (!token) return
+
+      const response = await fetch('/api/admin/cleanup', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
       if (!response.ok) {
+        if (response.status === 403) {
+          throw new Error('Access denied - admin privileges required')
+        }
         throw new Error('Failed to load stats')
       }
       const data = await response.json()
@@ -61,15 +100,24 @@ export default function AdminPage() {
     try {
       setIsRunningCleanup(true)
       setError(null)
-      
+
+      const token = await getAuthToken()
+      if (!token) return
+
       const response = await fetch('/api/admin/cleanup', {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       })
-      
+
       if (!response.ok) {
+        if (response.status === 403) {
+          throw new Error('Access denied - admin privileges required')
+        }
         throw new Error('Cleanup request failed')
       }
-      
+
       const data = await response.json()
       if (data.success) {
         setCleanupStats(data.stats)
@@ -87,8 +135,24 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    loadStats()
-  }, [])
+    if (isAuthorized) {
+      loadStats()
+    }
+  }, [isAuthorized])
+
+  // Loading state
+  if (authLoading || !isAuthorized) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Card className="max-w-md w-full">
+          <CardContent className="p-8 text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-muted-foreground">Verifying admin access...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -98,10 +162,17 @@ export default function AdminPage() {
           <div className="flex items-center space-x-2">
             <BarChart3 className="h-8 w-8 text-primary" />
             <span className="text-xl font-bold">DataCrafted Admin</span>
+            <span className="ml-2 px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full flex items-center">
+              <ShieldAlert className="h-3 w-3 mr-1" />
+              Admin Only
+            </span>
           </div>
-          <Button onClick={() => window.location.href = '/'} variant="outline">
-            Back to App
-          </Button>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-muted-foreground">{user?.email}</span>
+            <Button onClick={() => router.push('/dashboard')} variant="outline">
+              Back to App
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -117,7 +188,7 @@ export default function AdminPage() {
 
           {/* Actions */}
           <div className="flex gap-4">
-            <Button 
+            <Button
               onClick={loadStats}
               disabled={isLoading}
               variant="outline"
@@ -125,7 +196,7 @@ export default function AdminPage() {
               <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
               Refresh Stats
             </Button>
-            <Button 
+            <Button
               onClick={runCleanup}
               disabled={isRunningCleanup}
               variant="destructive"
@@ -259,15 +330,15 @@ export default function AdminPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="font-medium">Database</p>
-                  <p className="text-muted-foreground">SQLite with Prisma ORM</p>
+                  <p className="text-muted-foreground">PostgreSQL with Prisma ORM</p>
                 </div>
                 <div>
                   <p className="font-medium">File Storage</p>
-                  <p className="text-muted-foreground">Local filesystem</p>
+                  <p className="text-muted-foreground">Compressed in database</p>
                 </div>
                 <div>
                   <p className="font-medium">Session Management</p>
-                  <p className="text-muted-foreground">Cookie-based with 30-day expiration</p>
+                  <p className="text-muted-foreground">Firebase Auth with JWT tokens</p>
                 </div>
                 <div>
                   <p className="font-medium">Last Updated</p>

@@ -20,13 +20,16 @@ import { Check, Sparkles, Zap, MessageSquare, BarChart3 } from 'lucide-react'
 const PENDING_RETURN_URL_KEY = 'datacrafted_pending_return_url'
 
 const PRO_FEATURES = [
-  'Unlimited AI analyses',
+  'Unlimited AI analyses*',
   'Unlimited chat messages',
   'Up to 1M rows per file',
   'Priority support',
   'Advanced chart types',
   'Export without watermarks',
 ]
+
+// Fair use note shown below features
+const FAIR_USE_NOTE = '*Subject to fair use rate limits (10/hr)'
 
 export function UpgradeModal() {
   const { user } = useAuth()
@@ -167,6 +170,7 @@ export function UpgradeModal() {
                 </div>
               ))}
             </div>
+            <p className="text-xs text-gray-500 mt-2">{FAIR_USE_NOTE}</p>
           </div>
 
           {/* Error message */}

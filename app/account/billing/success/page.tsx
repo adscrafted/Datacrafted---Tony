@@ -9,6 +9,105 @@ import { CheckCircle, Loader2, ArrowRight, Sparkles, BarChart3 } from 'lucide-re
 // Key for storing return URL in localStorage across page redirects
 const PENDING_RETURN_URL_KEY = 'datacrafted_pending_return_url'
 
+// Whitelist of allowed redirect path patterns (security: prevents open redirect attacks)
+// Note: Query params are validated separately to only allow safe characters
+const ALLOWED_REDIRECT_PATTERNS = [
+  /^\/dashboard$/,
+  /^\/projects$/,
+  /^\/projects\/[a-zA-Z0-9_-]+$/,
+  /^\/analyze$/,
+  /^\/account\/billing$/,
+  /^\/account\/team$/,
+]
+
+// Safe query string pattern - only allows alphanumeric, common URL-safe chars
+const SAFE_QUERY_PATTERN = /^[a-zA-Z0-9_=&%.-]*$/
+
+/**
+ * Validates return URL to prevent open redirect vulnerabilities
+ * Only allows relative paths matching the whitelist
+ *
+ * Security measures:
+ * - URL decoding to catch encoded bypasses
+ * - Backslash normalization (browsers convert \ to /)
+ * - Protocol and external URL blocking
+ * - Path traversal blocking
+ * - Control character blocking
+ * - Whitelist-based path validation
+ * - Query parameter sanitization
+ */
+function isValidReturnUrl(url: string | null): boolean {
+  if (!url) return false
+
+  // Decode URL to catch encoded bypass attempts (e.g., %2F%2F for //)
+  let decodedUrl: string
+  try {
+    // Double decode to catch double-encoding attacks
+    decodedUrl = decodeURIComponent(decodeURIComponent(url))
+  } catch {
+    // Invalid encoding - reject
+    console.warn('[BILLING SUCCESS] Invalid URL encoding:', url)
+    return false
+  }
+
+  // Normalize backslashes to forward slashes (browsers may convert them)
+  const normalizedUrl = decodedUrl.replace(/\\/g, '/')
+
+  // Block protocol schemes (check decoded version)
+  if (normalizedUrl.includes('://')) {
+    console.warn('[BILLING SUCCESS] Blocked external redirect URL:', url)
+    return false
+  }
+
+  // Block protocol-relative URLs
+  if (normalizedUrl.startsWith('//')) {
+    console.warn('[BILLING SUCCESS] Blocked protocol-relative URL:', url)
+    return false
+  }
+
+  // Must start with exactly one forward slash
+  if (!normalizedUrl.startsWith('/')) {
+    console.warn('[BILLING SUCCESS] Blocked non-absolute path:', url)
+    return false
+  }
+
+  // Block any URL with @ (credential injection)
+  if (normalizedUrl.includes('@')) {
+    console.warn('[BILLING SUCCESS] Blocked URL with @ character:', url)
+    return false
+  }
+
+  // Block path traversal attempts
+  if (normalizedUrl.includes('..') || normalizedUrl.includes('./')) {
+    console.warn('[BILLING SUCCESS] Blocked path traversal attempt:', url)
+    return false
+  }
+
+  // Block null bytes and other control characters
+  if (/[\x00-\x1f\x7f]/.test(normalizedUrl)) {
+    console.warn('[BILLING SUCCESS] Blocked control characters:', url)
+    return false
+  }
+
+  // Split path and query string
+  const [path, queryString] = normalizedUrl.split('?')
+
+  // Validate query string if present (only allow safe characters)
+  if (queryString && !SAFE_QUERY_PATTERN.test(queryString)) {
+    console.warn('[BILLING SUCCESS] Blocked unsafe query string:', url)
+    return false
+  }
+
+  // Check path against whitelist (case-sensitive for security)
+  const isAllowed = ALLOWED_REDIRECT_PATTERNS.some(pattern => pattern.test(path))
+
+  if (!isAllowed) {
+    console.warn('[BILLING SUCCESS] URL path not in whitelist:', url)
+  }
+
+  return isAllowed
+}
+
 function CheckoutSuccessContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -23,11 +122,16 @@ function CheckoutSuccessContent() {
     // Check for return URL from query param first, then localStorage
     const pendingReturnUrl = returnToParam || localStorage.getItem(PENDING_RETURN_URL_KEY)
 
-    if (pendingReturnUrl) {
-      console.log('[BILLING SUCCESS] Found pending return URL:', pendingReturnUrl)
+    // Always clean up localStorage
+    localStorage.removeItem(PENDING_RETURN_URL_KEY)
+
+    // Validate the return URL before using it (security: prevent open redirect)
+    if (pendingReturnUrl && isValidReturnUrl(pendingReturnUrl)) {
+      console.log('[BILLING SUCCESS] Valid return URL:', pendingReturnUrl)
       setReturnUrl(pendingReturnUrl)
-      // Clean up localStorage
-      localStorage.removeItem(PENDING_RETURN_URL_KEY)
+    } else if (pendingReturnUrl) {
+      // URL was provided but failed validation - log and ignore
+      console.warn('[BILLING SUCCESS] Invalid return URL rejected, using default')
     }
 
     // Simple verification delay to allow webhook to process
@@ -104,7 +208,7 @@ function CheckoutSuccessContent() {
                 <ul className="space-y-2 text-sm text-gray-700">
                   <li className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
-                    Unlimited AI analyses
+                    Unlimited AI analyses*
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
@@ -119,6 +223,9 @@ function CheckoutSuccessContent() {
                     Priority support
                   </li>
                 </ul>
+                <p className="text-xs text-gray-500 mt-2">
+                  *Subject to fair use rate limits (10/hr)
+                </p>
               </div>
 
               {/* Return to analysis notification */}

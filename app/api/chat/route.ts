@@ -12,27 +12,7 @@ import {
 const isDev = process.env.NODE_ENV === 'development'
 const log = (...args: unknown[]) => { if (isDev) console.log(...args) }
 
-// Rate limiting (simple in-memory store for demo)
-const requestCounts = new Map<string, { count: number; resetTime: number }>()
-const RATE_LIMIT = 30 // requests per hour
-const RATE_LIMIT_WINDOW = 60 * 60 * 1000 // 1 hour in milliseconds
-
-function checkRateLimit(clientId: string): boolean {
-  const now = Date.now()
-  const clientData = requestCounts.get(clientId)
-
-  if (!clientData || now > clientData.resetTime) {
-    requestCounts.set(clientId, { count: 1, resetTime: now + RATE_LIMIT_WINDOW })
-    return true
-  }
-
-  if (clientData.count >= RATE_LIMIT) {
-    return false
-  }
-
-  clientData.count++
-  return true
-}
+// Note: Rate limiting is now handled by withRateLimit middleware (see bottom of file)
 
 function generateDataContext(data: DataRow[], schema: DataSchema | null, fileName: string | null) {
   if (!data || data.length === 0) {
@@ -161,16 +141,7 @@ export const POST = withAuth(async (request, authUser) => {
       )
     }
 
-    // SECURITY: Use authenticated user ID for rate limiting
-    const clientId = authUser.uid
-
-    // Check rate limit per authenticated user
-    if (!checkRateLimit(clientId)) {
-      return NextResponse.json(
-        { error: 'Rate limit exceeded. Please try again later.' },
-        { status: 429 }
-      )
-    }
+    // Note: Rate limiting is handled by withRateLimit middleware
 
     // Check chat message limit (paywall)
     const { canSendChatMessage, incrementChatCount, resetChatCountIfNeeded } = await import('@/lib/services/subscription-service')

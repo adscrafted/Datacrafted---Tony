@@ -47,7 +47,7 @@ const plans = [
     priceMonthly: 29,
     priceId: process.env.NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID || '',
     features: [
-      'Unlimited AI analyses',
+      'Unlimited AI analyses*',
       'Unlimited chat messages',
       'Unlimited projects',
       '100MB per file',
@@ -56,6 +56,7 @@ const plans = [
       'Priority support',
       'Export without watermarks',
     ],
+    fairUseNote: '*Subject to fair use rate limits (10/hr)',
     limitations: [],
     icon: Crown,
     popular: true
@@ -433,6 +434,9 @@ export default function BillingPage() {
                           <span className="text-sm">{feature}</span>
                         </div>
                       ))}
+                      {'fairUseNote' in plan && plan.fairUseNote && (
+                        <p className="text-xs text-gray-500 mt-2 pl-6">{plan.fairUseNote}</p>
+                      )}
                     </div>
 
                     {!isCurrent && plan.id !== 'free' && (
