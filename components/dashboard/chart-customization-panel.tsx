@@ -222,7 +222,7 @@ export function ChartCustomizationPanel({
       // Special case: if dataMapping is explicitly null, clear it completely
       dataMapping: updates.dataMapping === null ? {} :
         (updates.dataMapping ? {
-          ...customization?.dataMapping,
+          ...effectiveDataMapping,
           ...updates.dataMapping
         } : customization?.dataMapping),
       id: chartId
@@ -667,7 +667,7 @@ export function ChartCustomizationPanel({
                                 handleUpdate({
                                   dataMapping: {
                                     ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
-                                    ...customization?.dataMapping,
+                                    ...effectiveDataMapping,
                                     xAxis: data.fieldName,
                                     category: data.fieldName  // Also set category for consistency with AI format
                                   }
@@ -696,7 +696,7 @@ export function ChartCustomizationPanel({
                                     onClick={() => handleUpdate({
                                     dataMapping: {
                                       ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
-                                      ...customization?.dataMapping,
+                                      ...effectiveDataMapping,
                                       xAxis: undefined,
                                       category: undefined
                                     }
@@ -740,8 +740,8 @@ export function ChartCustomizationPanel({
                                     )
 
                                     if (allowField) {
-                                      // Support yAxis1, yAxis, or values (check all sources)
-                                      const currentYAxis1 = customization?.dataMapping?.yAxis1 || customization?.dataMapping?.yAxis || customization?.dataMapping?.values || effectiveDataMapping?.yAxis1 || effectiveDataMapping?.yAxis || effectiveDataMapping?.values
+                                      // Support yAxis1, yAxis, or values (effectiveDataMapping already includes customization)
+                                      const currentYAxis1 = effectiveDataMapping?.yAxis1 || effectiveDataMapping?.yAxis || effectiveDataMapping?.values
                                       let newYAxis1: string | string[]
 
                                       if (Array.isArray(currentYAxis1)) {
@@ -763,7 +763,7 @@ export function ChartCustomizationPanel({
                                       handleUpdate({
                                         dataMapping: {
                                           ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
-                                          ...customization?.dataMapping,
+                                          ...effectiveDataMapping,
                                           yAxis1: newYAxis1,
                                           yAxis: newYAxis1, // Update both for compatibility
                                           values: Array.isArray(newYAxis1) ? newYAxis1 : [newYAxis1] // Also update values for bar charts
@@ -801,8 +801,8 @@ export function ChartCustomizationPanel({
                                             />
                                             <button
                                               onClick={() => {
-                                              // Get current value from all sources
-                                              const currentYAxis1 = customization?.dataMapping?.yAxis1 || customization?.dataMapping?.yAxis || customization?.dataMapping?.values || effectiveDataMapping?.yAxis1 || effectiveDataMapping?.yAxis || effectiveDataMapping?.values
+                                              // Get current value (effectiveDataMapping already includes customization)
+                                              const currentYAxis1 = effectiveDataMapping?.yAxis1 || effectiveDataMapping?.yAxis || effectiveDataMapping?.values
                                               let newYAxis1: string | string[] | undefined
 
                                               if (Array.isArray(currentYAxis1)) {
@@ -821,7 +821,7 @@ export function ChartCustomizationPanel({
                                               handleUpdate({
                                                 dataMapping: {
                                                   ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
-                                                  ...customization?.dataMapping,
+                                                  ...effectiveDataMapping,
                                                   yAxis1: newYAxis1,
                                                   yAxis: newYAxis1, // Update both for compatibility
                                                   values: Array.isArray(newYAxis1) ? newYAxis1 : (newYAxis1 ? [newYAxis1] : undefined) // Also update values for bar charts
@@ -862,12 +862,12 @@ export function ChartCustomizationPanel({
                                     // Use intelligent field validation
                                     const allowField = isFieldAllowedForChart(
                                       effectiveChartType as any,
-                                      'yAxis1',
+                                      'yAxis2',
                                       data.fieldType
                                     )
 
                                     if (allowField) {
-                                      const currentYAxis2 = customization?.dataMapping?.yAxis2 || effectiveDataMapping?.yAxis2
+                                      const currentYAxis2 = effectiveDataMapping?.yAxis2
                                       let newYAxis2: string | string[]
 
                                       if (Array.isArray(currentYAxis2)) {
@@ -889,7 +889,7 @@ export function ChartCustomizationPanel({
                                       handleUpdate({
                                         dataMapping: {
                                           ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
-                                          ...customization?.dataMapping,
+                                          ...effectiveDataMapping,
                                           yAxis2: newYAxis2
                                         }
                                       })
@@ -922,7 +922,7 @@ export function ChartCustomizationPanel({
                                           />
                                           <button
                                             onClick={() => {
-                                            const currentYAxis2 = customization?.dataMapping?.yAxis2 || effectiveDataMapping?.yAxis2
+                                            const currentYAxis2 = effectiveDataMapping?.yAxis2
                                             let newYAxis2: string | string[] | undefined
 
                                             if (Array.isArray(currentYAxis2)) {
@@ -941,7 +941,7 @@ export function ChartCustomizationPanel({
                                             handleUpdate({
                                               dataMapping: {
                                                 ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
-                                                ...customization?.dataMapping,
+                                                ...effectiveDataMapping,
                                                 yAxis2: newYAxis2
                                               }
                                             })
@@ -979,8 +979,8 @@ export function ChartCustomizationPanel({
                                   const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                   // Use intelligent field validation
                                   if (isFieldAllowedForChart(effectiveChartType as any, 'yAxis', data.fieldType)) {
-                                    // Check all possible sources: yAxis, values, or yAxis1
-                                    const currentYAxis = customization?.dataMapping?.yAxis || customization?.dataMapping?.values || customization?.dataMapping?.yAxis1 || effectiveDataMapping?.yAxis || effectiveDataMapping?.values || effectiveDataMapping?.yAxis1
+                                    // Check all possible sources (effectiveDataMapping already includes customization)
+                                    const currentYAxis = effectiveDataMapping?.yAxis || effectiveDataMapping?.values || effectiveDataMapping?.yAxis1
                                     let newYAxis: string | string[]
 
                                     // Add to existing Y-axis fields
@@ -1003,7 +1003,7 @@ export function ChartCustomizationPanel({
                                     handleUpdate({
                                       dataMapping: {
                                         ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
-                                        ...customization?.dataMapping,
+                                        ...effectiveDataMapping,
                                         yAxis: newYAxis,
                                         values: Array.isArray(newYAxis) ? newYAxis : [newYAxis]  // Ensure values is always an array
                                       }
@@ -1042,8 +1042,8 @@ export function ChartCustomizationPanel({
                                           />
                                           <button
                                             onClick={() => {
-                                            // Check all possible sources: yAxis, values, or yAxis1
-                                            const currentYAxis = customization?.dataMapping?.yAxis || customization?.dataMapping?.values || customization?.dataMapping?.yAxis1 || effectiveDataMapping?.yAxis || effectiveDataMapping?.values || effectiveDataMapping?.yAxis1
+                                            // Check all possible sources (effectiveDataMapping already includes customization)
+                                            const currentYAxis = effectiveDataMapping?.yAxis || effectiveDataMapping?.values || effectiveDataMapping?.yAxis1
                                             let newYAxis: string | string[] | undefined
 
                                             if (Array.isArray(currentYAxis)) {
@@ -1062,7 +1062,7 @@ export function ChartCustomizationPanel({
                                             handleUpdate({
                                               dataMapping: {
                                                 ...effectiveDataMapping, // CRITICAL: Spread effectiveDataMapping first to preserve all fields
-                                                ...customization?.dataMapping,
+                                                ...effectiveDataMapping,
                                                 yAxis: newYAxis,
                                                 values: Array.isArray(newYAxis) ? newYAxis : (newYAxis ? [newYAxis] : undefined)
                                               }
@@ -1093,11 +1093,11 @@ export function ChartCustomizationPanel({
                                 Aggregation Method
                               </label>
                               <select
-                                value={customization?.dataMapping?.aggregation || 'sum'}
+                                value={effectiveDataMapping?.aggregation || 'sum'}
                                 onChange={(e) => {
                                   handleUpdate({
                                     dataMapping: {
-                                      ...customization?.dataMapping,
+                                      ...effectiveDataMapping,
                                       aggregation: e.target.value as any
                                     }
                                   })
@@ -1132,11 +1132,11 @@ export function ChartCustomizationPanel({
                                   <div>
                                     <label className="text-xs text-gray-600 mb-1 block">Sort By Column</label>
                                     <select
-                                      value={customization?.dataMapping?.sortBy || ''}
+                                      value={effectiveDataMapping?.sortBy || ''}
                                       onChange={(e) => {
                                         handleUpdate({
                                           dataMapping: {
-                                            ...customization?.dataMapping,
+                                            ...effectiveDataMapping,
                                             sortBy: e.target.value || undefined
                                           }
                                         })
@@ -1149,9 +1149,9 @@ export function ChartCustomizationPanel({
                                         <option key={col} value={col}>{col}</option>
                                       ))}
                                       {/* Show category/x-axis column for alphabetical sorting */}
-                                      {(customization?.dataMapping?.category || customization?.dataMapping?.xAxis) && (
-                                        <option value={customization?.dataMapping?.category || customization?.dataMapping?.xAxis}>
-                                          {customization?.dataMapping?.category || customization?.dataMapping?.xAxis} (Label)
+                                      {(effectiveDataMapping?.category || effectiveDataMapping?.xAxis) && (
+                                        <option value={effectiveDataMapping?.category || effectiveDataMapping?.xAxis}>
+                                          {effectiveDataMapping?.category || effectiveDataMapping?.xAxis} (Label)
                                         </option>
                                       )}
                                     </select>
@@ -1161,7 +1161,7 @@ export function ChartCustomizationPanel({
                                   </div>
 
                                 {/* Sort Order */}
-                                {customization?.dataMapping?.sortBy && (
+                                {effectiveDataMapping?.sortBy && (
                                   <div>
                                     <label className="text-xs text-gray-600 mb-1 block">Sort Order</label>
                                     <div className="flex gap-2">
@@ -1169,13 +1169,13 @@ export function ChartCustomizationPanel({
                                         onClick={() => {
                                           handleUpdate({
                                             dataMapping: {
-                                              ...customization?.dataMapping,
+                                              ...effectiveDataMapping,
                                               sortOrder: 'asc'
                                             }
                                           })
                                         }}
                                         className={`flex-1 px-2 py-1.5 text-xs rounded border ${
-                                          (customization?.dataMapping?.sortOrder || 'asc') === 'asc'
+                                          (effectiveDataMapping?.sortOrder || 'asc') === 'asc'
                                             ? 'bg-blue-100 border-blue-500 text-blue-700'
                                             : 'bg-white border-gray-300 text-gray-600'
                                         }`}
@@ -1186,13 +1186,13 @@ export function ChartCustomizationPanel({
                                         onClick={() => {
                                           handleUpdate({
                                             dataMapping: {
-                                              ...customization?.dataMapping,
+                                              ...effectiveDataMapping,
                                               sortOrder: 'desc'
                                             }
                                           })
                                         }}
                                         className={`flex-1 px-2 py-1.5 text-xs rounded border ${
-                                          customization?.dataMapping?.sortOrder === 'desc'
+                                          effectiveDataMapping?.sortOrder === 'desc'
                                             ? 'bg-blue-100 border-blue-500 text-blue-700'
                                             : 'bg-white border-gray-300 text-gray-600'
                                         }`}
@@ -1201,7 +1201,7 @@ export function ChartCustomizationPanel({
                                       </button>
                                     </div>
                                     <p className="text-xs text-gray-500 mt-1">
-                                      {customization?.dataMapping?.sortOrder === 'asc' ? 'Smallest values first' : 'Largest values first'}
+                                      {effectiveDataMapping?.sortOrder === 'asc' ? 'Smallest values first' : 'Largest values first'}
                                     </p>
                                   </div>
                                 )}
@@ -1215,12 +1215,12 @@ export function ChartCustomizationPanel({
                                     type="number"
                                     min="1"
                                     placeholder="Show all items"
-                                    value={customization?.dataMapping?.limit || ''}
+                                    value={effectiveDataMapping?.limit || ''}
                                     onChange={(e) => {
                                       const value = e.target.value ? parseInt(e.target.value) : undefined
                                       handleUpdate({
                                         dataMapping: {
-                                          ...customization?.dataMapping,
+                                          ...effectiveDataMapping,
                                           limit: value
                                         }
                                       })
@@ -1228,8 +1228,8 @@ export function ChartCustomizationPanel({
                                     className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
                                   />
                                   <p className="text-xs text-gray-500 mt-1">
-                                    {customization?.dataMapping?.limit
-                                      ? `Showing ${customization.dataMapping.sortOrder === 'asc' ? 'bottom' : 'top'} ${customization.dataMapping.limit} items`
+                                    {effectiveDataMapping?.limit
+                                      ? `Showing ${effectiveDataMapping.sortOrder === 'asc' ? 'bottom' : 'top'} ${effectiveDataMapping.limit} items`
                                       : 'Showing all items'}
                                   </p>
                                 </div>
@@ -1252,7 +1252,7 @@ export function ChartCustomizationPanel({
                                       if (isFieldAllowedForChart(effectiveChartType as any, 'value', data.fieldType)) {
                                         handleUpdate({
                                           dataMapping: {
-                                            ...customization?.dataMapping,
+                                            ...effectiveDataMapping,
                                             size: data.fieldName
                                           }
                                         })
@@ -1285,7 +1285,7 @@ export function ChartCustomizationPanel({
                                             onClick={() => {
                                               handleUpdate({
                                                 dataMapping: {
-                                                  ...customization?.dataMapping,
+                                                  ...effectiveDataMapping,
                                                   size: undefined
                                                 }
                                               })
@@ -1315,7 +1315,7 @@ export function ChartCustomizationPanel({
                                       const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                       handleUpdate({
                                         dataMapping: {
-                                          ...customization?.dataMapping,
+                                          ...effectiveDataMapping,
                                           color: data.fieldName
                                         }
                                       })
@@ -1347,7 +1347,7 @@ export function ChartCustomizationPanel({
                                             onClick={() => {
                                               handleUpdate({
                                                 dataMapping: {
-                                                  ...customization?.dataMapping,
+                                                  ...effectiveDataMapping,
                                                   color: undefined
                                                 }
                                               })
@@ -1428,7 +1428,7 @@ export function ChartCustomizationPanel({
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                 handleUpdate({
                                   dataMapping: {
-                                    ...customization?.dataMapping,
+                                    ...effectiveDataMapping,
                                     category: data.fieldName
                                   }
                                 })
@@ -1455,7 +1455,7 @@ export function ChartCustomizationPanel({
                                   <button
                                     onClick={() => handleUpdate({
                                       dataMapping: {
-                                        ...customization?.dataMapping,
+                                        ...effectiveDataMapping,
                                         category: undefined
                                       }
                                     })}
@@ -1491,7 +1491,7 @@ export function ChartCustomizationPanel({
                                 if (isFieldAllowedForChart(effectiveChartType as any, 'value', data.fieldType)) {
                                   handleUpdate({
                                     dataMapping: {
-                                      ...customization?.dataMapping,
+                                      ...effectiveDataMapping,
                                       value: data.fieldName
                                     }
                                   })
@@ -1519,7 +1519,7 @@ export function ChartCustomizationPanel({
                                   <button
                                     onClick={() => handleUpdate({
                                       dataMapping: {
-                                        ...customization?.dataMapping,
+                                        ...effectiveDataMapping,
                                         value: undefined
                                       }
                                     })}
@@ -1596,7 +1596,7 @@ export function ChartCustomizationPanel({
                                 if (isFieldAllowedForChart(effectiveChartType as any, 'metric', data.fieldType)) {
                                   handleUpdate({
                                     dataMapping: {
-                                      ...customization?.dataMapping,
+                                      ...effectiveDataMapping,
                                       metric: data.fieldName
                                     }
                                   })
@@ -1624,7 +1624,7 @@ export function ChartCustomizationPanel({
                                   <button
                                     onClick={() => handleUpdate({
                                       dataMapping: {
-                                        ...customization?.dataMapping,
+                                        ...effectiveDataMapping,
                                         metric: undefined
                                       }
                                     })}
@@ -1670,7 +1670,7 @@ export function ChartCustomizationPanel({
 
                                     handleUpdate({
                                       dataMapping: {
-                                        ...customization?.dataMapping,
+                                        ...effectiveDataMapping,
                                         columns: newColumns.length === availableColumns.length ? undefined : newColumns
                                       }
                                     })
@@ -1744,7 +1744,7 @@ export function ChartCustomizationPanel({
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                 handleUpdate({
                                   dataMapping: {
-                                    ...customization?.dataMapping,
+                                    ...effectiveDataMapping,
                                     category: data.fieldName
                                   }
                                 })
@@ -1772,7 +1772,7 @@ export function ChartCustomizationPanel({
                                     <button
                                       onClick={() => handleUpdate({
                                         dataMapping: {
-                                          ...customization?.dataMapping,
+                                          ...effectiveDataMapping,
                                           category: undefined
                                         }
                                       })}
@@ -1809,7 +1809,7 @@ export function ChartCustomizationPanel({
                                 if (isFieldAllowedForChart(effectiveChartType as any, 'value', data.fieldType)) {
                                   handleUpdate({
                                     dataMapping: {
-                                      ...customization?.dataMapping,
+                                      ...effectiveDataMapping,
                                       value: data.fieldName
                                     }
                                   })
@@ -1838,7 +1838,7 @@ export function ChartCustomizationPanel({
                                     <button
                                       onClick={() => handleUpdate({
                                         dataMapping: {
-                                          ...customization?.dataMapping,
+                                          ...effectiveDataMapping,
                                           value: undefined
                                         }
                                       })}
@@ -1873,7 +1873,7 @@ export function ChartCustomizationPanel({
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                 handleUpdate({
                                   dataMapping: {
-                                    ...customization?.dataMapping,
+                                    ...effectiveDataMapping,
                                     type: data.fieldName
                                   }
                                 })
@@ -1901,7 +1901,7 @@ export function ChartCustomizationPanel({
                                     <button
                                       onClick={() => handleUpdate({
                                         dataMapping: {
-                                          ...customization?.dataMapping,
+                                          ...effectiveDataMapping,
                                           type: undefined
                                         }
                                       })}
@@ -1975,7 +1975,7 @@ export function ChartCustomizationPanel({
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                 handleUpdate({
                                   dataMapping: {
-                                    ...customization?.dataMapping,
+                                    ...effectiveDataMapping,
                                     xAxis: data.fieldName
                                   }
                                 })
@@ -2003,7 +2003,7 @@ export function ChartCustomizationPanel({
                                     <button
                                       onClick={() => handleUpdate({
                                         dataMapping: {
-                                          ...customization?.dataMapping,
+                                          ...effectiveDataMapping,
                                           xAxis: undefined
                                         }
                                       })}
@@ -2037,7 +2037,7 @@ export function ChartCustomizationPanel({
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                 handleUpdate({
                                   dataMapping: {
-                                    ...customization?.dataMapping,
+                                    ...effectiveDataMapping,
                                     yAxis: data.fieldName
                                   }
                                 })
@@ -2065,7 +2065,7 @@ export function ChartCustomizationPanel({
                                     <button
                                       onClick={() => handleUpdate({
                                         dataMapping: {
-                                          ...customization?.dataMapping,
+                                          ...effectiveDataMapping,
                                           yAxis: undefined
                                         }
                                       })}
@@ -2100,7 +2100,7 @@ export function ChartCustomizationPanel({
                                 if (isFieldAllowedForChart(effectiveChartType as any, 'metric', data.fieldType)) {
                                   handleUpdate({
                                     dataMapping: {
-                                      ...customization?.dataMapping,
+                                      ...effectiveDataMapping,
                                       value: data.fieldName
                                     }
                                   })
@@ -2129,7 +2129,7 @@ export function ChartCustomizationPanel({
                                     <button
                                       onClick={() => handleUpdate({
                                         dataMapping: {
-                                          ...customization?.dataMapping,
+                                          ...effectiveDataMapping,
                                           value: undefined
                                         }
                                       })}
@@ -2209,10 +2209,10 @@ export function ChartCustomizationPanel({
                                 e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50')
                                 try {
                                   const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                  if (isFieldAllowedForChart('scorecard', 'metric', data.fieldType)) {
+                                  if (isFieldAllowedForChart('gauge', 'metric', data.fieldType)) {
                                     handleUpdate({
                                       dataMapping: {
-                                        ...customization?.dataMapping,
+                                        ...effectiveDataMapping,
                                         metric: data.fieldName
                                       }
                                     })
@@ -2239,7 +2239,7 @@ export function ChartCustomizationPanel({
                                       <button
                                         onClick={() => handleUpdate({
                                           dataMapping: {
-                                            ...customization?.dataMapping,
+                                            ...effectiveDataMapping,
                                             metric: undefined
                                           }
                                         })}
@@ -2268,7 +2268,7 @@ export function ChartCustomizationPanel({
                             value={effectiveDataMapping?.aggregation || 'sum'}
                             onChange={(e) => handleUpdate({
                               dataMapping: {
-                                ...customization?.dataMapping,
+                                ...effectiveDataMapping,
                                 aggregation: e.target.value as 'sum' | 'avg' | 'median' | 'min' | 'max' | 'count'
                               }
                             })}
@@ -2296,7 +2296,7 @@ export function ChartCustomizationPanel({
                             value={effectiveDataMapping?.max || ''}
                             onChange={(e) => handleUpdate({
                               dataMapping: {
-                                ...customization?.dataMapping,
+                                ...effectiveDataMapping,
                                 max: e.target.value ? Number(e.target.value) : undefined
                               }
                             })}
@@ -2318,7 +2318,7 @@ export function ChartCustomizationPanel({
                             value={effectiveDataMapping?.min !== undefined ? effectiveDataMapping?.min : 0}
                             onChange={(e) => handleUpdate({
                               dataMapping: {
-                                ...customization?.dataMapping,
+                                ...effectiveDataMapping,
                                 min: e.target.value ? Number(e.target.value) : 0
                               }
                             })}
@@ -2385,7 +2385,7 @@ export function ChartCustomizationPanel({
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                 handleUpdate({
                                   dataMapping: {
-                                    ...customization?.dataMapping,
+                                    ...effectiveDataMapping,
                                     cohort: data.fieldName
                                   }
                                 })
@@ -2413,7 +2413,7 @@ export function ChartCustomizationPanel({
                                     <button
                                       onClick={() => handleUpdate({
                                         dataMapping: {
-                                          ...customization?.dataMapping,
+                                          ...effectiveDataMapping,
                                           cohort: undefined
                                         }
                                       })}
@@ -2447,7 +2447,7 @@ export function ChartCustomizationPanel({
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                 handleUpdate({
                                   dataMapping: {
-                                    ...customization?.dataMapping,
+                                    ...effectiveDataMapping,
                                     period: data.fieldName
                                   }
                                 })
@@ -2475,7 +2475,7 @@ export function ChartCustomizationPanel({
                                     <button
                                       onClick={() => handleUpdate({
                                         dataMapping: {
-                                          ...customization?.dataMapping,
+                                          ...effectiveDataMapping,
                                           period: undefined
                                         }
                                       })}
@@ -2510,7 +2510,7 @@ export function ChartCustomizationPanel({
                                 if (isFieldAllowedForChart(effectiveChartType as any, 'metric', data.fieldType)) {
                                   handleUpdate({
                                     dataMapping: {
-                                      ...customization?.dataMapping,
+                                      ...effectiveDataMapping,
                                       value: data.fieldName
                                     }
                                   })
@@ -2539,7 +2539,7 @@ export function ChartCustomizationPanel({
                                     <button
                                       onClick={() => handleUpdate({
                                         dataMapping: {
-                                          ...customization?.dataMapping,
+                                          ...effectiveDataMapping,
                                           value: undefined
                                         }
                                       })}
@@ -2613,7 +2613,7 @@ export function ChartCustomizationPanel({
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                 handleUpdate({
                                   dataMapping: {
-                                    ...customization?.dataMapping,
+                                    ...effectiveDataMapping,
                                     category: data.fieldName
                                   }
                                 })
@@ -2641,7 +2641,7 @@ export function ChartCustomizationPanel({
                                     <button
                                       onClick={() => handleUpdate({
                                         dataMapping: {
-                                          ...customization?.dataMapping,
+                                          ...effectiveDataMapping,
                                           category: undefined
                                         }
                                       })}
@@ -2676,7 +2676,7 @@ export function ChartCustomizationPanel({
                                 if (isFieldAllowedForChart(effectiveChartType as any, 'metric', data.fieldType)) {
                                   handleUpdate({
                                     dataMapping: {
-                                      ...customization?.dataMapping,
+                                      ...effectiveDataMapping,
                                       actual: data.fieldName
                                     }
                                   })
@@ -2705,7 +2705,7 @@ export function ChartCustomizationPanel({
                                     <button
                                       onClick={() => handleUpdate({
                                         dataMapping: {
-                                          ...customization?.dataMapping,
+                                          ...effectiveDataMapping,
                                           actual: undefined
                                         }
                                       })}
@@ -2740,7 +2740,7 @@ export function ChartCustomizationPanel({
                                 if (isFieldAllowedForChart(effectiveChartType as any, 'metric', data.fieldType)) {
                                   handleUpdate({
                                     dataMapping: {
-                                      ...customization?.dataMapping,
+                                      ...effectiveDataMapping,
                                       comparative: data.fieldName
                                     }
                                   })
@@ -2769,7 +2769,7 @@ export function ChartCustomizationPanel({
                                     <button
                                       onClick={() => handleUpdate({
                                         dataMapping: {
-                                          ...customization?.dataMapping,
+                                          ...effectiveDataMapping,
                                           comparative: undefined
                                         }
                                       })}
@@ -2843,7 +2843,7 @@ export function ChartCustomizationPanel({
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                 handleUpdate({
                                   dataMapping: {
-                                    ...customization?.dataMapping,
+                                    ...effectiveDataMapping,
                                     category: data.fieldName
                                   }
                                 })
@@ -2871,7 +2871,7 @@ export function ChartCustomizationPanel({
                                     <button
                                       onClick={() => handleUpdate({
                                         dataMapping: {
-                                          ...customization?.dataMapping,
+                                          ...effectiveDataMapping,
                                           category: undefined
                                         }
                                       })}
@@ -2906,7 +2906,7 @@ export function ChartCustomizationPanel({
                                 if (isFieldAllowedForChart(effectiveChartType as any, 'metric', data.fieldType)) {
                                   handleUpdate({
                                     dataMapping: {
-                                      ...customization?.dataMapping,
+                                      ...effectiveDataMapping,
                                       value: data.fieldName
                                     }
                                   })
@@ -2935,7 +2935,7 @@ export function ChartCustomizationPanel({
                                     <button
                                       onClick={() => handleUpdate({
                                         dataMapping: {
-                                          ...customization?.dataMapping,
+                                          ...effectiveDataMapping,
                                           value: undefined
                                         }
                                       })}
@@ -3009,7 +3009,7 @@ export function ChartCustomizationPanel({
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                 handleUpdate({
                                   dataMapping: {
-                                    ...customization?.dataMapping,
+                                    ...effectiveDataMapping,
                                     source: data.fieldName
                                   }
                                 })
@@ -3026,7 +3026,7 @@ export function ChartCustomizationPanel({
                                 <button
                                   onClick={() => handleUpdate({
                                     dataMapping: {
-                                      ...customization?.dataMapping,
+                                      ...effectiveDataMapping,
                                       source: undefined
                                     }
                                   })}
@@ -3058,7 +3058,7 @@ export function ChartCustomizationPanel({
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                 handleUpdate({
                                   dataMapping: {
-                                    ...customization?.dataMapping,
+                                    ...effectiveDataMapping,
                                     target_node: data.fieldName
                                   }
                                 })
@@ -3075,7 +3075,7 @@ export function ChartCustomizationPanel({
                                 <button
                                   onClick={() => handleUpdate({
                                     dataMapping: {
-                                      ...customization?.dataMapping,
+                                      ...effectiveDataMapping,
                                       target_node: undefined
                                     }
                                   })}
@@ -3108,7 +3108,7 @@ export function ChartCustomizationPanel({
                                 if (isFieldAllowedForChart(effectiveChartType as any, 'metric', data.fieldType)) {
                                   handleUpdate({
                                     dataMapping: {
-                                      ...customization?.dataMapping,
+                                      ...effectiveDataMapping,
                                       value: data.fieldName
                                     }
                                   })
@@ -3126,7 +3126,7 @@ export function ChartCustomizationPanel({
                                 <button
                                   onClick={() => handleUpdate({
                                     dataMapping: {
-                                      ...customization?.dataMapping,
+                                      ...effectiveDataMapping,
                                       value: undefined
                                     }
                                   })}
@@ -3199,7 +3199,7 @@ export function ChartCustomizationPanel({
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
                                 handleUpdate({
                                   dataMapping: {
-                                    ...customization?.dataMapping,
+                                    ...effectiveDataMapping,
                                     xAxis: data.fieldName
                                   }
                                 })
@@ -3227,7 +3227,7 @@ export function ChartCustomizationPanel({
                                     <button
                                       onClick={() => handleUpdate({
                                         dataMapping: {
-                                          ...customization?.dataMapping,
+                                          ...effectiveDataMapping,
                                           xAxis: undefined
                                         }
                                       })}
@@ -3260,10 +3260,10 @@ export function ChartCustomizationPanel({
                               e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50')
                               try {
                                 const data = JSON.parse(e.dataTransfer.getData('application/json'))
-                                if (isFieldAllowedForChart(effectiveChartType as any, 'metric', data.fieldType)) {
+                                if (isFieldAllowedForChart(effectiveChartType as any, 'yAxis', data.fieldType)) {
                                   handleUpdate({
                                     dataMapping: {
-                                      ...customization?.dataMapping,
+                                      ...effectiveDataMapping,
                                       yAxis: data.fieldName
                                     }
                                   })
@@ -3292,7 +3292,7 @@ export function ChartCustomizationPanel({
                                     <button
                                       onClick={() => handleUpdate({
                                         dataMapping: {
-                                          ...customization?.dataMapping,
+                                          ...effectiveDataMapping,
                                           yAxis: undefined
                                         }
                                       })}
@@ -3340,7 +3340,8 @@ export function ChartCustomizationPanel({
                       <Button
                         onClick={() => {
                           // Validate required fields first
-                          const mapping = customization?.dataMapping || {}
+                          // CRITICAL: Use effectiveDataMapping which includes both configDataMapping (AI-generated) and customization.dataMapping (user overrides)
+                          const mapping = effectiveDataMapping || {}
                           let isValid = false
                           let missingFields = ''
 
@@ -3455,13 +3456,13 @@ export function ChartCustomizationPanel({
                         }}
                         className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                         size="lg"
-                        disabled={!customization?.dataMapping || Object.keys(customization.dataMapping).length === 0}
+                        disabled={!effectiveDataMapping || Object.keys(effectiveDataMapping).length === 0}
                       >
                         <Database className="h-4 w-4 mr-2" />
                         {isDraftChart ? 'Generate Chart' : 'Update Chart'}
                       </Button>
                       <p className="text-xs text-gray-500 mt-2 text-center">
-                        {customization?.dataMapping && Object.keys(customization.dataMapping).length > 0
+                        {effectiveDataMapping && Object.keys(effectiveDataMapping).length > 0
                           ? isDraftChart
                             ? 'Click to add this chart to your dashboard'
                             : 'Click to apply your data selections and update the chart'
